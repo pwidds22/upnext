@@ -1,0 +1,121 @@
+// Show tracking status
+export type ShowStatus = 'watching' | 'waiting' | 'watchlist' | 'completed' | 'dropped';
+
+// Locally stored tracked show
+export interface TrackedShow {
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  status: ShowStatus;
+  addedAt: string; // ISO date string
+  totalSeasons: number;
+  totalEpisodes: number;
+  airedEpisodes?: number; // Episodes that have actually aired (for accurate progress)
+  streamingServices: string[];
+}
+
+// Locally stored watched episode
+export interface WatchedEpisode {
+  id: string; // Unique ID for the record
+  showTmdbId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  watchedAt: string; // ISO date string
+  episodeTitle?: string;
+  stillPath?: string;
+}
+
+// TMDB API Response Types
+export interface TMDBSearchResponse {
+  page: number;
+  results: TMDBShow[];
+  total_pages: number;
+  total_results: number;
+}
+
+export interface TMDBShow {
+  id: number;
+  name: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  overview: string | null;
+  first_air_date: string | null;
+  number_of_seasons: number | null;
+  number_of_episodes: number | null;
+  status: string | null;
+  genres?: TMDBGenre[];
+  vote_average?: number;
+}
+
+export interface TMDBGenre {
+  id: number;
+  name: string;
+}
+
+export interface TMDBSeason {
+  id: number;
+  season_number: number;
+  name: string | null;
+  overview: string | null;
+  episode_count: number | null;
+  episodes: TMDBEpisode[] | null;
+  poster_path: string | null;
+  air_date: string | null;
+}
+
+export interface TMDBEpisode {
+  id: number;
+  name: string;
+  overview: string | null;
+  season_number: number;
+  episode_number: number;
+  still_path: string | null;
+  air_date: string | null;
+  runtime: number | null;
+  vote_average?: number;
+}
+
+export interface TMDBWatchProvidersResponse {
+  id: number;
+  results: Record<string, TMDBCountryProviders>;
+}
+
+export interface TMDBCountryProviders {
+  link?: string;
+  flatrate?: TMDBProvider[];
+  buy?: TMDBProvider[];
+  rent?: TMDBProvider[];
+  free?: TMDBProvider[];
+}
+
+export interface TMDBProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string | null;
+  display_priority?: number;
+}
+
+// Navigation types
+export type RootStackParamList = {
+  Main: undefined;
+  ShowDetail: { show: TrackedShow };
+  AddShow: { tmdbShow: TMDBShow };
+};
+
+export type MainTabParamList = {
+  UpNext: undefined;
+  MyShows: undefined;
+  Search: undefined;
+};
+
+// Up Next episode type
+export interface UpNextEpisode {
+  id: string;
+  show: TrackedShow;
+  seasonNumber: number;
+  episodeNumber: number;
+  episodeTitle: string | null;
+  stillPath: string | null;
+  airDate: string | null;
+  isUpcoming: boolean;
+}
