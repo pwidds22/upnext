@@ -1,7 +1,8 @@
 import * as SQLite from 'expo-sqlite';
-import { TrackedShow, WatchedEpisode, ShowStatus } from '../types';
+import { TrackedShow, WatchedEpisode, ShowStatus, SyncStatus, SyncOperation, SyncQueueItem } from '../types';
 
 const DB_NAME = 'showbuddy.db';
+const DEFAULT_SYNC_STATUS: SyncStatus = 'pending';
 
 class StorageService {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -43,6 +44,45 @@ class StorageService {
     } catch {
       // Column already exists, ignore error
     }
+
+    // Migration: add sync columns to tracked_shows
+    const syncColumns = [
+      { name: 'sync_status', type: 'TEXT DEFAULT \'pending\'' },
+      { name: 'remote_id', type: 'TEXT' },
+      { name: 'last_synced_at', type: 'TEXT' },
+    ];
+
+    for (const col of syncColumns) {
+      try {
+        await this.db.runAsync(`ALTER TABLE tracked_shows ADD COLUMN ${col.name} ${col.type}`);
+      } catch {
+        // Column already exists, ignore error
+      }
+    }
+
+    // Migration: add sync columns to watched_episodes
+    for (const col of syncColumns) {
+      try {
+        await this.db.runAsync(`ALTER TABLE watched_episodes ADD COLUMN ${col.name} ${col.type}`);
+      } catch {
+        // Column already exists, ignore error
+      }
+    }
+
+    // Create sync queue table
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        attempts INTEGER DEFAULT 0,
+        last_error TEXT,
+        UNIQUE(table_name, record_id, operation)
+      );
+    `);
   }
 
   // Tracked Shows
@@ -59,6 +99,9 @@ class StorageService {
       total_episodes: number;
       aired_episodes: number | null;
       streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
     }>('SELECT * FROM tracked_shows ORDER BY added_at DESC');
 
     return rows.map((row) => ({
@@ -71,6 +114,9 @@ class StorageService {
       totalEpisodes: row.total_episodes,
       airedEpisodes: row.aired_episodes ?? undefined,
       streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
     }));
   }
 
@@ -87,6 +133,9 @@ class StorageService {
       total_episodes: number;
       aired_episodes: number | null;
       streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
     }>('SELECT * FROM tracked_shows WHERE status = ? ORDER BY added_at DESC', [status]);
 
     return rows.map((row) => ({
@@ -99,6 +148,9 @@ class StorageService {
       totalEpisodes: row.total_episodes,
       airedEpisodes: row.aired_episodes ?? undefined,
       streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
     }));
   }
 
@@ -115,6 +167,9 @@ class StorageService {
       total_episodes: number;
       aired_episodes: number | null;
       streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
     }>('SELECT * FROM tracked_shows WHERE tmdb_id = ?', [tmdbId]);
 
     if (!row) return null;
@@ -129,6 +184,9 @@ class StorageService {
       totalEpisodes: row.total_episodes,
       airedEpisodes: row.aired_episodes ?? undefined,
       streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
     };
   }
 
@@ -137,8 +195,8 @@ class StorageService {
 
     await this.db!.runAsync(
       `INSERT OR REPLACE INTO tracked_shows
-       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         show.tmdbId,
         show.title,
@@ -149,8 +207,12 @@ class StorageService {
         show.totalEpisodes,
         show.airedEpisodes ?? null,
         JSON.stringify(show.streamingServices),
+        DEFAULT_SYNC_STATUS,
       ]
     );
+
+    // Queue for sync
+    await this.addToSyncQueue('tracked_shows', show.tmdbId.toString(), 'create', show);
   }
 
   async updateAiredEpisodes(tmdbId: number, airedEpisodes: number): Promise<void> {
@@ -165,14 +227,20 @@ class StorageService {
   async updateShowStatus(tmdbId: number, status: ShowStatus): Promise<void> {
     if (!this.db) await this.init();
 
-    await this.db!.runAsync('UPDATE tracked_shows SET status = ? WHERE tmdb_id = ?', [
-      status,
-      tmdbId,
-    ]);
+    await this.db!.runAsync(
+      'UPDATE tracked_shows SET status = ?, sync_status = ? WHERE tmdb_id = ?',
+      [status, DEFAULT_SYNC_STATUS, tmdbId]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('tracked_shows', tmdbId.toString(), 'update', { tmdbId, status });
   }
 
   async deleteShow(tmdbId: number): Promise<void> {
     if (!this.db) await this.init();
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('tracked_shows', tmdbId.toString(), 'delete', { tmdbId });
 
     await this.db!.runAsync('DELETE FROM tracked_shows WHERE tmdb_id = ?', [tmdbId]);
     await this.db!.runAsync('DELETE FROM watched_episodes WHERE show_tmdb_id = ?', [tmdbId]);
@@ -234,8 +302,8 @@ class StorageService {
 
     await this.db!.runAsync(
       `INSERT OR REPLACE INTO watched_episodes
-       (id, show_tmdb_id, season_number, episode_number, watched_at, episode_title, still_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, show_tmdb_id, season_number, episode_number, watched_at, episode_title, still_path, sync_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         episode.showTmdbId,
@@ -244,12 +312,21 @@ class StorageService {
         episode.watchedAt,
         episode.episodeTitle ?? null,
         episode.stillPath ?? null,
+        DEFAULT_SYNC_STATUS,
       ]
     );
+
+    // Queue for sync
+    await this.addToSyncQueue('watched_episodes', id, 'create', { ...episode, id });
   }
 
   async markEpisodeUnwatched(showTmdbId: number, season: number, episode: number): Promise<void> {
     if (!this.db) await this.init();
+
+    const id = `${showTmdbId}-${season}-${episode}`;
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('watched_episodes', id, 'delete', { showTmdbId, season, episode });
 
     await this.db!.runAsync(
       'DELETE FROM watched_episodes WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?',
@@ -307,6 +384,131 @@ class StorageService {
     );
 
     return row?.count ?? 0;
+  }
+
+  // Sync Queue Operations
+  async addToSyncQueue(
+    tableName: string,
+    recordId: string,
+    operation: SyncOperation,
+    payload: unknown
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    await this.db!.runAsync(
+      `INSERT OR REPLACE INTO sync_queue (table_name, record_id, operation, payload, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      [tableName, recordId, operation, JSON.stringify(payload), new Date().toISOString()]
+    );
+  }
+
+  async getSyncQueue(): Promise<SyncQueueItem[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: number;
+      table_name: string;
+      record_id: string;
+      operation: SyncOperation;
+      payload: string;
+      created_at: string;
+      attempts: number;
+      last_error: string | null;
+    }>('SELECT * FROM sync_queue ORDER BY created_at ASC');
+
+    return rows.map((row) => ({
+      id: row.id,
+      tableName: row.table_name,
+      recordId: row.record_id,
+      operation: row.operation,
+      payload: row.payload,
+      createdAt: row.created_at,
+      attempts: row.attempts,
+      lastError: row.last_error ?? undefined,
+    }));
+  }
+
+  async removeSyncQueueItem(id: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    await this.db!.runAsync('DELETE FROM sync_queue WHERE id = ?', [id]);
+  }
+
+  async updateSyncQueueItemError(id: number, error: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    await this.db!.runAsync(
+      'UPDATE sync_queue SET attempts = attempts + 1, last_error = ? WHERE id = ?',
+      [error, id]
+    );
+  }
+
+  async clearSyncQueue(): Promise<void> {
+    if (!this.db) await this.init();
+
+    await this.db!.runAsync('DELETE FROM sync_queue');
+  }
+
+  async getSyncQueueCount(): Promise<number> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM sync_queue'
+    );
+
+    return row?.count ?? 0;
+  }
+
+  // Update sync status for a show
+  async updateShowSyncStatus(
+    tmdbId: number,
+    syncStatus: SyncStatus,
+    remoteId?: string
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    const now = new Date().toISOString();
+    await this.db!.runAsync(
+      `UPDATE tracked_shows
+       SET sync_status = ?, remote_id = COALESCE(?, remote_id), last_synced_at = ?
+       WHERE tmdb_id = ?`,
+      [syncStatus, remoteId ?? null, now, tmdbId]
+    );
+  }
+
+  // Get all pending sync shows
+  async getPendingSyncShows(): Promise<TrackedShow[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      tmdb_id: number;
+      title: string;
+      poster_path: string | null;
+      status: ShowStatus;
+      added_at: string;
+      total_seasons: number;
+      total_episodes: number;
+      aired_episodes: number | null;
+      streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+    }>('SELECT * FROM tracked_shows WHERE sync_status = ? OR sync_status IS NULL', [DEFAULT_SYNC_STATUS]);
+
+    return rows.map((row) => ({
+      tmdbId: row.tmdb_id,
+      title: row.title,
+      posterPath: row.poster_path,
+      status: row.status,
+      addedAt: row.added_at,
+      totalSeasons: row.total_seasons,
+      totalEpisodes: row.total_episodes,
+      airedEpisodes: row.aired_episodes ?? undefined,
+      streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    }));
   }
 }
 

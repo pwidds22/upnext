@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
+import { AuthProvider } from './src/contexts/AuthContext';
 import { storageService } from './src/services/storage';
 import { COLORS } from './src/utils/constants';
 
@@ -33,10 +34,10 @@ export default function App() {
   }
 
   return (
-    <>
+    <AuthProvider>
       <AppNavigator />
       <StatusBar style="light" />
-    </>
+    </AuthProvider>
   );
 }
 

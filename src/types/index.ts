@@ -1,6 +1,24 @@
 // Show tracking status
 export type ShowStatus = 'watching' | 'waiting' | 'watchlist' | 'completed' | 'dropped';
 
+// Sync status for offline-first architecture
+export type SyncStatus = 'pending' | 'synced' | 'error';
+
+// Sync operation types
+export type SyncOperation = 'create' | 'update' | 'delete';
+
+// Sync queue item
+export interface SyncQueueItem {
+  id: number;
+  tableName: string;
+  recordId: string;
+  operation: SyncOperation;
+  payload: string; // JSON string
+  createdAt: string;
+  attempts: number;
+  lastError?: string;
+}
+
 // Locally stored tracked show
 export interface TrackedShow {
   tmdbId: number;
@@ -12,6 +30,10 @@ export interface TrackedShow {
   totalEpisodes: number;
   airedEpisodes?: number; // Episodes that have actually aired (for accurate progress)
   streamingServices: string[];
+  // Sync fields (optional - not present in legacy data)
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+  lastSyncedAt?: string;
 }
 
 // Locally stored watched episode
@@ -23,6 +45,10 @@ export interface WatchedEpisode {
   watchedAt: string; // ISO date string
   episodeTitle?: string;
   stillPath?: string;
+  // Sync fields (optional - not present in legacy data)
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+  lastSyncedAt?: string;
 }
 
 // TMDB API Response Types
@@ -100,6 +126,13 @@ export type RootStackParamList = {
   Main: undefined;
   ShowDetail: { show: TrackedShow };
   AddShow: { tmdbShow: TMDBShow };
+  Auth: undefined;
+  Profile: undefined;
+};
+
+export type AuthStackParamList = {
+  SignIn: undefined;
+  SignUp: undefined;
 };
 
 export type MainTabParamList = {
