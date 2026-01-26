@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { SyncProvider } from './src/contexts/SyncContext';
 import { storageService } from './src/services/storage';
 import { COLORS } from './src/utils/constants';
 
@@ -35,8 +36,10 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <AppNavigator />
-      <StatusBar style="light" />
+      <SyncProvider>
+        <AppNavigator />
+        <StatusBar style="light" />
+      </SyncProvider>
     </AuthProvider>
   );
 }

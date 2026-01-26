@@ -7,6 +7,52 @@ export type SyncStatus = 'pending' | 'synced' | 'error';
 // Sync operation types
 export type SyncOperation = 'create' | 'update' | 'delete';
 
+// Sync state for context
+export type SyncState = 'idle' | 'syncing' | 'error';
+
+// Supabase row types (match database schema)
+export interface UserShowRow {
+  id: string;
+  user_id: string;
+  tmdb_id: number;
+  title: string;
+  poster_path: string | null;
+  status: ShowStatus;
+  added_at: string;
+  total_seasons: number;
+  total_episodes: number;
+  aired_episodes: number | null;
+  streaming_services: string[];
+  local_id: string | null;
+  synced_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface UserWatchedEpisodeRow {
+  id: string;
+  user_id: string;
+  user_show_id: string | null;
+  tmdb_show_id: number;
+  season_number: number;
+  episode_number: number;
+  watched_at: string;
+  episode_title: string | null;
+  still_path: string | null;
+  local_id: string | null;
+  synced_at: string;
+  deleted_at: string | null;
+}
+
+// Sync result for reporting
+export interface SyncResult {
+  success: boolean;
+  pushed: { shows: number; episodes: number };
+  pulled: { shows: number; episodes: number };
+  conflicts: number;
+  errors: string[];
+}
+
 // Sync queue item
 export interface SyncQueueItem {
   id: number;
