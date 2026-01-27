@@ -37,14 +37,15 @@ export default function ShowDetailScreen() {
   const [seasons, setSeasons] = useState<TMDBSeason[]>([]);
   const [providers, setProviders] = useState<TMDBCountryProviders | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedSeasons, setExpandedSeasons] = useState<Set<number>>(new Set([1]));
+  const [expandedSeasons, setExpandedSeasons] = useState<Set<number>>(new Set());
+  const [hasSetInitialSeason, setHasSetInitialSeason] = useState(false);
   const [activeTab, setActiveTab] = useState<'episodes' | 'about'>('episodes');
   const [currentStatus, setCurrentStatus] = useState<ShowStatus>(show.status);
   const [airedEpisodes, setAiredEpisodes] = useState<number>(show.airedEpisodes ?? show.totalEpisodes);
 
   // Rating state
   const [userRating, setUserRating] = useState<number>(0);
-  const [communityRating, setCommunityRating] = useState<{ average: number; count: number } | null>(null);
+  const [tmdbRating, setTmdbRating] = useState<number | null>(null);
   const [friendRatings, setFriendRatings] = useState<FriendRating[]>([]);
   const [ratingLoading, setRatingLoading] = useState(false);
 
@@ -53,18 +54,64 @@ export default function ShowDetailScreen() {
 
   const { getReaction, toggleReaction } = useEpisodeReactions(show.tmdbId);
 
+  // Calculate which season to expand by default (newest with unwatched aired episodes)
+  const getDefaultExpandedSeason = useCallback((): number => {
+    if (seasons.length === 0) return 1;
+
+    const now = new Date();
+
+    // Find newest season with unwatched aired episodes (iterate highest to lowest)
+    for (let i = seasons.length - 1; i >= 0; i--) {
+      const season = seasons[i];
+      if (!season.episodes) continue;
+
+      const airedEpisodes = season.episodes.filter(
+        (ep) => ep.air_date && new Date(ep.air_date) <= now
+      );
+
+      if (airedEpisodes.length === 0) continue;
+
+      const watchedInSeason = watchedCountForSeason(season.season_number);
+      if (watchedInSeason < airedEpisodes.length) {
+        return season.season_number;
+      }
+    }
+
+    // Fallback: latest season that has aired episodes (not a future season)
+    for (let i = seasons.length - 1; i >= 0; i--) {
+      const season = seasons[i];
+      if (!season.episodes) continue;
+
+      const hasAiredEpisodes = season.episodes.some(
+        (ep) => ep.air_date && new Date(ep.air_date) <= now
+      );
+
+      if (hasAiredEpisodes) {
+        return season.season_number;
+      }
+    }
+
+    return 1;
+  }, [seasons, watchedCountForSeason]);
+
   useEffect(() => {
     async function loadData() {
       try {
-        const [seasonsData, providersData] = await Promise.all([
+        const [seasonsData, providersData, showDetails] = await Promise.all([
           show.totalSeasons > 0
             ? tmdbService.getAllSeasons(show.tmdbId, show.totalSeasons)
             : Promise.resolve([]),
           tmdbService.getWatchProviders(show.tmdbId),
+          tmdbService.getShowDetails(show.tmdbId),
         ]);
 
         setSeasons(seasonsData);
         setProviders(providersData);
+
+        // Set TMDB rating if available
+        if (showDetails.vote_average !== undefined && showDetails.vote_average > 0) {
+          setTmdbRating(showDetails.vote_average);
+        }
 
         // Calculate aired episodes (episodes with air date in the past)
         const now = new Date();
@@ -94,25 +141,29 @@ export default function ShowDetailScreen() {
     loadData();
   }, [show.tmdbId, show.totalSeasons]);
 
-  // Load user rating, friend ratings, and community rating
+  // Set default expanded season after seasons and watched data load
+  useEffect(() => {
+    if (!hasSetInitialSeason && seasons.length > 0 && !loading) {
+      const defaultSeason = getDefaultExpandedSeason();
+      setExpandedSeasons(new Set([defaultSeason]));
+      setHasSetInitialSeason(true);
+    }
+  }, [seasons, loading, hasSetInitialSeason, getDefaultExpandedSeason]);
+
+  // Load user rating and friend ratings
   useEffect(() => {
     async function loadRatings() {
-      try {
-        // Load community average (always)
-        const avgRating = await ratingsService.getShowAverageRating(show.tmdbId);
-        setCommunityRating(avgRating);
+      if (!user) return;
 
-        // Load user's own rating and friend ratings (if logged in)
-        if (user) {
-          const [rating, friends] = await Promise.all([
-            ratingsService.getUserShowRating(user.id, show.tmdbId),
-            followsService.getFriendRatings(user.id, show.tmdbId),
-          ]);
-          if (rating) {
-            setUserRating(rating.rating);
-          }
-          setFriendRatings(friends);
+      try {
+        const [rating, friends] = await Promise.all([
+          ratingsService.getUserShowRating(user.id, show.tmdbId),
+          followsService.getFriendRatings(user.id, show.tmdbId),
+        ]);
+        if (rating) {
+          setUserRating(rating.rating);
         }
+        setFriendRatings(friends);
       } catch (e) {
         console.error('Failed to load ratings:', e);
       }
@@ -134,10 +185,6 @@ export default function ShowDetailScreen() {
         });
         setUserRating(newRating);
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-        // Refresh community rating
-        const avgRating = await ratingsService.getShowAverageRating(show.tmdbId);
-        setCommunityRating(avgRating);
       } catch (e) {
         console.error('Failed to save rating:', e);
         Alert.alert('Error', 'Failed to save rating');
@@ -195,9 +242,30 @@ export default function ShowDetailScreen() {
     async (newStatus: ShowStatus) => {
       await storageService.updateShowStatus(show.tmdbId, newStatus);
       setCurrentStatus(newStatus);
+
+      // Auto-mark all aired episodes when completing a show
+      if (newStatus === 'completed' && seasons.length > 0) {
+        const now = new Date();
+        for (const season of seasons) {
+          if (season.episodes) {
+            const airedEpisodes = season.episodes.filter(
+              (ep) => ep.air_date && new Date(ep.air_date) <= now
+            );
+            if (airedEpisodes.length > 0) {
+              const episodeList = airedEpisodes.map((ep) => ({
+                episodeNumber: ep.episode_number,
+                name: ep.name,
+                stillPath: ep.still_path,
+              }));
+              await markSeasonWatched(season.season_number, episodeList);
+            }
+          }
+        }
+      }
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [show.tmdbId]
+    [show.tmdbId, seasons, markSeasonWatched]
   );
 
   const handleDelete = useCallback(() => {
@@ -318,22 +386,16 @@ export default function ShowDetailScreen() {
           </View>
         )}
 
-        {/* Community Rating (everyone on the app) */}
+        {/* TMDB Rating */}
         <View style={styles.ratingRow}>
-          <Text style={styles.ratingLabel}>Everyone</Text>
-          {communityRating && communityRating.count > 0 ? (
+          <Text style={styles.ratingLabel}>TMDB</Text>
+          {tmdbRating !== null ? (
             <View style={styles.ratingStars}>
-              <StarRating
-                value={communityRating.average}
-                size={20}
-                readonly
-              />
-              <Text style={styles.ratingValue}>
-                {formatRating(communityRating.average)} ({communityRating.count})
-              </Text>
+              <StarRating value={tmdbRating} size={20} readonly />
+              <Text style={styles.ratingValue}>{formatRating(tmdbRating)}</Text>
             </View>
           ) : (
-            <Text style={styles.ratingHint}>No ratings yet</Text>
+            <Text style={styles.ratingHint}>No rating</Text>
           )}
         </View>
       </View>
@@ -389,54 +451,68 @@ export default function ShowDetailScreen() {
               const isExpanded = expandedSeasons.has(season.season_number);
               const seasonWatchedCount = watchedCountForSeason(season.season_number);
               const episodeCount = season.episodes?.length ?? season.episode_count ?? 0;
-              const isComplete = seasonWatchedCount >= episodeCount;
+
+              // Calculate aired episodes in this season
+              const now = new Date();
+              const airedInSeason = season.episodes?.filter(
+                (ep) => ep.air_date && new Date(ep.air_date) <= now
+              ).length ?? 0;
+              const isUpcoming = airedInSeason === 0;
+              const isComplete = !isUpcoming && seasonWatchedCount >= airedInSeason;
 
               return (
                 <View key={season.season_number} style={styles.seasonSection}>
                   <View style={styles.seasonHeader}>
                     <TouchableOpacity
                       style={styles.seasonHeaderLeft}
-                      onPress={() => toggleSeason(season.season_number)}
+                      onPress={() => !isUpcoming && toggleSeason(season.season_number)}
+                      disabled={isUpcoming}
                     >
-                      <Ionicons
-                        name={isExpanded ? 'chevron-down' : 'chevron-forward'}
-                        size={16}
-                        color={COLORS.textSecondary}
-                      />
-                      <Text style={styles.seasonTitle}>Season {season.season_number}</Text>
-                      <Text style={styles.seasonProgress}>
-                        {seasonWatchedCount}/{episodeCount}
+                      {!isUpcoming && (
+                        <Ionicons
+                          name={isExpanded ? 'chevron-down' : 'chevron-forward'}
+                          size={16}
+                          color={COLORS.textSecondary}
+                        />
+                      )}
+                      <Text style={[styles.seasonTitle, isUpcoming && styles.seasonTitleUpcoming]}>
+                        Season {season.season_number}
+                      </Text>
+                      <Text style={[styles.seasonProgress, isUpcoming && styles.seasonProgressUpcoming]}>
+                        {isUpcoming ? 'Upcoming' : `${seasonWatchedCount}/${airedInSeason}`}
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Mark all watched/unwatched button */}
-                    <TouchableOpacity
-                      style={[
-                        styles.markAllButton,
-                        isComplete && styles.markAllButtonComplete,
-                      ]}
-                      onPress={() => {
-                        if (isComplete) {
-                          handleMarkSeasonUnwatched(season.season_number);
-                        } else {
-                          handleMarkSeasonWatched(season);
-                        }
-                      }}
-                    >
-                      <Ionicons
-                        name={isComplete ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                        size={20}
-                        color={isComplete ? COLORS.primary : COLORS.textSecondary}
-                      />
-                      <Text
+                    {/* Mark all watched/unwatched button - only show for seasons with aired episodes */}
+                    {!isUpcoming && (
+                      <TouchableOpacity
                         style={[
-                          styles.markAllText,
-                          isComplete && styles.markAllTextComplete,
+                          styles.markAllButton,
+                          isComplete && styles.markAllButtonComplete,
                         ]}
+                        onPress={() => {
+                          if (isComplete) {
+                            handleMarkSeasonUnwatched(season.season_number);
+                          } else {
+                            handleMarkSeasonWatched(season);
+                          }
+                        }}
                       >
-                        {isComplete ? 'Done' : 'Mark All'}
-                      </Text>
-                    </TouchableOpacity>
+                        <Ionicons
+                          name={isComplete ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                          size={20}
+                          color={isComplete ? COLORS.primary : COLORS.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.markAllText,
+                            isComplete && styles.markAllTextComplete,
+                          ]}
+                        >
+                          {isComplete ? 'Done' : 'Mark All'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {isExpanded && season.episodes && (
@@ -684,6 +760,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     marginLeft: 8,
+  },
+  seasonTitleUpcoming: {
+    color: COLORS.textTertiary,
+  },
+  seasonProgressUpcoming: {
+    fontStyle: 'italic',
+    color: COLORS.textTertiary,
   },
   markAllButton: {
     flexDirection: 'row',
