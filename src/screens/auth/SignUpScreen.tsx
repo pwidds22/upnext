@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
+import { followsService } from '../../services/supabase/follows';
 import { COLORS } from '../../utils/constants';
 
 interface Props {
@@ -20,19 +21,89 @@ interface Props {
   onSkip: () => void;
 }
 
+// Username validation: 3-20 chars, alphanumeric and underscores only
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
+
+function validateUsername(username: string): string | null {
+  if (!username.trim()) {
+    return 'Username is required';
+  }
+  if (username.length < 3) {
+    return 'Username must be at least 3 characters';
+  }
+  if (username.length > 20) {
+    return 'Username must be 20 characters or less';
+  }
+  if (!USERNAME_REGEX.test(username)) {
+    return 'Username can only contain letters, numbers, and underscores';
+  }
+  return null;
+}
+
 export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
   const { signUp } = useAuth();
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'available' | 'taken'>('idle');
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Check username availability with debounce
+  const checkUsername = useCallback(async (value: string) => {
+    const validationError = validateUsername(value);
+    if (validationError) {
+      setUsernameStatus('idle');
+      return;
+    }
+
+    setCheckingUsername(true);
+    try {
+      const available = await followsService.isUsernameAvailable(value);
+      setUsernameStatus(available ? 'available' : 'taken');
+    } catch (e) {
+      console.error('Failed to check username:', e);
+      setUsernameStatus('idle');
+    } finally {
+      setCheckingUsername(false);
+    }
+  }, []);
+
+  const handleUsernameChange = useCallback(
+    (value: string) => {
+      // Only allow valid characters while typing
+      const cleaned = value.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+      setUsername(cleaned);
+      setUsernameStatus('idle');
+
+      // Debounce the availability check
+      if (cleaned.length >= 3) {
+        const timer = setTimeout(() => checkUsername(cleaned), 500);
+        return () => clearTimeout(timer);
+      }
+    },
+    [checkUsername]
+  );
+
   const handleSignUp = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter email and password');
+    // Validate all fields
+    if (!email.trim()) {
+      setError('Please enter your email');
+      return;
+    }
+
+    const usernameError = validateUsername(username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('Please enter a password');
       return;
     }
 
@@ -49,14 +120,29 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
     setLoading(true);
     setError(null);
 
-    const { error: signUpError } = await signUp(email.trim(), password);
+    try {
+      // Check username availability one more time
+      const available = await followsService.isUsernameAvailable(username);
+      if (!available) {
+        setError('Username is already taken');
+        setUsernameStatus('taken');
+        setLoading(false);
+        return;
+      }
 
-    if (signUpError) {
-      setError(signUpError);
+      // Create the account with username
+      const { error: signUpError } = await signUp(email.trim(), password, username);
+
+      if (signUpError) {
+        setError(signUpError);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        setSuccess(true);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) {
+      setError('Something went wrong. Please try again.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } else {
-      setSuccess(true);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
     setLoading(false);
@@ -70,6 +156,9 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
           <Text style={styles.successTitle}>Check your email</Text>
           <Text style={styles.successText}>
             We sent a confirmation link to {email}. Please verify your email to complete sign up.
+          </Text>
+          <Text style={styles.successUsername}>
+            Your username: @{username.toLowerCase()}
           </Text>
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
@@ -118,6 +207,40 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
               keyboardType="email-address"
               textContentType="emailAddress"
             />
+          </View>
+
+          <View>
+            <View
+              style={[
+                styles.inputContainer,
+                usernameStatus === 'available' && styles.inputSuccess,
+                usernameStatus === 'taken' && styles.inputError,
+              ]}
+            >
+              <Ionicons name="at" size={20} color={COLORS.textSecondary} />
+              <TextInput
+                style={styles.input}
+                placeholder="Username"
+                placeholderTextColor={COLORS.textSecondary}
+                value={username}
+                onChangeText={handleUsernameChange}
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="username"
+              />
+              {checkingUsername && (
+                <ActivityIndicator size="small" color={COLORS.textSecondary} />
+              )}
+              {!checkingUsername && usernameStatus === 'available' && (
+                <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+              )}
+              {!checkingUsername && usernameStatus === 'taken' && (
+                <Ionicons name="close-circle" size={20} color={COLORS.error} />
+              )}
+            </View>
+            <Text style={styles.inputHint}>
+              3-20 characters, letters, numbers, and underscores only
+            </Text>
           </View>
 
           <View style={styles.inputContainer}>
@@ -233,12 +356,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 12,
     gap: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  inputSuccess: {
+    borderColor: COLORS.primary,
+  },
+  inputError: {
+    borderColor: COLORS.error,
   },
   input: {
     flex: 1,
     paddingVertical: 16,
     fontSize: 16,
     color: COLORS.text,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginTop: 4,
+    marginLeft: 4,
   },
   button: {
     paddingVertical: 16,
@@ -295,5 +432,10 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 24,
+  },
+  successUsername: {
+    fontSize: 16,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
 });

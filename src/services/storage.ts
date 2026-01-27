@@ -681,6 +681,19 @@ class StorageService {
 
     await this.db!.runAsync('DELETE FROM episode_reactions WHERE show_tmdb_id = ?', [showTmdbId]);
   }
+
+  // Clear all local data (used on sign out to prevent data bleeding between accounts)
+  async clearAllData(): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Delete all data from all tables
+    await this.db!.execAsync(`
+      DELETE FROM episode_reactions;
+      DELETE FROM sync_queue;
+      DELETE FROM watched_episodes;
+      DELETE FROM tracked_shows;
+    `);
+  }
 }
 
 export const storageService = new StorageService();

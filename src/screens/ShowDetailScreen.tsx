@@ -12,10 +12,11 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus } from '../types';
+import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus, FriendRating } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
+import { followsService } from '../services/supabase/follows';
 import { useWatchedEpisodes } from '../hooks/useShowData';
 import { useEpisodeReactions } from '../hooks/useEpisodeReactions';
 import { useAuth } from '../contexts/AuthContext';
@@ -44,6 +45,7 @@ export default function ShowDetailScreen() {
   // Rating state
   const [userRating, setUserRating] = useState<number>(0);
   const [communityRating, setCommunityRating] = useState<{ average: number; count: number } | null>(null);
+  const [friendRatings, setFriendRatings] = useState<FriendRating[]>([]);
   const [ratingLoading, setRatingLoading] = useState(false);
 
   const { isWatched, toggleWatched, watchedCount, watchedCountForSeason, markSeasonWatched, markSeasonUnwatched } =
@@ -92,7 +94,7 @@ export default function ShowDetailScreen() {
     loadData();
   }, [show.tmdbId, show.totalSeasons]);
 
-  // Load user rating and community rating
+  // Load user rating, friend ratings, and community rating
   useEffect(() => {
     async function loadRatings() {
       try {
@@ -100,12 +102,16 @@ export default function ShowDetailScreen() {
         const avgRating = await ratingsService.getShowAverageRating(show.tmdbId);
         setCommunityRating(avgRating);
 
-        // Load user's own rating (if logged in)
+        // Load user's own rating and friend ratings (if logged in)
         if (user) {
-          const rating = await ratingsService.getUserShowRating(user.id, show.tmdbId);
+          const [rating, friends] = await Promise.all([
+            ratingsService.getUserShowRating(user.id, show.tmdbId),
+            followsService.getFriendRatings(user.id, show.tmdbId),
+          ]);
           if (rating) {
             setUserRating(rating.rating);
           }
+          setFriendRatings(friends);
         }
       } catch (e) {
         console.error('Failed to load ratings:', e);
@@ -284,11 +290,31 @@ export default function ShowDetailScreen() {
           )}
         </View>
 
-        {/* Friends Rating (placeholder until Phase 2) */}
+        {/* Friends Rating */}
         {user && (
           <View style={styles.ratingRow}>
             <Text style={styles.ratingLabel}>Friends</Text>
-            <Text style={styles.ratingHint}>Follow friends to see ratings</Text>
+            {friendRatings.length > 0 ? (
+              <View style={styles.friendRatingsContainer}>
+                {friendRatings.slice(0, 3).map((fr) => (
+                  <View key={fr.user.id} style={styles.friendRatingItem}>
+                    <View style={styles.friendAvatar}>
+                      <Text style={styles.friendAvatarText}>
+                        {(fr.user.displayName || fr.user.username || 'U')[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <StarRating value={fr.rating} size={14} readonly />
+                  </View>
+                ))}
+                {friendRatings.length > 3 && (
+                  <Text style={styles.friendRatingsMore}>
+                    +{friendRatings.length - 3} more
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.ratingHint}>No friend ratings yet</Text>
+            )}
           </View>
         )}
 
@@ -538,6 +564,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textTertiary,
     fontStyle: 'italic',
+  },
+  friendRatingsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  friendRatingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  friendAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  friendAvatarText: {
+    color: COLORS.background,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  friendRatingsMore: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginLeft: 4,
   },
   providersSection: {
     paddingHorizontal: 16,

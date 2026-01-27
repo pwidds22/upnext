@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import type { User, Session } from '@supabase/supabase-js';
 import { authService } from '../services/supabase/auth';
 import { isSupabaseConfigured } from '../services/supabase/client';
+import { storageService } from '../services/storage';
 
 interface AuthContextType {
   user: User | null;
@@ -9,7 +10,7 @@ interface AuthContextType {
   isLoading: boolean;
   isConfigured: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, username?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
 }
@@ -51,13 +52,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await authService.signUp(email, password);
+  const signUp = useCallback(async (email: string, password: string, username?: string) => {
+    const { error } = await authService.signUp(email, password, username);
     return { error: error?.message ?? null };
   }, []);
 
   const signOut = useCallback(async () => {
     await authService.signOut();
+    // Clear local data to prevent data bleeding between accounts
+    await storageService.clearAllData();
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {

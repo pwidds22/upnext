@@ -20,12 +20,30 @@ export const authService = {
     return data.user;
   },
 
-  // Sign up with email and password
-  async signUp(email: string, password: string): Promise<AuthResult> {
+  // Sign up with email and password (optionally with username)
+  async signUp(email: string, password: string, username?: string): Promise<AuthResult> {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
+
+    // If signup successful and username provided, update the profile
+    if (!error && data.user && username) {
+      // Small delay to ensure profile trigger has completed
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          username: username.toLowerCase(),
+          display_name: username,
+        })
+        .eq('id', data.user.id);
+
+      if (profileError) {
+        console.error('Failed to update profile with username:', profileError);
+      }
+    }
 
     return {
       user: data.user,

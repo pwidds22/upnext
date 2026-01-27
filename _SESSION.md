@@ -4,105 +4,99 @@ Branch: master
 
 ## Completed This Session
 
-### Episode Emoji Reactions (NEW)
-- [x] Created Supabase `user_episode_reactions` table with enum ('good', 'meh', 'bad')
-- [x] Created `src/services/supabase/episodeReactions.ts` - Cloud service for reactions
-- [x] Added SQLite table and CRUD in `src/services/storage.ts`
-- [x] Added reaction types to `src/types/index.ts` - EpisodeReactionType, REACTION_CONFIG, EpisodeReaction
-- [x] Added reaction sync handling to `src/services/supabase/sync.ts`
-- [x] Created `src/hooks/useEpisodeReactions.ts` - React hook for reaction state
-- [x] Created `src/components/EpisodeReactionPicker.tsx` - 3-button emoji picker (👍😐👎)
-- [x] Updated `src/components/EpisodeRow.tsx` - Shows reactions when episode is watched
-- [x] Updated `src/screens/ShowDetailScreen.tsx` - Wired up reactions hook
+### Follow System (Phase 2) - COMPLETE
+- [x] Created Supabase `user_follows` table with RLS policies
+- [x] Extended `profiles` table with `bio` and `is_searchable` columns
+- [x] Added follow types to `src/types/index.ts`
+- [x] Created `src/services/supabase/follows.ts` - Full follow service
+- [x] Created `src/hooks/useFollows.ts` - React hooks for follow state
+- [x] Created `src/components/FollowButton.tsx` - Follow/Following toggle
+- [x] Created `src/components/UserRow.tsx` - User list item component
+- [x] Created 4 new screens:
+  - `src/screens/UserSearchScreen.tsx` - Find people
+  - `src/screens/UserProfileScreen.tsx` - View user profile
+  - `src/screens/FollowersScreen.tsx` - List followers
+  - `src/screens/FollowingScreen.tsx` - List following
+- [x] Updated `src/navigation/AppNavigator.tsx` - Registered new screens
+- [x] Updated `src/screens/ProfileScreen.tsx` - Follow counts + Find People
+- [x] Updated `src/screens/ShowDetailScreen.tsx` - Friend ratings display
 
-**UX Flow:**
-- Reactions only appear after marking an episode as watched
-- Tap emoji to react, tap same emoji to remove
-- Single reaction per episode (not multiple)
-- Syncs offline-first with Supabase
+### Bug Fixes
+- [x] Fixed data bleeding between accounts - Added `clearAllData()` to `src/services/storage.ts`
+- [x] Fixed sign out to clear local SQLite data - Updated `src/contexts/AuthContext.tsx`
+- [x] Fixed user search returning no results - Updated DB trigger to set username from email
+- [x] Applied migration `fix_profile_username_from_email` to set usernames for existing users
 
-### Rating System Implementation
-- [x] Created `src/services/supabase/ratings.ts` - Rating CRUD operations
-  - rateShow (select-then-update/insert for reliability)
-  - rateSeason, rateEpisode (ready for future use)
-  - getUserShowRating, getUserRatings, getUserShowRatings
-  - getPublicShowRatings, getShowAverageRating
-  - deleteRating, deleteShowRating
-- [x] Created `src/components/StarRating.tsx` - 5-star input component
-  - Stores 0-10 scale (database), displays 1-5 stars (UI)
-  - Half-star support: tap star = full, tap same star again = half (toggle)
-  - Supports readonly mode for displaying ratings
-  - Utility functions: starsToValue, valueToStars, formatRating
-- [x] Updated `src/types/index.ts` - Added rating types
-  - RatingType, UserRating, RatingWithUser
-- [x] Updated `src/screens/ShowDetailScreen.tsx` - Added rating UI
-  - "Your Rating" with 5-star picker (when logged in)
-  - "Friends" placeholder (for Phase 2)
-  - "Everyone" community average rating display
-  - Loads user rating on mount, saves changes with haptic feedback
-- [x] Updated `src/screens/ProfileScreen.tsx` - Added "My Ratings" section
-  - Grid display of rated shows with posters and stars
-  - Loads ratings from Supabase
-  - Tap to navigate to show detail
-
-### Previous Sessions
-- [x] Supabase foundation (auth, client, tables)
-- [x] Database schema (profiles, user_shows, user_watched_episodes, user_ratings)
-- [x] Sync engine (offline-first bidirectional sync)
-
-## In Progress / Paused
-
-### UX Research Complete
-Research completed via Claude deep research. Key findings in `CLAUDE_RESEARCH.md`:
-- 5-star with half-star ratings validated (matches Letterboxd)
-- Show-level rating = primary, Season = optional, Episode = emoji reactions (not stars)
-- Privacy-focused monetization: freemium ($4.99/mo or $49.99/yr) + lifetime ($99)
-- Key differentiators: speed, show-level ratings, data export, privacy
+### Username Selection on Signup - COMPLETE
+- [x] Added `isUsernameAvailable()` to `src/services/supabase/follows.ts`
+- [x] Added `updateProfile()` to `src/services/supabase/follows.ts`
+- [x] Updated `src/services/supabase/auth.ts` - signUp accepts optional username
+- [x] Updated `src/contexts/AuthContext.tsx` - Pass username through signUp
+- [x] Rewrote `src/screens/auth/SignUpScreen.tsx`:
+  - Username field with real-time availability checking
+  - Visual feedback (green/red border)
+  - Validation: 3-20 chars, alphanumeric + underscores
+  - Auto-lowercases input
 
 ## App Status
 - Core features working (search, tracking, episodes)
-- Auth UI ready (sign in, sign up, profile)
+- Auth UI ready with username selection on signup
 - Supabase connected and tables created
-- Sync engine complete and tested
-- **RATING SYSTEM WORKING** - 1-5 star ratings with half-star toggle
-- **EPISODE REACTIONS WORKING** - 👍😐👎 reactions for watched episodes
+- Sync engine complete
+- Rating system working (5-star with half-star toggle)
+- Episode reactions working (👍😐👎)
+- **FOLLOW SYSTEM WORKING** - Follow/unfollow, search users, friend ratings
+- **USERNAME SIGNUP WORKING** - Users can choose username on signup
 
-## Next Steps (Pending Research)
+## Database Migrations Applied
+1. `create_profiles`
+2. `create_user_shows`
+3. `create_watched_episodes`
+4. `create_user_ratings`
+5. `create_updated_at_triggers`
+6. `fix_function_search_paths`
+7. `create_episode_reactions`
+8. `create_user_follows`
+9. `fix_profile_username_from_email`
 
-### After UX Research
-1. Finalize rating system design (show/season/episode, half-stars)
-2. Decide on social features scope
-3. Plan monetization strategy
+## Next Steps
 
-### Phase 2: Follow System (pending research)
-- [ ] Create `follows` table (follower_id, following_id)
-- [ ] Create `user_activity` table (activity feed)
-- [ ] Create social service (`src/services/supabase/social.ts`)
-- [ ] Create UserProfileScreen, FollowersScreen, UserSearchScreen
+### Phase 2b: Activity Feed (Optional)
+- [ ] Create `user_activities` table
+- [ ] Real-time feed with Supabase subscriptions
+- [ ] ActivityFeedScreen
 
-### Phase 3: Recommendations (pending research)
+### Phase 3: Recommendations
 - [ ] Add TMDB endpoints (trending, popular, similar, discover)
 - [ ] Update SearchScreen to show recommendations when empty
 
-## Key Files Created/Modified This Session
+### Polish
+- [ ] Allow existing users to change username in ProfileScreen
+- [ ] Add profile editing (display name, bio, avatar)
 
-### Episode Reactions (Latest)
-- `src/services/supabase/episodeReactions.ts` - NEW: Cloud service for reactions
-- `src/hooks/useEpisodeReactions.ts` - NEW: React hook for reaction state
-- `src/components/EpisodeReactionPicker.tsx` - NEW: 3-emoji picker (👍😐👎)
-- `src/components/EpisodeRow.tsx` - MODIFIED: Shows reactions when watched
-- `src/services/storage.ts` - MODIFIED: SQLite table + CRUD for reactions
-- `src/services/supabase/sync.ts` - MODIFIED: Sync handling for reactions
-- `src/types/index.ts` - MODIFIED: EpisodeReactionType, REACTION_CONFIG
-- `src/screens/ShowDetailScreen.tsx` - MODIFIED: Wired up reactions hook
+## Key Files Modified This Session
 
-### Rating System (Previous)
-- `src/services/supabase/ratings.ts` - NEW: Rating CRUD operations
-- `src/components/StarRating.tsx` - NEW: 5-star input with half-star toggle
-- `src/screens/ProfileScreen.tsx` - MODIFIED: My Ratings section
+### New Files
+- `src/services/supabase/follows.ts`
+- `src/hooks/useFollows.ts`
+- `src/components/FollowButton.tsx`
+- `src/components/UserRow.tsx`
+- `src/screens/UserSearchScreen.tsx`
+- `src/screens/UserProfileScreen.tsx`
+- `src/screens/FollowersScreen.tsx`
+- `src/screens/FollowingScreen.tsx`
+
+### Modified Files
+- `src/types/index.ts` - Follow types + navigation params
+- `src/navigation/AppNavigator.tsx` - New screens
+- `src/screens/ProfileScreen.tsx` - Follow counts + Find People
+- `src/screens/ShowDetailScreen.tsx` - Friend ratings
+- `src/services/storage.ts` - clearAllData()
+- `src/contexts/AuthContext.tsx` - Clear data on signout, username in signup
+- `src/services/supabase/auth.ts` - Username in signup
+- `src/screens/auth/SignUpScreen.tsx` - Username field
 
 ## Build Info
 - Expo SDK: 54
 - Supabase project connected
 - TypeScript compiles cleanly
-- Episode reactions tested and working

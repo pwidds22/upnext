@@ -17,6 +17,10 @@ import ShowDetailScreen from '../screens/ShowDetailScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import UserSearchScreen from '../screens/UserSearchScreen';
+import UserProfileScreen from '../screens/UserProfileScreen';
+import FollowersScreen from '../screens/FollowersScreen';
+import FollowingScreen from '../screens/FollowingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -158,6 +162,34 @@ export default function AppNavigator() {
             title: 'Profile',
             presentation: 'modal',
           }}
+        />
+        <Stack.Screen
+          name="UserSearch"
+          component={UserSearchScreen}
+          options={{ title: 'Find People' }}
+        />
+        <Stack.Screen
+          name="UserProfile"
+          component={UserProfileScreen}
+          options={{ title: 'Profile' }}
+        />
+        <Stack.Screen
+          name="Followers"
+          component={FollowersScreen}
+          options={({ route }) => ({
+            title: route.params.username
+              ? `${route.params.username}'s Followers`
+              : 'Followers',
+          })}
+        />
+        <Stack.Screen
+          name="Following"
+          component={FollowingScreen}
+          options={({ route }) => ({
+            title: route.params.username
+              ? `${route.params.username} Following`
+              : 'Following',
+          })}
         />
       </Stack.Navigator>
     </NavigationContainer>

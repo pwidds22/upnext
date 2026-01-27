@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { storageService } from '../services/storage';
+import { useFollowCounts } from '../hooks/useFollows';
 import { COLORS } from '../utils/constants';
 import { RootStackParamList, TrackedShow } from '../types';
 import StarRating, { formatRating } from '../components/StarRating';
@@ -36,6 +37,11 @@ export default function ProfileScreen() {
   const [authScreen, setAuthScreen] = useState<'signIn' | 'signUp' | null>(null);
   const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
+
+  // Follow counts for signed-in user
+  const { followers, following, loading: followCountsLoading } = useFollowCounts(
+    user?.id ?? ''
+  );
 
   // Load user's ratings
   useEffect(() => {
@@ -132,6 +138,54 @@ export default function ProfileScreen() {
             <Ionicons name="cloud-done" size={14} color={COLORS.primary} />
             <Text style={styles.syncBadgeText}>Synced</Text>
           </View>
+
+          {/* Follow Stats */}
+          <View style={styles.statsRow}>
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() =>
+                navigation.navigate('Followers', {
+                  userId: user.id,
+                  username: user.email?.split('@')[0],
+                })
+              }
+            >
+              <Text style={styles.statNumber}>
+                {followCountsLoading ? '-' : followers}
+              </Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </TouchableOpacity>
+
+            <View style={styles.statDivider} />
+
+            <TouchableOpacity
+              style={styles.statItem}
+              onPress={() =>
+                navigation.navigate('Following', {
+                  userId: user.id,
+                  username: user.email?.split('@')[0],
+                })
+              }
+            >
+              <Text style={styles.statNumber}>
+                {followCountsLoading ? '-' : following}
+              </Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Social</Text>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('UserSearch')}
+          >
+            <Ionicons name="people-outline" size={22} color={COLORS.text} />
+            <Text style={styles.menuItemText}>Find People</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -300,6 +354,30 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 13,
     fontWeight: '500',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 24,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.border,
   },
   section: {
     paddingTop: 24,

@@ -174,6 +174,10 @@ export type RootStackParamList = {
   AddShow: { tmdbShow: TMDBShow };
   Auth: undefined;
   Profile: undefined;
+  UserSearch: undefined;
+  UserProfile: { userId: string };
+  Followers: { userId: string; username?: string };
+  Following: { userId: string; username?: string };
 };
 
 export type AuthStackParamList = {
@@ -274,4 +278,51 @@ export interface UserEpisodeReactionRow {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+// Follow system types
+
+// Supabase row type for follows
+export interface UserFollowRow {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+}
+
+// Profile row type (matches database)
+export interface ProfileRow {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  is_searchable: boolean;
+}
+
+// App-level user profile type
+export interface UserProfile {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  bio?: string | null;
+}
+
+// User with follow status for lists
+export interface UserWithFollowStatus extends UserProfile {
+  isFollowing: boolean;
+  isFollowedBy: boolean;
+}
+
+// Follow counts
+export interface FollowCounts {
+  followers: number;
+  following: number;
+}
+
+// Friend rating for show detail
+export interface FriendRating {
+  user: UserProfile;
+  rating: number;
 }
