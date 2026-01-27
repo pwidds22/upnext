@@ -4,39 +4,20 @@ Branch: master
 
 ## Completed This Session
 
-### Follow System (Phase 2) - COMPLETE
-- [x] Created Supabase `user_follows` table with RLS policies
-- [x] Extended `profiles` table with `bio` and `is_searchable` columns
-- [x] Added follow types to `src/types/index.ts`
-- [x] Created `src/services/supabase/follows.ts` - Full follow service
-- [x] Created `src/hooks/useFollows.ts` - React hooks for follow state
-- [x] Created `src/components/FollowButton.tsx` - Follow/Following toggle
-- [x] Created `src/components/UserRow.tsx` - User list item component
-- [x] Created 4 new screens:
-  - `src/screens/UserSearchScreen.tsx` - Find people
-  - `src/screens/UserProfileScreen.tsx` - View user profile
-  - `src/screens/FollowersScreen.tsx` - List followers
-  - `src/screens/FollowingScreen.tsx` - List following
-- [x] Updated `src/navigation/AppNavigator.tsx` - Registered new screens
-- [x] Updated `src/screens/ProfileScreen.tsx` - Follow counts + Find People
-- [x] Updated `src/screens/ShowDetailScreen.tsx` - Friend ratings display
-
-### Bug Fixes
-- [x] Fixed data bleeding between accounts - Added `clearAllData()` to `src/services/storage.ts`
-- [x] Fixed sign out to clear local SQLite data - Updated `src/contexts/AuthContext.tsx`
-- [x] Fixed user search returning no results - Updated DB trigger to set username from email
-- [x] Applied migration `fix_profile_username_from_email` to set usernames for existing users
-
-### Username Selection on Signup - COMPLETE
-- [x] Added `isUsernameAvailable()` to `src/services/supabase/follows.ts`
-- [x] Added `updateProfile()` to `src/services/supabase/follows.ts`
-- [x] Updated `src/services/supabase/auth.ts` - signUp accepts optional username
-- [x] Updated `src/contexts/AuthContext.tsx` - Pass username through signUp
-- [x] Rewrote `src/screens/auth/SignUpScreen.tsx`:
-  - Username field with real-time availability checking
-  - Visual feedback (green/red border)
-  - Validation: 3-20 chars, alphanumeric + underscores
-  - Auto-lowercases input
+### Recommendations Feature (Phase 3) - COMPLETE
+- [x] Added TMDB endpoints to `src/services/tmdb.ts`:
+  - `getTrending(timeWindow)` - Trending shows (day/week)
+  - `getPopular(page)` - Popular shows
+  - `discoverByGenres(genreIds)` - Discover by genre with OR logic
+- [x] Created `src/hooks/useRecommendations.ts`:
+  - Fetches trending + genre-based recommendations
+  - 5-minute in-memory caching
+  - Extracts genres from user's tracked shows
+  - Filters out already-tracked shows
+- [x] Created `src/components/ShowCard.tsx` - Compact card for horizontal lists
+- [x] Updated `src/screens/SearchScreen.tsx`:
+  - Shows "Trending This Week" + "For You" sections when search is empty
+  - Tapping a card opens add-to-watchlist modal
 
 ## App Status
 - Core features working (search, tracking, episodes)
@@ -44,9 +25,10 @@ Branch: master
 - Supabase connected and tables created
 - Sync engine complete
 - Rating system working (5-star with half-star toggle)
-- Episode reactions working (👍😐👎)
+- Episode reactions working
 - **FOLLOW SYSTEM WORKING** - Follow/unfollow, search users, friend ratings
 - **USERNAME SIGNUP WORKING** - Users can choose username on signup
+- **RECOMMENDATIONS WORKING** - Trending + "For You" (genre-based) on Search screen
 
 ## Database Migrations Applied
 1. `create_profiles`
@@ -61,14 +43,20 @@ Branch: master
 
 ## Next Steps
 
+### Recommendations Improvements (Priority)
+- [ ] Filter out shows older than 15 years (`first_air_date.gte` in `src/services/tmdb.ts:discoverByGenres`)
+- [ ] Show TMDB rating on ShowCard (`vote_average` field already available)
+- [ ] Add "dismiss/ignore" feature for suggestions:
+  - Create `dismissed_recommendations` table in Supabase
+  - Add dismiss button to ShowCard
+  - Filter out dismissed shows in `useRecommendations`
+  - Optionally track "bad" suggestions to improve future recommendations
+- [ ] Remove debug console.log statements from `src/hooks/useRecommendations.ts`
+
 ### Phase 2b: Activity Feed (Optional)
 - [ ] Create `user_activities` table
 - [ ] Real-time feed with Supabase subscriptions
 - [ ] ActivityFeedScreen
-
-### Phase 3: Recommendations
-- [ ] Add TMDB endpoints (trending, popular, similar, discover)
-- [ ] Update SearchScreen to show recommendations when empty
 
 ### Polish
 - [ ] Allow existing users to change username in ProfileScreen
@@ -77,24 +65,12 @@ Branch: master
 ## Key Files Modified This Session
 
 ### New Files
-- `src/services/supabase/follows.ts`
-- `src/hooks/useFollows.ts`
-- `src/components/FollowButton.tsx`
-- `src/components/UserRow.tsx`
-- `src/screens/UserSearchScreen.tsx`
-- `src/screens/UserProfileScreen.tsx`
-- `src/screens/FollowersScreen.tsx`
-- `src/screens/FollowingScreen.tsx`
+- `src/hooks/useRecommendations.ts` - Recommendations hook with caching
+- `src/components/ShowCard.tsx` - Compact show card for horizontal lists
 
 ### Modified Files
-- `src/types/index.ts` - Follow types + navigation params
-- `src/navigation/AppNavigator.tsx` - New screens
-- `src/screens/ProfileScreen.tsx` - Follow counts + Find People
-- `src/screens/ShowDetailScreen.tsx` - Friend ratings
-- `src/services/storage.ts` - clearAllData()
-- `src/contexts/AuthContext.tsx` - Clear data on signout, username in signup
-- `src/services/supabase/auth.ts` - Username in signup
-- `src/screens/auth/SignUpScreen.tsx` - Username field
+- `src/services/tmdb.ts` - Added getTrending, getPopular, discoverByGenres methods
+- `src/screens/SearchScreen.tsx` - Recommendations display on empty state
 
 ## Build Info
 - Expo SDK: 54

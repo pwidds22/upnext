@@ -85,6 +85,57 @@ class TMDBService {
     const data: TMDBWatchProvidersResponse = await response.json();
     return data.results?.[countryCode] || null;
   }
+
+  // Get trending TV shows
+  async getTrending(timeWindow: 'day' | 'week' = 'week'): Promise<TMDBShow[]> {
+    const url = `${TMDB_BASE_URL}/trending/tv/${timeWindow}`;
+
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get trending: ${response.status}`);
+    }
+
+    const data: TMDBSearchResponse = await response.json();
+    return data.results;
+  }
+
+  // Get popular TV shows
+  async getPopular(page: number = 1): Promise<TMDBShow[]> {
+    const url = `${TMDB_BASE_URL}/tv/popular?page=${page}`;
+
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get popular: ${response.status}`);
+    }
+
+    const data: TMDBSearchResponse = await response.json();
+    return data.results;
+  }
+
+  // Discover TV shows by genre (OR logic - matches ANY of the genres)
+  async discoverByGenres(genreIds: number[]): Promise<TMDBShow[]> {
+    if (genreIds.length === 0) return [];
+
+    const params = new URLSearchParams({
+      with_genres: genreIds.join('|'), // Use pipe for OR logic (comma = AND)
+      sort_by: 'popularity.desc',
+      'vote_count.gte': '50',
+      include_adult: 'false',
+    });
+
+    const url = `${TMDB_BASE_URL}/discover/tv?${params}`;
+
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      throw new Error(`Failed to discover shows: ${response.status}`);
+    }
+
+    const data: TMDBSearchResponse = await response.json();
+    return data.results;
+  }
 }
 
 export const tmdbService = new TMDBService();

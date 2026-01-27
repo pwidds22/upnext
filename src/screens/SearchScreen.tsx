@@ -16,6 +16,8 @@ import { TMDBShow, TrackedShow } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import ShowPoster from '../components/ShowPoster';
+import ShowCard from '../components/ShowCard';
+import { useRecommendations } from '../hooks/useRecommendations';
 import {
   COLORS,
   SEARCH_DEBOUNCE_MS,
@@ -33,6 +35,9 @@ export default function SearchScreen() {
   // Modal state
   const [selectedShow, setSelectedShow] = useState<TMDBShow | null>(null);
   const [addingShow, setAddingShow] = useState(false);
+
+  // Recommendations (pass trackedIds to filter out shows user already has)
+  const { trending, forYou, loading: recsLoading } = useRecommendations(trackedIds);
 
   // Load tracked show IDs
   useEffect(() => {
@@ -141,6 +146,50 @@ export default function SearchScreen() {
     [trackedIds]
   );
 
+  const renderRecommendations = () => {
+    if (recsLoading) {
+      return (
+        <View style={styles.recsLoadingContainer}>
+          <ActivityIndicator color={COLORS.primary} />
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.recommendationsContainer}>
+        {trending.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Trending This Week</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {trending.map((show) => (
+                <ShowCard key={show.id} show={show} onPress={setSelectedShow} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {forYou.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>For You</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {forYou.map((show) => (
+                <ShowCard key={show.id} show={show} onPress={setSelectedShow} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
   const renderEmpty = () => {
     if (loading) return null;
 
@@ -164,13 +213,8 @@ export default function SearchScreen() {
       );
     }
 
-    return (
-      <View style={styles.emptyContainer}>
-        <Ionicons name="tv-outline" size={48} color={COLORS.textSecondary} />
-        <Text style={styles.emptyTitle}>Search for Shows</Text>
-        <Text style={styles.emptyText}>Find TV shows to add to your watchlist</Text>
-      </View>
-    );
+    // Show recommendations when no query
+    return renderRecommendations();
   };
 
   return (
@@ -353,6 +397,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  // Recommendations styles
+  recommendationsContainer: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  recsLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  horizontalList: {
+    paddingHorizontal: 16,
   },
   // Modal styles
   modalContainer: {
