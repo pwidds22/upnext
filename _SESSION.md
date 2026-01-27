@@ -1,82 +1,83 @@
 # Current Session State
-Updated: 2026-01-26
+Updated: 2026-01-27
 Branch: master
 
 ## Completed This Session
 
-### Phase 1: Supabase Foundation (Previous Session)
-- [x] Installed Supabase dependencies (`@supabase/supabase-js`, `react-native-url-polyfill`)
-- [x] Created `.env` and `.env.example` for environment variables
-- [x] Moved TMDB API key to env vars (`src/utils/constants.ts`)
-- [x] Created Supabase client with SecureStore (`src/services/supabase/client.ts`)
-- [x] Created auth service (`src/services/supabase/auth.ts`)
-- [x] Created AuthContext and useAuth hook (`src/contexts/AuthContext.tsx`)
-- [x] Created sign-in/sign-up screens (`src/screens/auth/SignInScreen.tsx`, `SignUpScreen.tsx`)
-- [x] Created ProfileScreen (`src/screens/ProfileScreen.tsx`)
-- [x] Updated AppNavigator with profile button and auth screens
-- [x] Wrapped App.tsx with AuthProvider
+### Rating System Implementation
+- [x] Created `src/services/supabase/ratings.ts` - Rating CRUD operations
+  - rateShow (select-then-update/insert for reliability)
+  - rateSeason, rateEpisode (ready for future use)
+  - getUserShowRating, getUserRatings, getUserShowRatings
+  - getPublicShowRatings, getShowAverageRating
+  - deleteRating, deleteShowRating
+- [x] Created `src/components/StarRating.tsx` - 5-star input component
+  - Stores 0-10 scale (database), displays 1-5 stars (UI)
+  - Half-star support: tap star = full, tap same star again = half (toggle)
+  - Supports readonly mode for displaying ratings
+  - Utility functions: starsToValue, valueToStars, formatRating
+- [x] Updated `src/types/index.ts` - Added rating types
+  - RatingType, UserRating, RatingWithUser
+- [x] Updated `src/screens/ShowDetailScreen.tsx` - Added rating UI
+  - "Your Rating" with 5-star picker (when logged in)
+  - "Friends" placeholder (for Phase 2)
+  - "Everyone" community average rating display
+  - Loads user rating on mount, saves changes with haptic feedback
+- [x] Updated `src/screens/ProfileScreen.tsx` - Added "My Ratings" section
+  - Grid display of rated shows with posters and stars
+  - Loads ratings from Supabase
+  - Tap to navigate to show detail
 
-### Phase 2: Database Schema (Previous Session)
-- [x] Added sync columns to SQLite (`src/services/storage.ts`):
-  - `sync_status`, `remote_id`, `last_synced_at` on tracked_shows and watched_episodes
-  - Created `sync_queue` table for offline changes
-- [x] Added sync types to `src/types/index.ts`
-- [x] Created Supabase tables via MCP:
-  - `profiles` (auto-created on signup)
-  - `user_shows` (synced tracked shows)
-  - `user_watched_episodes` (synced watched episodes)
-  - `user_ratings` (for Phase 2 ratings feature)
-- [x] All tables have RLS enabled, proper indexes, and updated_at triggers
+### Previous Sessions
+- [x] Supabase foundation (auth, client, tables)
+- [x] Database schema (profiles, user_shows, user_watched_episodes, user_ratings)
+- [x] Sync engine (offline-first bidirectional sync)
 
-### Phase 3: Sync Engine (THIS SESSION - COMPLETED & TESTED)
-- [x] Created `src/services/supabase/shows.ts` - Show cloud operations
-  - fetchAllShows, fetchShowsSince, upsertShow, upsertShows, softDeleteShow
-- [x] Created `src/services/supabase/episodes.ts` - Episode cloud operations
-  - fetchAllEpisodes, fetchEpisodesSince, upsertEpisode, upsertEpisodes, softDeleteEpisode
-- [x] Created `src/services/supabase/sync.ts` - Core sync engine
-  - Initial sync (full merge on sign-in)
-  - Incremental sync (push queue, pull changes)
-  - Conflict resolution (last-write-wins)
-  - Retry with exponential backoff
-- [x] Created `src/contexts/SyncContext.tsx` - Sync state provider
-  - Network monitoring via NetInfo
-  - Auto-sync on reconnection
-  - Initial sync on sign-in
-- [x] Created `src/hooks/useSync.ts` - Sync hook
-- [x] Modified `src/hooks/useShowData.ts` - Integrated sync triggers
-- [x] Updated `App.tsx` - Wrapped with SyncProvider
-- [x] Installed dependencies: `@react-native-community/netinfo`, `@react-native-async-storage/async-storage`
-- [x] **TESTED & VERIFIED** - Sync working end-to-end:
-  - Shows sync to `user_shows` table
-  - Episodes sync to `user_watched_episodes` table
-  - Bulk season marking syncs correctly
-  - ~5 second latency from action to cloud
+## In Progress / Paused
+
+### UX Research Needed
+User wants to do deep research before continuing with social features. Key questions:
+1. Rating granularity: show-level vs season-level vs episode-level ratings?
+2. Should show rating be average of seasons or separate?
+3. Half-star ratings - needed or unnecessary friction?
+4. Business model: how to monetize without selling data?
+5. Competitive positioning vs TV Time (simpler alternative)
+
+**Research prompt created** - user will run through Claude web for deep research
 
 ## App Status
 - Core features working (search, tracking, episodes)
 - Auth UI ready (sign in, sign up, profile)
 - Supabase connected and tables created
-- **SYNC ENGINE COMPLETE** - Full offline-first sync with Supabase, tested and working
-- Network monitoring active - auto-syncs on reconnection
+- Sync engine complete and tested
+- **RATING SYSTEM WORKING** - 1-5 star ratings with half-star toggle
 
-## Next Steps
-1. Add sync status indicator to UI (e.g., in profile screen or header)
-2. Add user-facing sync controls (manual sync button, last synced time display)
-3. Handle edge cases (large datasets, rate limiting)
-4. Test offline mode and conflict resolution scenarios
+## Next Steps (Pending Research)
+
+### After UX Research
+1. Finalize rating system design (show/season/episode, half-stars)
+2. Decide on social features scope
+3. Plan monetization strategy
+
+### Phase 2: Follow System (pending research)
+- [ ] Create `follows` table (follower_id, following_id)
+- [ ] Create `user_activity` table (activity feed)
+- [ ] Create social service (`src/services/supabase/social.ts`)
+- [ ] Create UserProfileScreen, FollowersScreen, UserSearchScreen
+
+### Phase 3: Recommendations (pending research)
+- [ ] Add TMDB endpoints (trending, popular, similar, discover)
+- [ ] Update SearchScreen to show recommendations when empty
 
 ## Key Files Created/Modified This Session
-- `src/services/supabase/shows.ts` - NEW: Show cloud CRUD
-- `src/services/supabase/episodes.ts` - NEW: Episode cloud CRUD
-- `src/services/supabase/sync.ts` - NEW: Core sync engine
-- `src/contexts/SyncContext.tsx` - NEW: Sync state provider
-- `src/hooks/useSync.ts` - NEW: Sync hook
-- `src/hooks/useShowData.ts` - MODIFIED: Added sync triggers
-- `src/types/index.ts` - MODIFIED: Added cloud row types (SyncState, UserShowRow, UserWatchedEpisodeRow, SyncResult)
-- `App.tsx` - MODIFIED: Added SyncProvider
+- `src/services/supabase/ratings.ts` - NEW: Rating CRUD operations
+- `src/components/StarRating.tsx` - NEW: 5-star input with half-star toggle
+- `src/screens/ShowDetailScreen.tsx` - MODIFIED: Rating UI (Your/Friends/Everyone)
+- `src/screens/ProfileScreen.tsx` - MODIFIED: My Ratings section
+- `src/types/index.ts` - MODIFIED: Added rating types
 
 ## Build Info
 - Expo SDK: 54
 - Supabase project connected
 - TypeScript compiles cleanly
-- Sync tested and verified working
+- Rating feature tested and working

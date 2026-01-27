@@ -15,9 +15,12 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
+import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { useWatchedEpisodes } from '../hooks/useShowData';
+import { useAuth } from '../contexts/AuthContext';
 import ShowPoster from '../components/ShowPoster';
 import EpisodeRow from '../components/EpisodeRow';
+import StarRating, { formatRating } from '../components/StarRating';
 import { COLORS, STATUS_CONFIG, getLogoUrl } from '../utils/constants';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -27,6 +30,7 @@ export default function ShowDetailScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ShowDetailRouteProp>();
   const { show } = route.params;
+  const { user } = useAuth();
 
   const [seasons, setSeasons] = useState<TMDBSeason[]>([]);
   const [providers, setProviders] = useState<TMDBCountryProviders | null>(null);
@@ -35,6 +39,11 @@ export default function ShowDetailScreen() {
   const [activeTab, setActiveTab] = useState<'episodes' | 'about'>('episodes');
   const [currentStatus, setCurrentStatus] = useState<ShowStatus>(show.status);
   const [airedEpisodes, setAiredEpisodes] = useState<number>(show.airedEpisodes ?? show.totalEpisodes);
+
+  // Rating state
+  const [userRating, setUserRating] = useState<number>(0);
+  const [communityRating, setCommunityRating] = useState<{ average: number; count: number } | null>(null);
+  const [ratingLoading, setRatingLoading] = useState(false);
 
   const { isWatched, toggleWatched, watchedCount, watchedCountForSeason, markSeasonWatched, markSeasonUnwatched } =
     useWatchedEpisodes(show.tmdbId);
@@ -79,6 +88,56 @@ export default function ShowDetailScreen() {
 
     loadData();
   }, [show.tmdbId, show.totalSeasons]);
+
+  // Load user rating and community rating
+  useEffect(() => {
+    async function loadRatings() {
+      try {
+        // Load community average (always)
+        const avgRating = await ratingsService.getShowAverageRating(show.tmdbId);
+        setCommunityRating(avgRating);
+
+        // Load user's own rating (if logged in)
+        if (user) {
+          const rating = await ratingsService.getUserShowRating(user.id, show.tmdbId);
+          if (rating) {
+            setUserRating(rating.rating);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load ratings:', e);
+      }
+    }
+
+    loadRatings();
+  }, [show.tmdbId, user]);
+
+  const handleRatingChange = useCallback(
+    async (newRating: number) => {
+      if (!user) return;
+
+      setRatingLoading(true);
+      try {
+        await ratingsService.rateShow(user.id, {
+          tmdbId: show.tmdbId,
+          rating: newRating,
+          isPublic: true, // Default to public for now
+        });
+        setUserRating(newRating);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+        // Refresh community rating
+        const avgRating = await ratingsService.getShowAverageRating(show.tmdbId);
+        setCommunityRating(avgRating);
+      } catch (e) {
+        console.error('Failed to save rating:', e);
+        Alert.alert('Error', 'Failed to save rating');
+      } finally {
+        setRatingLoading(false);
+      }
+    },
+    [user, show.tmdbId]
+  );
 
   const toggleSeason = useCallback((seasonNumber: number) => {
     setExpandedSeasons((prev) => {
@@ -197,6 +256,56 @@ export default function ShowDetailScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+      </View>
+
+      {/* Rating Section */}
+      <View style={styles.ratingSection}>
+        {/* Your Rating */}
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingLabel}>Your Rating</Text>
+          {user ? (
+            <View style={styles.ratingStars}>
+              <StarRating
+                value={userRating}
+                onChange={handleRatingChange}
+                size={28}
+                readonly={ratingLoading}
+              />
+              {userRating > 0 && (
+                <Text style={styles.ratingValue}>{formatRating(userRating)}</Text>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.ratingHint}>Sign in to rate</Text>
+          )}
+        </View>
+
+        {/* Friends Rating (placeholder until Phase 2) */}
+        {user && (
+          <View style={styles.ratingRow}>
+            <Text style={styles.ratingLabel}>Friends</Text>
+            <Text style={styles.ratingHint}>Follow friends to see ratings</Text>
+          </View>
+        )}
+
+        {/* Community Rating (everyone on the app) */}
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingLabel}>Everyone</Text>
+          {communityRating && communityRating.count > 0 ? (
+            <View style={styles.ratingStars}>
+              <StarRating
+                value={communityRating.average}
+                size={20}
+                readonly
+              />
+              <Text style={styles.ratingValue}>
+                {formatRating(communityRating.average)} ({communityRating.count})
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.ratingHint}>No ratings yet</Text>
+          )}
         </View>
       </View>
 
@@ -391,6 +500,37 @@ const styles = StyleSheet.create({
   statusOptionText: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  ratingSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 16,
+    gap: 12,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ratingLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  ratingStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ratingValue: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  ratingHint: {
+    fontSize: 13,
+    color: COLORS.textTertiary,
+    fontStyle: 'italic',
   },
   providersSection: {
     paddingHorizontal: 16,

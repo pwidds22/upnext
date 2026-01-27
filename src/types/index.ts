@@ -198,3 +198,29 @@ export interface UpNextEpisode {
   airDate: string | null;
   isUpcoming: boolean;
 }
+
+// Rating types
+export type RatingType = 'show' | 'season' | 'episode';
+
+export interface UserRating {
+  id: string;
+  userId: string;
+  tmdbId: number;
+  ratingType: RatingType;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  rating: number; // 0-10 scale
+  review?: string;
+  isPublic: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Rating with user info for public ratings display
+export interface RatingWithUser extends UserRating {
+  user: {
+    username: string;
+    displayName?: string;
+    avatarUrl?: string;
+  };
+}

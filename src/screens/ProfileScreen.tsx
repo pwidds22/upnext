@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,71 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
+import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
+import { storageService } from '../services/storage';
 import { COLORS } from '../utils/constants';
+import { RootStackParamList, TrackedShow } from '../types';
+import StarRating, { formatRating } from '../components/StarRating';
+import ShowPoster from '../components/ShowPoster';
 import SignInScreen from './auth/SignInScreen';
 import SignUpScreen from './auth/SignUpScreen';
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Extended rating with show info for display
+interface RatingWithShowInfo extends UserRatingRow {
+  showTitle?: string;
+  posterPath?: string | null;
+}
+
 export default function ProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const { user, isConfigured, signOut } = useAuth();
   const [authScreen, setAuthScreen] = useState<'signIn' | 'signUp' | null>(null);
+  const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
+  const [ratingsLoading, setRatingsLoading] = useState(false);
+
+  // Load user's ratings
+  useEffect(() => {
+    async function loadRatings() {
+      if (!user) {
+        setRatings([]);
+        return;
+      }
+
+      setRatingsLoading(true);
+      try {
+        const userRatings = await ratingsService.getUserShowRatings(user.id);
+
+        // Enrich with show info from local storage
+        const enrichedRatings: RatingWithShowInfo[] = await Promise.all(
+          userRatings.map(async (rating) => {
+            const show = await storageService.getShow(rating.tmdb_id);
+            return {
+              ...rating,
+              showTitle: show?.title,
+              posterPath: show?.posterPath,
+            };
+          })
+        );
+
+        setRatings(enrichedRatings);
+      } catch (e) {
+        console.error('Failed to load ratings:', e);
+      } finally {
+        setRatingsLoading(false);
+      }
+    }
+
+    loadRatings();
+  }, [user]);
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -36,6 +88,14 @@ export default function ProfileScreen() {
         },
       ]
     );
+  };
+
+  const handleRatingPress = async (rating: RatingWithShowInfo) => {
+    // Get full show info from storage
+    const show = await storageService.getShow(rating.tmdb_id);
+    if (show) {
+      navigation.navigate('ShowDetail', { show });
+    }
   };
 
   // Show auth screen if user is not signed in and wants to sign in
@@ -88,6 +148,46 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemText}>Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
+        </View>
+
+        {/* My Ratings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>My Ratings</Text>
+
+          {ratingsLoading ? (
+            <ActivityIndicator color={COLORS.primary} style={{ padding: 20 }} />
+          ) : ratings.length === 0 ? (
+            <View style={styles.emptyRatings}>
+              <Ionicons name="star-outline" size={32} color={COLORS.textSecondary} />
+              <Text style={styles.emptyRatingsText}>No ratings yet</Text>
+              <Text style={styles.emptyRatingsHint}>Rate shows to see them here</Text>
+            </View>
+          ) : (
+            <View style={styles.ratingsGrid}>
+              {ratings.slice(0, 6).map((rating) => (
+                <TouchableOpacity
+                  key={rating.id}
+                  style={styles.ratingCard}
+                  onPress={() => handleRatingPress(rating)}
+                >
+                  <ShowPoster path={rating.posterPath ?? null} size="small" width={50} height={75} />
+                  <View style={styles.ratingCardInfo}>
+                    <Text style={styles.ratingCardTitle} numberOfLines={2}>
+                      {rating.showTitle || `Show #${rating.tmdb_id}`}
+                    </Text>
+                    <StarRating value={rating.rating} size={14} readonly />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {ratings.length > 6 && (
+            <TouchableOpacity style={styles.seeAllButton}>
+              <Text style={styles.seeAllText}>See All ({ratings.length})</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -311,5 +411,59 @@ const styles = StyleSheet.create({
   localOnlyText: {
     color: COLORS.textSecondary,
     fontSize: 14,
+  },
+  emptyRatings: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyRatingsText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  emptyRatingsHint: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  ratingsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  ratingCard: {
+    width: '47%',
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    overflow: 'hidden',
+    gap: 10,
+  },
+  ratingCardInfo: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingRight: 8,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  ratingCardTitle: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+    gap: 4,
+  },
+  seeAllText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
