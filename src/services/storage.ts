@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { TrackedShow, WatchedEpisode, ShowStatus, SyncStatus, SyncOperation, SyncQueueItem } from '../types';
+import { TrackedShow, WatchedEpisode, ShowStatus, SyncStatus, SyncOperation, SyncQueueItem, EpisodeReaction, EpisodeReactionType } from '../types';
 
 const DB_NAME = 'showbuddy.db';
 const DEFAULT_SYNC_STATUS: SyncStatus = 'pending';
@@ -82,6 +82,25 @@ class StorageService {
         last_error TEXT,
         UNIQUE(table_name, record_id, operation)
       );
+    `);
+
+    // Create episode reactions table
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS episode_reactions (
+        id TEXT PRIMARY KEY,
+        show_tmdb_id INTEGER NOT NULL,
+        season_number INTEGER NOT NULL,
+        episode_number INTEGER NOT NULL,
+        reaction TEXT NOT NULL CHECK (reaction IN ('good', 'meh', 'bad')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending',
+        remote_id TEXT,
+        last_synced_at TEXT,
+        UNIQUE(show_tmdb_id, season_number, episode_number)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_reactions_show ON episode_reactions(show_tmdb_id);
     `);
   }
 
@@ -509,6 +528,158 @@ class StorageService {
       remoteId: row.remote_id ?? undefined,
       lastSyncedAt: row.last_synced_at ?? undefined,
     }));
+  }
+
+  // Episode Reactions
+  async getReactionsForShow(showTmdbId: number): Promise<EpisodeReaction[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      reaction: EpisodeReactionType;
+      created_at: string;
+      updated_at: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+    }>('SELECT * FROM episode_reactions WHERE show_tmdb_id = ?', [showTmdbId]);
+
+    return rows.map((row) => ({
+      id: row.id,
+      showTmdbId: row.show_tmdb_id,
+      seasonNumber: row.season_number,
+      episodeNumber: row.episode_number,
+      reaction: row.reaction,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    }));
+  }
+
+  async getReaction(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<EpisodeReaction | null> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{
+      id: string;
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      reaction: EpisodeReactionType;
+      created_at: string;
+      updated_at: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+    }>(
+      'SELECT * FROM episode_reactions WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?',
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      showTmdbId: row.show_tmdb_id,
+      seasonNumber: row.season_number,
+      episodeNumber: row.episode_number,
+      reaction: row.reaction,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    };
+  }
+
+  async setReaction(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number,
+    reaction: EpisodeReactionType
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    const id = `${showTmdbId}-${seasonNumber}-${episodeNumber}-reaction`;
+    const now = new Date().toISOString();
+
+    await this.db!.runAsync(
+      `INSERT INTO episode_reactions
+       (id, show_tmdb_id, season_number, episode_number, reaction, created_at, updated_at, sync_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(show_tmdb_id, season_number, episode_number)
+       DO UPDATE SET reaction = ?, updated_at = ?, sync_status = ?`,
+      [
+        id,
+        showTmdbId,
+        seasonNumber,
+        episodeNumber,
+        reaction,
+        now,
+        now,
+        DEFAULT_SYNC_STATUS,
+        reaction,
+        now,
+        DEFAULT_SYNC_STATUS,
+      ]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('episode_reactions', id, 'create', {
+      id,
+      showTmdbId,
+      seasonNumber,
+      episodeNumber,
+      reaction,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  async removeReaction(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    const id = `${showTmdbId}-${seasonNumber}-${episodeNumber}-reaction`;
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('episode_reactions', id, 'delete', {
+      showTmdbId,
+      seasonNumber,
+      episodeNumber,
+    });
+
+    await this.db!.runAsync(
+      'DELETE FROM episode_reactions WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?',
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+  }
+
+  async deleteReactionsForShow(showTmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Queue each reaction for sync deletion
+    const reactions = await this.getReactionsForShow(showTmdbId);
+    for (const reaction of reactions) {
+      await this.addToSyncQueue('episode_reactions', reaction.id, 'delete', {
+        showTmdbId: reaction.showTmdbId,
+        seasonNumber: reaction.seasonNumber,
+        episodeNumber: reaction.episodeNumber,
+      });
+    }
+
+    await this.db!.runAsync('DELETE FROM episode_reactions WHERE show_tmdb_id = ?', [showTmdbId]);
   }
 }
 

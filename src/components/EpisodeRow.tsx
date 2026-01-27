@@ -3,16 +3,25 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TMDBEpisode } from '../types';
+import { TMDBEpisode, EpisodeReactionType } from '../types';
 import { COLORS, getStillUrl, formatEpisodeCode, getCountdownText } from '../utils/constants';
+import EpisodeReactionPicker from './EpisodeReactionPicker';
 
 interface EpisodeRowProps {
   episode: TMDBEpisode;
   isWatched: boolean;
   onToggle: () => void;
+  reaction?: EpisodeReactionType | null;
+  onReactionChange?: (reaction: EpisodeReactionType) => void;
 }
 
-export default function EpisodeRow({ episode, isWatched, onToggle }: EpisodeRowProps) {
+export default function EpisodeRow({
+  episode,
+  isWatched,
+  onToggle,
+  reaction,
+  onReactionChange,
+}: EpisodeRowProps) {
   const stillUrl = getStillUrl(episode.still_path, 'small');
   const isUpcoming = episode.air_date ? new Date(episode.air_date) > new Date() : false;
   const countdown = getCountdownText(episode.air_date);
@@ -55,6 +64,15 @@ export default function EpisodeRow({ episode, isWatched, onToggle }: EpisodeRowP
           <Text style={styles.airDate}>{episode.air_date}</Text>
         )}
       </View>
+
+      {/* Reaction Picker - only show when watched */}
+      {isWatched && onReactionChange && (
+        <EpisodeReactionPicker
+          currentReaction={reaction ?? null}
+          onSelect={onReactionChange}
+          size="small"
+        />
+      )}
 
       {/* Watch Toggle */}
       <TouchableOpacity onPress={handleToggle} style={styles.toggleButton}>

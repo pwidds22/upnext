@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showsCloudService } from './shows';
 import { episodesCloudService } from './episodes';
+import { episodeReactionsCloudService } from './episodeReactions';
 import { storageService } from '../storage';
 import type {
   SyncResult,
   SyncQueueItem,
   TrackedShow,
   WatchedEpisode,
+  EpisodeReaction,
   UserShowRow,
   UserWatchedEpisodeRow,
 } from '../../types';
@@ -365,8 +367,9 @@ export const syncService = {
         case 'delete': {
           const { tmdbId } = payload;
           await withRetry(() => showsCloudService.softDeleteShow(userId, tmdbId));
-          // Also soft-delete episodes for this show
+          // Also soft-delete episodes and reactions for this show
           await withRetry(() => episodesCloudService.softDeleteShowEpisodes(userId, tmdbId));
+          await withRetry(() => episodeReactionsCloudService.softDeleteShowReactions(userId, tmdbId));
           break;
         }
       }
@@ -383,6 +386,21 @@ export const syncService = {
           const { showTmdbId, season, episode } = payload;
           await withRetry(() =>
             episodesCloudService.softDeleteEpisode(userId, showTmdbId, season, episode)
+          );
+          break;
+        }
+      }
+    } else if (item.tableName === 'episode_reactions') {
+      switch (item.operation) {
+        case 'create': {
+          const reaction = payload as EpisodeReaction;
+          await withRetry(() => episodeReactionsCloudService.upsertReaction(userId, reaction));
+          break;
+        }
+        case 'delete': {
+          const { showTmdbId, seasonNumber, episodeNumber } = payload;
+          await withRetry(() =>
+            episodeReactionsCloudService.softDeleteReaction(userId, showTmdbId, seasonNumber, episodeNumber)
           );
           break;
         }

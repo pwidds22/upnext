@@ -17,6 +17,7 @@ import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { useWatchedEpisodes } from '../hooks/useShowData';
+import { useEpisodeReactions } from '../hooks/useEpisodeReactions';
 import { useAuth } from '../contexts/AuthContext';
 import ShowPoster from '../components/ShowPoster';
 import EpisodeRow from '../components/EpisodeRow';
@@ -47,6 +48,8 @@ export default function ShowDetailScreen() {
 
   const { isWatched, toggleWatched, watchedCount, watchedCountForSeason, markSeasonWatched, markSeasonUnwatched } =
     useWatchedEpisodes(show.tmdbId);
+
+  const { getReaction, toggleReaction } = useEpisodeReactions(show.tmdbId);
 
   useEffect(() => {
     async function loadData() {
@@ -424,6 +427,10 @@ export default function ShowDetailScreen() {
                               episode.name,
                               episode.still_path
                             )
+                          }
+                          reaction={getReaction(season.season_number, episode.episode_number)}
+                          onReactionChange={(reaction) =>
+                            toggleReaction(season.season_number, episode.episode_number, reaction)
                           }
                         />
                       ))}

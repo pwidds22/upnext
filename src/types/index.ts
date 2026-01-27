@@ -224,3 +224,54 @@ export interface RatingWithUser extends UserRating {
     avatarUrl?: string;
   };
 }
+
+// Episode reaction types
+export type EpisodeReactionType = 'good' | 'meh' | 'bad';
+
+// Reaction display configuration
+export const REACTION_CONFIG = {
+  good: {
+    emoji: '👍',
+    label: 'Good',
+    color: '#34C759', // Green
+  },
+  meh: {
+    emoji: '😐',
+    label: 'Meh',
+    color: '#8E8E93', // Gray
+  },
+  bad: {
+    emoji: '👎',
+    label: 'Bad',
+    color: '#FF3B30', // Red
+  },
+} as const;
+
+// Locally stored episode reaction
+export interface EpisodeReaction {
+  id: string;
+  showTmdbId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  reaction: EpisodeReactionType;
+  createdAt: string;
+  updatedAt: string;
+  // Sync fields
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+  lastSyncedAt?: string;
+}
+
+// Supabase row type for episode reactions
+export interface UserEpisodeReactionRow {
+  id: string;
+  user_id: string;
+  tmdb_show_id: number;
+  season_number: number;
+  episode_number: number;
+  reaction: EpisodeReactionType;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
