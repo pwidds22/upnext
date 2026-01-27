@@ -26,20 +26,25 @@ export function useRecommendations(trackedIds: Set<number>) {
   const [forYou, setForYou] = useState<TMDBShow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
 
-  const loadRecommendations = useCallback(async (excludeIds: Set<number>) => {
+  // Load dismissed IDs on mount
+  useEffect(() => {
+    async function loadDismissed() {
+      const ids = await storageService.getDismissedShowIds();
+      setDismissedIds(ids);
+    }
+    loadDismissed();
+  }, []);
+
+  const loadRecommendations = useCallback(async (excludeIds: Set<number>, dismissed: Set<number>) => {
     setLoading(true);
     setError(null);
-
-    console.log('[Recommendations] Loading with excludeIds:', Array.from(excludeIds));
 
     try {
       // Get user's tracked shows to extract genres
       const trackedShows = await storageService.getAllShows();
-      console.log('[Recommendations] Tracked shows:', trackedShows.length, trackedShows.map(s => ({ id: s.tmdbId, title: s.title })));
-
       const genreIds = await extractGenresFromShows(trackedShows.slice(0, MAX_SHOWS_FOR_GENRES));
-      console.log('[Recommendations] Extracted genre IDs:', genreIds);
 
       // Create cache key based on genres
       const genreCacheKey = genreIds.length > 0 ? `forYou_${genreIds.sort().join(',')}` : 'popular';
@@ -48,15 +53,10 @@ export function useRecommendations(trackedIds: Set<number>) {
       const cachedTrending = isCacheValid('trending') ? cache['trending'].data : null;
       const cachedForYou = isCacheValid(genreCacheKey) ? cache[genreCacheKey].data : null;
 
-      console.log('[Recommendations] Fetching data, genreIds.length:', genreIds.length);
-
       const [trendingData, forYouData] = await Promise.all([
         cachedTrending ?? tmdbService.getTrending('week'),
         cachedForYou ?? (genreIds.length > 0 ? tmdbService.discoverByGenres(genreIds) : tmdbService.getPopular()),
       ]);
-
-      console.log('[Recommendations] Raw trending count:', trendingData.length);
-      console.log('[Recommendations] Raw forYou count:', forYouData.length);
 
       // Update cache with raw data (before filtering)
       if (!cachedTrending) {
@@ -66,17 +66,14 @@ export function useRecommendations(trackedIds: Set<number>) {
         cache[genreCacheKey] = { data: forYouData, timestamp: Date.now() };
       }
 
-      // Filter out tracked shows and limit to MAX_ITEMS
+      // Filter out tracked and dismissed shows, then limit to MAX_ITEMS
       const filteredTrending = trendingData
-        .filter((show) => !excludeIds.has(show.id))
+        .filter((show) => !excludeIds.has(show.id) && !dismissed.has(show.id))
         .slice(0, MAX_ITEMS);
 
       const filteredForYou = forYouData
-        .filter((show) => !excludeIds.has(show.id))
+        .filter((show) => !excludeIds.has(show.id) && !dismissed.has(show.id))
         .slice(0, MAX_ITEMS);
-
-      console.log('[Recommendations] Filtered trending count:', filteredTrending.length);
-      console.log('[Recommendations] Filtered forYou count:', filteredForYou.length);
 
       setTrending(filteredTrending);
       setForYou(filteredForYou);
@@ -88,17 +85,27 @@ export function useRecommendations(trackedIds: Set<number>) {
     }
   }, []);
 
-  // Load recommendations when trackedIds changes
+  // Dismiss a show from recommendations
+  const dismissShow = useCallback(async (tmdbId: number) => {
+    await storageService.dismissShow(tmdbId);
+    setDismissedIds((prev) => new Set([...prev, tmdbId]));
+    // Remove from current lists immediately for responsive UI
+    setTrending((prev) => prev.filter((s) => s.id !== tmdbId));
+    setForYou((prev) => prev.filter((s) => s.id !== tmdbId));
+  }, []);
+
+  // Load recommendations when trackedIds or dismissedIds changes
   useEffect(() => {
-    loadRecommendations(trackedIds);
-  }, [trackedIds, loadRecommendations]);
+    loadRecommendations(trackedIds, dismissedIds);
+  }, [trackedIds, dismissedIds, loadRecommendations]);
 
   return {
     trending,
     forYou,
     loading,
     error,
-    refresh: () => loadRecommendations(trackedIds),
+    refresh: () => loadRecommendations(trackedIds, dismissedIds),
+    dismissShow,
   };
 }
 

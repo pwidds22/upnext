@@ -102,6 +102,20 @@ class StorageService {
 
       CREATE INDEX IF NOT EXISTS idx_reactions_show ON episode_reactions(show_tmdb_id);
     `);
+
+    // Create dismissed shows table (for hiding recommendations)
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS dismissed_shows (
+        id TEXT PRIMARY KEY,
+        tmdb_id INTEGER NOT NULL UNIQUE,
+        dismissed_at TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending',
+        remote_id TEXT,
+        last_synced_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_dismissed_tmdb ON dismissed_shows(tmdb_id);
+    `);
   }
 
   // Tracked Shows
@@ -682,6 +696,60 @@ class StorageService {
     await this.db!.runAsync('DELETE FROM episode_reactions WHERE show_tmdb_id = ?', [showTmdbId]);
   }
 
+  // Dismissed Shows (for hiding recommendations)
+  async getDismissedShowIds(): Promise<Set<number>> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{ tmdb_id: number }>(
+      'SELECT tmdb_id FROM dismissed_shows'
+    );
+
+    return new Set(rows.map((row) => row.tmdb_id));
+  }
+
+  async dismissShow(tmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    const id = `dismissed-${tmdbId}`;
+    const now = new Date().toISOString();
+
+    await this.db!.runAsync(
+      `INSERT OR REPLACE INTO dismissed_shows
+       (id, tmdb_id, dismissed_at, sync_status)
+       VALUES (?, ?, ?, ?)`,
+      [id, tmdbId, now, DEFAULT_SYNC_STATUS]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('dismissed_shows', id, 'create', {
+      id,
+      tmdbId,
+      dismissedAt: now,
+    });
+  }
+
+  async undismissShow(tmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    const id = `dismissed-${tmdbId}`;
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('dismissed_shows', id, 'delete', { tmdbId });
+
+    await this.db!.runAsync('DELETE FROM dismissed_shows WHERE tmdb_id = ?', [tmdbId]);
+  }
+
+  async isShowDismissed(tmdbId: number): Promise<boolean> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM dismissed_shows WHERE tmdb_id = ?',
+      [tmdbId]
+    );
+
+    return (row?.count ?? 0) > 0;
+  }
+
   // Clear all local data (used on sign out to prevent data bleeding between accounts)
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();
@@ -689,6 +757,7 @@ class StorageService {
     // Delete all data from all tables
     await this.db!.execAsync(`
       DELETE FROM episode_reactions;
+      DELETE FROM dismissed_shows;
       DELETE FROM sync_queue;
       DELETE FROM watched_episodes;
       DELETE FROM tracked_shows;

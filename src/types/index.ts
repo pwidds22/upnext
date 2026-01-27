@@ -326,3 +326,23 @@ export interface FriendRating {
   user: UserProfile;
   rating: number;
 }
+
+// Dismissed show recommendation (local)
+export interface DismissedShow {
+  id: string;
+  tmdbId: number;
+  dismissedAt: string;
+  // Sync fields
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+  lastSyncedAt?: string;
+}
+
+// Supabase row type for dismissed shows
+export interface UserDismissedShowRow {
+  id: string;
+  user_id: string;
+  tmdb_id: number;
+  dismissed_at: string;
+  deleted_at: string | null;
+}

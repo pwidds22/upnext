@@ -37,7 +37,7 @@ export default function SearchScreen() {
   const [addingShow, setAddingShow] = useState(false);
 
   // Recommendations (pass trackedIds to filter out shows user already has)
-  const { trending, forYou, loading: recsLoading } = useRecommendations(trackedIds);
+  const { trending, forYou, loading: recsLoading, dismissShow } = useRecommendations(trackedIds);
 
   // Load tracked show IDs
   useEffect(() => {
@@ -166,7 +166,12 @@ export default function SearchScreen() {
               contentContainerStyle={styles.horizontalList}
             >
               {trending.map((show) => (
-                <ShowCard key={show.id} show={show} onPress={setSelectedShow} />
+                <ShowCard
+                  key={show.id}
+                  show={show}
+                  onPress={setSelectedShow}
+                  onDismiss={(s) => dismissShow(s.id)}
+                />
               ))}
             </ScrollView>
           </View>
@@ -181,7 +186,12 @@ export default function SearchScreen() {
               contentContainerStyle={styles.horizontalList}
             >
               {forYou.map((show) => (
-                <ShowCard key={show.id} show={show} onPress={setSelectedShow} />
+                <ShowCard
+                  key={show.id}
+                  show={show}
+                  onPress={setSelectedShow}
+                  onDismiss={(s) => dismissShow(s.id)}
+                />
               ))}
             </ScrollView>
           </View>

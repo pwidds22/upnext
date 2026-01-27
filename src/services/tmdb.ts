@@ -118,11 +118,17 @@ class TMDBService {
   async discoverByGenres(genreIds: number[]): Promise<TMDBShow[]> {
     if (genreIds.length === 0) return [];
 
+    // Calculate date 15 years ago to filter out older shows
+    const fifteenYearsAgo = new Date();
+    fifteenYearsAgo.setFullYear(fifteenYearsAgo.getFullYear() - 15);
+    const minDate = fifteenYearsAgo.toISOString().split('T')[0];
+
     const params = new URLSearchParams({
       with_genres: genreIds.join('|'), // Use pipe for OR logic (comma = AND)
       sort_by: 'popularity.desc',
       'vote_count.gte': '50',
       include_adult: 'false',
+      'first_air_date.gte': minDate,
     });
 
     const url = `${TMDB_BASE_URL}/discover/tv?${params}`;

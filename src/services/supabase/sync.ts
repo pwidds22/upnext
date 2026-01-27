@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showsCloudService } from './shows';
 import { episodesCloudService } from './episodes';
 import { episodeReactionsCloudService } from './episodeReactions';
+import { dismissedShowsCloudService } from './dismissedShows';
 import { storageService } from '../storage';
 import type {
   SyncResult,
@@ -9,6 +10,7 @@ import type {
   TrackedShow,
   WatchedEpisode,
   EpisodeReaction,
+  DismissedShow,
   UserShowRow,
   UserWatchedEpisodeRow,
 } from '../../types';
@@ -402,6 +404,19 @@ export const syncService = {
           await withRetry(() =>
             episodeReactionsCloudService.softDeleteReaction(userId, showTmdbId, seasonNumber, episodeNumber)
           );
+          break;
+        }
+      }
+    } else if (item.tableName === 'dismissed_shows') {
+      switch (item.operation) {
+        case 'create': {
+          const dismissed = payload as DismissedShow;
+          await withRetry(() => dismissedShowsCloudService.upsertDismissed(userId, dismissed));
+          break;
+        }
+        case 'delete': {
+          const { tmdbId } = payload;
+          await withRetry(() => dismissedShowsCloudService.softDeleteDismissed(userId, tmdbId));
           break;
         }
       }
