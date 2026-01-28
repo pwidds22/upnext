@@ -116,12 +116,20 @@ export interface TMDBShow {
   number_of_episodes: number | null;
   status: string | null;
   genres?: TMDBGenre[];
+  networks?: TMDBNetwork[];
   vote_average?: number;
 }
 
 export interface TMDBGenre {
   id: number;
   name: string;
+}
+
+export interface TMDBNetwork {
+  id: number;
+  name: string;
+  logo_path: string | null;
+  origin_country: string;
 }
 
 export interface TMDBSeason {

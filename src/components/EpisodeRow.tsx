@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { TMDBEpisode, EpisodeReactionType } from '../types';
-import { COLORS, getStillUrl, formatEpisodeCode, getCountdownText, parseLocalDate, formatAirDate } from '../utils/constants';
+import { COLORS, getStillUrl, formatEpisodeCode, getCountdownText, hasAiredPacific, formatAirDate } from '../utils/constants';
 import EpisodeReactionPicker from './EpisodeReactionPicker';
 
 interface EpisodeRowProps {
@@ -23,10 +23,7 @@ export default function EpisodeRow({
   onReactionChange,
 }: EpisodeRowProps) {
   const stillUrl = getStillUrl(episode.still_path, 'small');
-  const airDate = parseLocalDate(episode.air_date);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const isUpcoming = airDate ? airDate > today : false;
+  const isUpcoming = episode.air_date ? !hasAiredPacific(episode.air_date) : false;
   const countdown = getCountdownText(episode.air_date);
 
   const handleToggle = async () => {

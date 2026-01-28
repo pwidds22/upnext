@@ -107,6 +107,25 @@ export function parseLocalDate(dateString: string | null): Date | null {
   return new Date(year, month - 1, day); // month is 0-indexed
 }
 
+// Get today's date in Pacific Time as YYYY-MM-DD string
+// Used for comparing air dates since most shows release at midnight PT
+export function getTodayPacificDate(): string {
+  const now = new Date();
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+// Check if a TMDB date is in the past (has aired) based on Pacific Time
+export function hasAiredPacific(dateString: string | null): boolean {
+  if (!dateString) return false;
+  const todayPT = getTodayPacificDate();
+  return dateString <= todayPT;
+}
+
 // Format a date string for display (e.g., "Jan 28, 2025" or "Wed, Jan 28")
 // Uses manual formatting to avoid any locale/timezone issues
 export function formatAirDate(dateString: string | null, includeYear = false): string | null {
@@ -128,15 +147,19 @@ export function formatAirDate(dateString: string | null, includeYear = false): s
 }
 
 export function getDaysUntil(dateString: string | null): number | null {
-  const date = parseLocalDate(dateString);
-  if (!date) return null;
+  if (!dateString) return null;
 
-  // Compare dates at midnight local time
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  // Compare dates in Pacific Time (most shows release at midnight PT)
+  const todayPT = getTodayPacificDate();
+  const [targetYear, targetMonth, targetDay] = dateString.split('-').map(Number);
+  const [todayYear, todayMonth, todayDay] = todayPT.split('-').map(Number);
 
-  const diffTime = targetDate.getTime() - today.getTime();
+  if (!targetYear || !targetMonth || !targetDay) return null;
+
+  const targetDate = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay));
+  const todayDate = new Date(Date.UTC(todayYear, todayMonth - 1, todayDay));
+
+  const diffTime = targetDate.getTime() - todayDate.getTime();
   return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 

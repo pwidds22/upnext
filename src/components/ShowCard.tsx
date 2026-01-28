@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { TMDBShow } from '../types';
 import ShowPoster from './ShowPoster';
 import { COLORS, getYearFromDate } from '../utils/constants';
+import { formatRating } from './StarRating';
 
 interface ShowCardProps {
   show: TMDBShow;
@@ -35,7 +36,7 @@ export default function ShowCard({ show, onPress, onDismiss }: ShowCardProps) {
       {rating !== undefined && rating > 0 && (
         <View style={styles.ratingRow}>
           <Ionicons name="star" size={12} color="#FFD700" />
-          <Text style={styles.rating}>{rating.toFixed(1)}</Text>
+          <Text style={styles.rating}>{formatRating(rating)}</Text>
         </View>
       )}
       {year && <Text style={styles.year}>{year}</Text>}

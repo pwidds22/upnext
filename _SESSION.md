@@ -4,6 +4,20 @@ Branch: master
 
 ## Completed This Session
 
+### UX Improvements - COMPLETE
+- [x] **Timezone-adjusted air dates** - All air date comparisons now use Pacific Time
+  - Added `getTodayPacificDate()` and `hasAiredPacific()` to constants.ts
+  - Updated `getDaysUntil()` to compare dates in Pacific timezone
+  - Updated `UpNextScreen.tsx`, `ShowDetailScreen.tsx`, `EpisodeRow.tsx`
+
+- [x] **Show About section enhanced** - Now shows full show details
+  - Added `TMDBNetwork` interface to types
+  - About tab now displays: overview, genres, network, status
+  - `src/screens/ShowDetailScreen.tsx` - Full About section redesign
+
+- [x] **TMDB rating consistency** - All ratings now use 5-star scale
+  - `src/components/ShowCard.tsx` - Now uses `formatRating()` (shows "4.3/5" instead of "8.5")
+
 ### Auth/Signup Fixes - COMPLETE
 - [x] **Username signin** - SignInScreen now accepts email OR username
   - Added `getProfileByUsername()` and `getEmailByUserId()` to follows service
@@ -65,6 +79,14 @@ Branch: master
 13. `add_get_user_email_function` - Function to get email by user id (for username signin)
 
 ## Files Modified This Session
+- `src/utils/constants.ts` - Added `getTodayPacificDate()`, `hasAiredPacific()`, updated `getDaysUntil()`
+- `src/screens/ShowDetailScreen.tsx` - Enhanced About section, Pacific timezone for aired episodes
+- `src/screens/UpNextScreen.tsx` - Pacific timezone for air date comparisons
+- `src/components/EpisodeRow.tsx` - Pacific timezone for isUpcoming calculation
+- `src/components/ShowCard.tsx` - Use `formatRating()` for consistent 5-star display
+- `src/types/index.ts` - Added `TMDBNetwork` interface, `networks` to `TMDBShow`
+
+### Previous Session
 - `src/screens/ProfileScreen.tsx` - Profile fetch, Edit Profile modal, scroll padding fix
 - `src/screens/auth/SignInScreen.tsx` - Username signin support, redirect fix
 - `src/screens/auth/SignUpScreen.tsx` - Direct redirect after signup (no email confirm)
@@ -74,14 +96,15 @@ Branch: master
 - None currently
 
 ## Notes
-- TMDB air dates may appear off by one day for streaming shows (e.g., AppleTV+) due to timezone differences. TMDB shows dates based on original release timezone - we should adjust for user's local timezone (see future tasks).
+- Air dates now use Pacific Time for all comparisons (most streaming shows release at midnight PT). This ensures accurate countdown text regardless of user timezone.
+- TMDB stores AppleTV+ air dates as US evening release time (e.g., Jan 27) rather than advertised date (Jan 28). This is TMDB's intentional behavior - they store the actual US availability time.
 
 ## Next Steps
 
 ### Future Tasks
-- [ ] Timezone-adjusted air dates: Streaming shows (AppleTV+, etc.) release at midnight Pacific - adjust display for user's local timezone
-- [ ] Show About section: either add more data (overview, genres, network) or remove it
-- [ ] TMDB rating consistency: MyShows shows 10-star, ShowDetail shows 5-star - make both 5-star
+- [x] ~~Timezone-adjusted air dates~~ - DONE
+- [x] ~~Show About section~~ - DONE (added overview, genres, network, status)
+- [x] ~~TMDB rating consistency~~ - DONE (all use 5-star scale)
 - [ ] Add avatar upload support (low priority)
 - [ ] Real-time updates with Supabase subscriptions (optional)
 

@@ -12,7 +12,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus, FriendRating, RatingType } from '../types';
+import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus, FriendRating, RatingType, TMDBShow } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
@@ -24,7 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import ShowPoster from '../components/ShowPoster';
 import EpisodeRow from '../components/EpisodeRow';
 import StarRating, { formatRating } from '../components/StarRating';
-import { COLORS, STATUS_CONFIG, getLogoUrl, parseLocalDate } from '../utils/constants';
+import { COLORS, STATUS_CONFIG, getLogoUrl, hasAiredPacific } from '../utils/constants';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ShowDetailRouteProp = RouteProp<RootStackParamList, 'ShowDetail'>;
@@ -58,6 +58,9 @@ export default function ShowDetailScreen() {
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [privacyLoading, setPrivacyLoading] = useState(false);
 
+  // Show details for About section
+  const [showDetails, setShowDetails] = useState<TMDBShow | null>(null);
+
   const { isWatched, toggleWatched, watchedCount, watchedCountForSeason, markSeasonWatched, markSeasonUnwatched } =
     useWatchedEpisodes(show.tmdbId);
 
@@ -67,18 +70,12 @@ export default function ShowDetailScreen() {
   const getDefaultExpandedSeason = useCallback((): number => {
     if (seasons.length === 0) return 1;
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     // Find newest season with unwatched aired episodes (iterate highest to lowest)
     for (let i = seasons.length - 1; i >= 0; i--) {
       const season = seasons[i];
       if (!season.episodes) continue;
 
-      const airedEpisodes = season.episodes.filter((ep) => {
-        const airDate = parseLocalDate(ep.air_date);
-        return airDate && airDate <= today;
-      });
+      const airedEpisodes = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
 
       if (airedEpisodes.length === 0) continue;
 
@@ -93,10 +90,7 @@ export default function ShowDetailScreen() {
       const season = seasons[i];
       if (!season.episodes) continue;
 
-      const hasAiredEpisodes = season.episodes.some((ep) => {
-        const airDate = parseLocalDate(ep.air_date);
-        return airDate && airDate <= today;
-      });
+      const hasAiredEpisodes = season.episodes.some((ep) => hasAiredPacific(ep.air_date));
 
       if (hasAiredEpisodes) {
         return season.season_number;
@@ -119,21 +113,19 @@ export default function ShowDetailScreen() {
 
         setSeasons(seasonsData);
         setProviders(providersData);
+        setShowDetails(showDetails);
 
         // Set TMDB rating if available
         if (showDetails.vote_average !== undefined && showDetails.vote_average > 0) {
           setTmdbRating(showDetails.vote_average);
         }
 
-        // Calculate aired episodes (episodes with air date in the past)
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // Calculate aired episodes (episodes with air date in the past, Pacific Time)
         let airedCount = 0;
         for (const season of seasonsData) {
           if (season.episodes) {
             for (const episode of season.episodes) {
-              const airDate = parseLocalDate(episode.air_date);
-              if (airDate && airDate <= today) {
+              if (hasAiredPacific(episode.air_date)) {
                 airedCount++;
               }
             }
@@ -329,14 +321,9 @@ export default function ShowDetailScreen() {
 
       // Auto-mark all aired episodes when completing a show
       if (newStatus === 'completed' && seasons.length > 0) {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         for (const season of seasons) {
           if (season.episodes) {
-            const airedEpisodes = season.episodes.filter((ep) => {
-              const airDate = parseLocalDate(ep.air_date);
-              return airDate && airDate <= today;
-            });
+            const airedEpisodes = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
             if (airedEpisodes.length > 0) {
               const episodeList = airedEpisodes.map((ep) => ({
                 episodeNumber: ep.episode_number,
@@ -554,13 +541,8 @@ export default function ShowDetailScreen() {
               const seasonWatchedCount = watchedCountForSeason(season.season_number);
               const episodeCount = season.episodes?.length ?? season.episode_count ?? 0;
 
-              // Calculate aired episodes in this season
-              const now = new Date();
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const airedInSeason = season.episodes?.filter((ep) => {
-                const airDate = parseLocalDate(ep.air_date);
-                return airDate && airDate <= today;
-              }).length ?? 0;
+              // Calculate aired episodes in this season (Pacific Time)
+              const airedInSeason = season.episodes?.filter((ep) => hasAiredPacific(ep.air_date)).length ?? 0;
               const isUpcoming = airedInSeason === 0;
               const isComplete = !isUpcoming && seasonWatchedCount >= airedInSeason;
 
@@ -690,6 +672,49 @@ export default function ShowDetailScreen() {
         )
       ) : (
         <View style={styles.aboutContainer}>
+          {/* Overview */}
+          {showDetails?.overview && (
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Overview</Text>
+              <Text style={styles.overview}>{showDetails.overview}</Text>
+            </View>
+          )}
+
+          {/* Genres */}
+          {showDetails?.genres && showDetails.genres.length > 0 && (
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Genres</Text>
+              <View style={styles.genreContainer}>
+                {showDetails.genres.map((genre) => (
+                  <View key={genre.id} style={styles.genreTag}>
+                    <Text style={styles.genreText}>{genre.name}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Network */}
+          {showDetails?.networks && showDetails.networks.length > 0 && (
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Network</Text>
+              <View style={styles.networkContainer}>
+                {showDetails.networks.map((network) => (
+                  <Text key={network.id} style={styles.networkName}>{network.name}</Text>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Status */}
+          {showDetails?.status && (
+            <View style={styles.aboutSection}>
+              <Text style={styles.aboutSectionTitle}>Status</Text>
+              <Text style={styles.statusText}>{showDetails.status}</Text>
+            </View>
+          )}
+
+          {/* Stats */}
           <Text style={styles.aboutText}>
             {show.totalSeasons} seasons • {show.totalEpisodes} episodes
           </Text>
@@ -988,6 +1013,49 @@ const styles = StyleSheet.create({
   aboutText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  aboutSection: {
+    gap: 8,
+  },
+  aboutSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  overview: {
+    fontSize: 14,
+    color: COLORS.text,
+    lineHeight: 20,
+  },
+  genreContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  genreTag: {
+    backgroundColor: COLORS.surfaceLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  genreText: {
+    fontSize: 13,
+    color: COLORS.text,
+  },
+  networkContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  networkName: {
+    fontSize: 14,
+    color: COLORS.text,
+  },
+  statusText: {
+    fontSize: 14,
+    color: COLORS.text,
   },
   deleteButton: {
     flexDirection: 'row',
