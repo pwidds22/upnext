@@ -71,11 +71,15 @@ Branch: master
 - `src/services/supabase/follows.ts` - Added `getProfileByUsername()`, `getEmailByUserId()`
 
 ## Known Issues
-- TMDB data quality: Some air dates are incorrect (e.g., Shrinking S2E10). Reported to TMDB support forum.
+- None currently
+
+## Notes
+- TMDB air dates may appear off by one day for streaming shows (e.g., AppleTV+) due to timezone differences. TMDB shows dates based on original release timezone - we should adjust for user's local timezone (see future tasks).
 
 ## Next Steps
 
 ### Future Tasks
+- [ ] Timezone-adjusted air dates: Streaming shows (AppleTV+, etc.) release at midnight Pacific - adjust display for user's local timezone
 - [ ] Show About section: either add more data (overview, genres, network) or remove it
 - [ ] TMDB rating consistency: MyShows shows 10-star, ShowDetail shows 5-star - make both 5-star
 - [ ] Add avatar upload support (low priority)
