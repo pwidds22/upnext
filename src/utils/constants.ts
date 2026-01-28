@@ -98,12 +98,46 @@ export function getYearFromDate(dateString: string | null): string | null {
   return dateString.substring(0, 4);
 }
 
-export function getDaysUntil(dateString: string | null): number | null {
+// Parse TMDB date string (YYYY-MM-DD) as local date, not UTC
+// This prevents timezone issues where "2025-01-28" shows as Jan 27 in US timezones
+export function parseLocalDate(dateString: string | null): Date | null {
   if (!dateString) return null;
-  const date = new Date(dateString);
+  const [year, month, day] = dateString.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day); // month is 0-indexed
+}
+
+// Format a date string for display (e.g., "Jan 28, 2025" or "Wed, Jan 28")
+// Uses manual formatting to avoid any locale/timezone issues
+export function formatAirDate(dateString: string | null, includeYear = false): string | null {
+  const date = parseLocalDate(dateString);
+  if (!date) return null;
+
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const weekday = weekdays[date.getDay()];
+  const month = months[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+
+  if (includeYear) {
+    return `${month} ${day}, ${year}`;
+  }
+  return `${weekday}, ${month} ${day}`;
+}
+
+export function getDaysUntil(dateString: string | null): number | null {
+  const date = parseLocalDate(dateString);
+  if (!date) return null;
+
+  // Compare dates at midnight local time
   const now = new Date();
-  const diffTime = date.getTime() - now.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  const diffTime = targetDate.getTime() - today.getTime();
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 
 export function getCountdownText(dateString: string | null): string | null {
@@ -118,5 +152,5 @@ export function getCountdownText(dateString: string | null): string | null {
     const weeks = Math.floor(days / 7);
     return `In ${weeks} week${weeks === 1 ? '' : 's'}`;
   }
-  return dateString;
+  return formatAirDate(dateString, true);
 }

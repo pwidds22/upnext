@@ -6,7 +6,18 @@ import type {
   UserWithFollowStatus,
   FollowCounts,
   FriendRating,
+  ShowStatus,
 } from '../../types';
+
+// Public show summary for viewing other users' profiles
+export interface UserPublicShow {
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  status: ShowStatus;
+  addedAt: string;
+  updatedAt: string;
+}
 
 // Convert database row to app type
 function profileFromRow(row: ProfileRow): UserProfile {
@@ -312,6 +323,58 @@ export const followsService = {
     return (data ?? []).map((row: any) => ({
       user: profileFromRow(row.profiles as ProfileRow),
       rating: row.rating,
+    }));
+  },
+
+  // Get a user's public shows (for viewing their profile)
+  async getUserPublicShows(userId: string): Promise<UserPublicShow[]> {
+    const { data, error } = await supabase
+      .from('user_shows')
+      .select('tmdb_id, title, poster_path, status, added_at, updated_at')
+      .eq('user_id', userId)
+      .eq('is_public', true)
+      .is('deleted_at', null)
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row) => ({
+      tmdbId: row.tmdb_id,
+      title: row.title,
+      posterPath: row.poster_path,
+      status: row.status as ShowStatus,
+      addedAt: row.added_at,
+      updatedAt: row.updated_at,
+    }));
+  },
+
+  // Get all of a user's public ratings (for viewing their profile)
+  async getUserPublicRatings(userId: string): Promise<Array<{
+    tmdbId: number;
+    ratingType: 'show' | 'season' | 'episode';
+    seasonNumber?: number;
+    episodeNumber?: number;
+    rating: number;
+    review?: string;
+    updatedAt: string;
+  }>> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('tmdb_id, rating_type, season_number, episode_number, rating, review, updated_at')
+      .eq('user_id', userId)
+      .eq('is_public', true)
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data ?? []).map((row) => ({
+      tmdbId: row.tmdb_id,
+      ratingType: row.rating_type as 'show' | 'season' | 'episode',
+      seasonNumber: row.season_number ?? undefined,
+      episodeNumber: row.episode_number ?? undefined,
+      rating: row.rating,
+      review: row.review ?? undefined,
+      updatedAt: row.updated_at,
     }));
   },
 };

@@ -189,6 +189,7 @@ export type MainTabParamList = {
   UpNext: undefined;
   MyShows: undefined;
   Search: undefined;
+  Activity: undefined;
 };
 
 // Up Next episode type
@@ -345,4 +346,40 @@ export interface UserDismissedShowRow {
   tmdb_id: number;
   dismissed_at: string;
   deleted_at: string | null;
+}
+
+// Activity Feed types
+export type ActivityType = 'episode_watch' | 'show_add' | 'rating' | 'reaction';
+
+export interface ActivityItem {
+  id: string;
+  type: ActivityType;
+  userId: string;
+  user: UserProfile;
+  tmdbId: number;
+  showTitle: string;
+  posterPath: string | null;
+  timestamp: string;
+  // Type-specific data
+  seasonNumber?: number;
+  episodeNumber?: number;
+  episodeTitle?: string;
+  rating?: number;
+  ratingType?: RatingType; // For rating activities: show, season, or episode
+  reaction?: EpisodeReactionType;
+  showStatus?: ShowStatus;
+  // Aggregation data (for batched episode watches)
+  isAggregated?: boolean;
+  episodeCount?: number;
+  seasonCompleted?: number; // If they finished a full season
+  episodes?: Array<{ seasonNumber: number; episodeNumber: number; episodeTitle?: string }>;
+}
+
+// Friends watching aggregated show
+export interface FriendsWatchingShow {
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  friends: UserProfile[];
+  friendCount: number;
 }

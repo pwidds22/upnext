@@ -17,7 +17,9 @@ import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import ShowPoster from '../components/ShowPoster';
 import ShowCard from '../components/ShowCard';
+import FriendsWatchingCard from '../components/FriendsWatchingCard';
 import { useRecommendations } from '../hooks/useRecommendations';
+import { useFriendsWatching } from '../hooks/useFriendsWatching';
 import {
   COLORS,
   SEARCH_DEBOUNCE_MS,
@@ -38,6 +40,9 @@ export default function SearchScreen() {
 
   // Recommendations (pass trackedIds to filter out shows user already has)
   const { trending, forYou, loading: recsLoading, dismissShow } = useRecommendations(trackedIds);
+
+  // Friends watching (shows from people you follow)
+  const { shows: friendsWatching, loading: friendsLoading } = useFriendsWatching(trackedIds);
 
   // Load tracked show IDs
   useEffect(() => {
@@ -147,7 +152,7 @@ export default function SearchScreen() {
   );
 
   const renderRecommendations = () => {
-    if (recsLoading) {
+    if (recsLoading && friendsLoading) {
       return (
         <View style={styles.recsLoadingContainer}>
           <ActivityIndicator color={COLORS.primary} />
@@ -191,6 +196,25 @@ export default function SearchScreen() {
                   show={show}
                   onPress={setSelectedShow}
                   onDismiss={(s) => dismissShow(s.id)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {friendsWatching.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Friends Are Watching</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {friendsWatching.map((show) => (
+                <FriendsWatchingCard
+                  key={show.tmdbId}
+                  show={show}
+                  onPress={setSelectedShow}
                 />
               ))}
             </ScrollView>

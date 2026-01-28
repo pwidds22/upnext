@@ -89,10 +89,30 @@ export const ratingsService = {
     seasonNumber: number,
     input: Omit<RatingInput, 'tmdbId'>
   ): Promise<UserRatingRow> {
-    const { data, error } = await supabase
-      .from('user_ratings')
-      .upsert(
-        {
+    // Check if rating already exists
+    const existing = await this.getUserSeasonRating(userId, tmdbId, seasonNumber);
+
+    if (existing) {
+      // Update existing rating
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .update({
+          rating: input.rating,
+          review: input.review ?? null,
+          is_public: input.isPublic ?? false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert new rating
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .insert({
           user_id: userId,
           tmdb_id: tmdbId,
           rating_type: 'season' as RatingType,
@@ -101,18 +121,13 @@ export const ratingsService = {
           rating: input.rating,
           review: input.review ?? null,
           is_public: input.isPublic ?? false,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'user_id,tmdb_id,rating_type,season_number,episode_number',
-          ignoreDuplicates: false,
-        }
-      )
-      .select()
-      .single();
+        })
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data;
+    }
   },
 
   // Rate an episode
@@ -123,10 +138,30 @@ export const ratingsService = {
     episodeNumber: number,
     input: Omit<RatingInput, 'tmdbId'>
   ): Promise<UserRatingRow> {
-    const { data, error } = await supabase
-      .from('user_ratings')
-      .upsert(
-        {
+    // Check if rating already exists
+    const existing = await this.getUserEpisodeRating(userId, tmdbId, seasonNumber, episodeNumber);
+
+    if (existing) {
+      // Update existing rating
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .update({
+          rating: input.rating,
+          review: input.review ?? null,
+          is_public: input.isPublic ?? false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert new rating
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .insert({
           user_id: userId,
           tmdb_id: tmdbId,
           rating_type: 'episode' as RatingType,
@@ -135,18 +170,13 @@ export const ratingsService = {
           rating: input.rating,
           review: input.review ?? null,
           is_public: input.isPublic ?? false,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'user_id,tmdb_id,rating_type,season_number,episode_number',
-          ignoreDuplicates: false,
-        }
-      )
-      .select()
-      .single();
+        })
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data;
+    }
   },
 
   // Get current user's rating for a show
@@ -157,6 +187,60 @@ export const ratingsService = {
       .eq('user_id', userId)
       .eq('tmdb_id', tmdbId)
       .eq('rating_type', 'show')
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+    return data;
+  },
+
+  // Get current user's rating for a season
+  async getUserSeasonRating(
+    userId: string,
+    tmdbId: number,
+    seasonNumber: number
+  ): Promise<UserRatingRow | null> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'season')
+      .eq('season_number', seasonNumber)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+    return data;
+  },
+
+  // Get all season ratings for a show by user
+  async getUserSeasonRatings(userId: string, tmdbId: number): Promise<UserRatingRow[]> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'season')
+      .order('season_number', { ascending: true });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  // Get current user's rating for an episode
+  async getUserEpisodeRating(
+    userId: string,
+    tmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<UserRatingRow | null> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'episode')
+      .eq('season_number', seasonNumber)
+      .eq('episode_number', episodeNumber)
       .single();
 
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found

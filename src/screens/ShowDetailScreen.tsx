@@ -12,18 +12,19 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus, FriendRating } from '../types';
+import { RootStackParamList, TMDBSeason, TMDBCountryProviders, ShowStatus, FriendRating, RatingType } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
+import { showsCloudService } from '../services/supabase/shows';
 import { useWatchedEpisodes } from '../hooks/useShowData';
 import { useEpisodeReactions } from '../hooks/useEpisodeReactions';
 import { useAuth } from '../contexts/AuthContext';
 import ShowPoster from '../components/ShowPoster';
 import EpisodeRow from '../components/EpisodeRow';
 import StarRating, { formatRating } from '../components/StarRating';
-import { COLORS, STATUS_CONFIG, getLogoUrl } from '../utils/constants';
+import { COLORS, STATUS_CONFIG, getLogoUrl, parseLocalDate } from '../utils/constants';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ShowDetailRouteProp = RouteProp<RootStackParamList, 'ShowDetail'>;
@@ -49,6 +50,14 @@ export default function ShowDetailScreen() {
   const [friendRatings, setFriendRatings] = useState<FriendRating[]>([]);
   const [ratingLoading, setRatingLoading] = useState(false);
 
+  // Season rating state
+  const [seasonRatings, setSeasonRatings] = useState<Map<number, number>>(new Map());
+  const [ratingSeasonNumber, setRatingSeasonNumber] = useState<number | null>(null);
+
+  // Privacy state
+  const [isPublic, setIsPublic] = useState<boolean>(true);
+  const [privacyLoading, setPrivacyLoading] = useState(false);
+
   const { isWatched, toggleWatched, watchedCount, watchedCountForSeason, markSeasonWatched, markSeasonUnwatched } =
     useWatchedEpisodes(show.tmdbId);
 
@@ -59,15 +68,17 @@ export default function ShowDetailScreen() {
     if (seasons.length === 0) return 1;
 
     const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Find newest season with unwatched aired episodes (iterate highest to lowest)
     for (let i = seasons.length - 1; i >= 0; i--) {
       const season = seasons[i];
       if (!season.episodes) continue;
 
-      const airedEpisodes = season.episodes.filter(
-        (ep) => ep.air_date && new Date(ep.air_date) <= now
-      );
+      const airedEpisodes = season.episodes.filter((ep) => {
+        const airDate = parseLocalDate(ep.air_date);
+        return airDate && airDate <= today;
+      });
 
       if (airedEpisodes.length === 0) continue;
 
@@ -82,9 +93,10 @@ export default function ShowDetailScreen() {
       const season = seasons[i];
       if (!season.episodes) continue;
 
-      const hasAiredEpisodes = season.episodes.some(
-        (ep) => ep.air_date && new Date(ep.air_date) <= now
-      );
+      const hasAiredEpisodes = season.episodes.some((ep) => {
+        const airDate = parseLocalDate(ep.air_date);
+        return airDate && airDate <= today;
+      });
 
       if (hasAiredEpisodes) {
         return season.season_number;
@@ -115,11 +127,13 @@ export default function ShowDetailScreen() {
 
         // Calculate aired episodes (episodes with air date in the past)
         const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let airedCount = 0;
         for (const season of seasonsData) {
           if (season.episodes) {
             for (const episode of season.episodes) {
-              if (episode.air_date && new Date(episode.air_date) <= now) {
+              const airDate = parseLocalDate(episode.air_date);
+              if (airDate && airDate <= today) {
                 airedCount++;
               }
             }
@@ -150,26 +164,50 @@ export default function ShowDetailScreen() {
     }
   }, [seasons, loading, hasSetInitialSeason, getDefaultExpandedSeason]);
 
-  // Load user rating and friend ratings
+  // Load user rating, friend ratings, and season ratings
   useEffect(() => {
     async function loadRatings() {
       if (!user) return;
 
       try {
-        const [rating, friends] = await Promise.all([
+        const [rating, friends, seasonRatingData] = await Promise.all([
           ratingsService.getUserShowRating(user.id, show.tmdbId),
           followsService.getFriendRatings(user.id, show.tmdbId),
+          ratingsService.getUserSeasonRatings(user.id, show.tmdbId),
         ]);
         if (rating) {
           setUserRating(rating.rating);
         }
         setFriendRatings(friends);
+
+        // Build map of season ratings
+        const ratingsMap = new Map<number, number>();
+        seasonRatingData.forEach((sr) => {
+          if (sr.season_number !== null) {
+            ratingsMap.set(sr.season_number, sr.rating);
+          }
+        });
+        setSeasonRatings(ratingsMap);
       } catch (e) {
         console.error('Failed to load ratings:', e);
       }
     }
 
     loadRatings();
+  }, [show.tmdbId, user]);
+
+  // Load show privacy setting
+  useEffect(() => {
+    async function loadPrivacy() {
+      if (!user) return;
+      try {
+        const privacy = await showsCloudService.getShowPrivacy(user.id, show.tmdbId);
+        setIsPublic(privacy);
+      } catch (e) {
+        console.error('Failed to load privacy setting:', e);
+      }
+    }
+    loadPrivacy();
   }, [show.tmdbId, user]);
 
   const handleRatingChange = useCallback(
@@ -194,6 +232,52 @@ export default function ShowDetailScreen() {
     },
     [user, show.tmdbId]
   );
+
+  const handleSeasonRatingChange = useCallback(
+    async (seasonNumber: number, newRating: number) => {
+      if (!user) return;
+
+      try {
+        await ratingsService.rateSeason(user.id, show.tmdbId, seasonNumber, {
+          rating: newRating,
+          isPublic: true,
+        });
+        setSeasonRatings((prev) => new Map(prev).set(seasonNumber, newRating));
+        setRatingSeasonNumber(null);
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch (e) {
+        console.error('Failed to save season rating:', e);
+        Alert.alert('Error', 'Failed to save rating');
+      }
+    },
+    [user, show.tmdbId]
+  );
+
+  const handlePrivacyToggle = useCallback(async () => {
+    if (!user || privacyLoading) return;
+
+    setPrivacyLoading(true);
+    try {
+      const newValue = !isPublic;
+      await showsCloudService.updateShowPrivacy(user.id, show.tmdbId, newValue);
+      setIsPublic(newValue);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Show brief feedback about what changed
+      Alert.alert(
+        newValue ? 'Visible on Profile' : 'Hidden from Profile',
+        newValue
+          ? 'This show will appear on your profile for followers to see.'
+          : 'This show is now hidden from your profile.',
+        [{ text: 'OK' }],
+        { cancelable: true }
+      );
+    } catch (e) {
+      console.error('Failed to update privacy setting:', e);
+      Alert.alert('Error', 'Failed to update privacy setting');
+    } finally {
+      setPrivacyLoading(false);
+    }
+  }, [user, show.tmdbId, isPublic, privacyLoading]);
 
   const toggleSeason = useCallback((seasonNumber: number) => {
     setExpandedSeasons((prev) => {
@@ -246,11 +330,13 @@ export default function ShowDetailScreen() {
       // Auto-mark all aired episodes when completing a show
       if (newStatus === 'completed' && seasons.length > 0) {
         const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         for (const season of seasons) {
           if (season.episodes) {
-            const airedEpisodes = season.episodes.filter(
-              (ep) => ep.air_date && new Date(ep.air_date) <= now
-            );
+            const airedEpisodes = season.episodes.filter((ep) => {
+              const airDate = parseLocalDate(ep.air_date);
+              return airDate && airDate <= today;
+            });
             if (airedEpisodes.length > 0) {
               const episodeList = airedEpisodes.map((ep) => ({
                 episodeNumber: ep.episode_number,
@@ -295,7 +381,23 @@ export default function ShowDetailScreen() {
         <ShowPoster path={show.posterPath} size="medium" />
 
         <View style={styles.headerInfo}>
-          <Text style={styles.title}>{show.title}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{show.title}</Text>
+            {/* Privacy toggle icon */}
+            {user && (
+              <TouchableOpacity
+                style={styles.privacyIconButton}
+                onPress={handlePrivacyToggle}
+                disabled={privacyLoading}
+              >
+                <Ionicons
+                  name={isPublic ? 'eye-outline' : 'eye-off-outline'}
+                  size={20}
+                  color={isPublic ? COLORS.textSecondary : COLORS.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
 
           <Text style={styles.progressText}>{progressText}</Text>
 
@@ -454,9 +556,11 @@ export default function ShowDetailScreen() {
 
               // Calculate aired episodes in this season
               const now = new Date();
-              const airedInSeason = season.episodes?.filter(
-                (ep) => ep.air_date && new Date(ep.air_date) <= now
-              ).length ?? 0;
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const airedInSeason = season.episodes?.filter((ep) => {
+                const airDate = parseLocalDate(ep.air_date);
+                return airDate && airDate <= today;
+              }).length ?? 0;
               const isUpcoming = airedInSeason === 0;
               const isComplete = !isUpcoming && seasonWatchedCount >= airedInSeason;
 
@@ -483,37 +587,78 @@ export default function ShowDetailScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Mark all watched/unwatched button - only show for seasons with aired episodes */}
+                    {/* Season action buttons */}
                     {!isUpcoming && (
-                      <TouchableOpacity
-                        style={[
-                          styles.markAllButton,
-                          isComplete && styles.markAllButtonComplete,
-                        ]}
-                        onPress={() => {
-                          if (isComplete) {
-                            handleMarkSeasonUnwatched(season.season_number);
-                          } else {
-                            handleMarkSeasonWatched(season);
-                          }
-                        }}
-                      >
-                        <Ionicons
-                          name={isComplete ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                          size={20}
-                          color={isComplete ? COLORS.primary : COLORS.textSecondary}
-                        />
-                        <Text
+                      <View style={styles.seasonActions}>
+                        {/* Season rating button */}
+                        {user && (
+                          <TouchableOpacity
+                            style={[
+                              styles.seasonRatingButton,
+                              seasonRatings.has(season.season_number) && styles.seasonRatingButtonActive,
+                            ]}
+                            onPress={() => setRatingSeasonNumber(
+                              ratingSeasonNumber === season.season_number ? null : season.season_number
+                            )}
+                          >
+                            <Ionicons
+                              name={seasonRatings.has(season.season_number) ? 'star' : 'star-outline'}
+                              size={18}
+                              color={seasonRatings.has(season.season_number) ? COLORS.warning : COLORS.textSecondary}
+                            />
+                            {seasonRatings.has(season.season_number) && (
+                              <Text style={styles.seasonRatingValue}>
+                                {formatRating(seasonRatings.get(season.season_number)!)}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Mark all watched/unwatched button */}
+                        <TouchableOpacity
                           style={[
-                            styles.markAllText,
-                            isComplete && styles.markAllTextComplete,
+                            styles.markAllButton,
+                            isComplete && styles.markAllButtonComplete,
                           ]}
+                          onPress={() => {
+                            if (isComplete) {
+                              handleMarkSeasonUnwatched(season.season_number);
+                            } else {
+                              handleMarkSeasonWatched(season);
+                            }
+                          }}
                         >
-                          {isComplete ? 'Done' : 'Mark All'}
-                        </Text>
-                      </TouchableOpacity>
+                          <Ionicons
+                            name={isComplete ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                            size={20}
+                            color={isComplete ? COLORS.primary : COLORS.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.markAllText,
+                              isComplete && styles.markAllTextComplete,
+                            ]}
+                          >
+                            {isComplete ? 'Done' : 'Mark All'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
                   </View>
+
+                  {/* Inline season rating picker */}
+                  {ratingSeasonNumber === season.season_number && (
+                    <View style={styles.seasonRatingPicker}>
+                      <Text style={styles.seasonRatingPickerLabel}>
+                        Rate Season {season.season_number}
+                      </Text>
+                      <StarRating
+                        value={seasonRatings.get(season.season_number) ?? 0}
+                        onChange={(rating) => handleSeasonRatingChange(season.season_number, rating)}
+                        size={32}
+                      />
+                    </View>
+                  )}
 
                   {isExpanded && season.episodes && (
                     <View style={styles.episodesList}>
@@ -573,10 +718,21 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 8,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.text,
+    flex: 1,
+  },
+  privacyIconButton: {
+    padding: 4,
+    marginTop: 2,
   },
   progressText: {
     fontSize: 14,
@@ -787,6 +943,40 @@ const styles = StyleSheet.create({
   },
   markAllTextComplete: {
     color: COLORS.primary,
+  },
+  seasonActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  seasonRatingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: COLORS.surfaceLight,
+    gap: 4,
+  },
+  seasonRatingButtonActive: {
+    backgroundColor: `${COLORS.warning}20`,
+  },
+  seasonRatingValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.warning,
+  },
+  seasonRatingPicker: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surfaceLight,
+    alignItems: 'center',
+    gap: 8,
+  },
+  seasonRatingPickerLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   episodesList: {
     backgroundColor: COLORS.background,

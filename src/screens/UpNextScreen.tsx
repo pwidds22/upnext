@@ -16,7 +16,7 @@ import { RootStackParamList, TrackedShow, UpNextEpisode, TMDBEpisode } from '../
 import { storageService } from '../services/storage';
 import { tmdbService } from '../services/tmdb';
 import ShowPoster from '../components/ShowPoster';
-import { COLORS, formatEpisodeCode, getCountdownText } from '../utils/constants';
+import { COLORS, formatEpisodeCode, getCountdownText, parseLocalDate } from '../utils/constants';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -108,8 +108,11 @@ export default function UpNextScreen() {
             // If no air date, treat as upcoming (we don't know when it airs)
             // If air date exists and is in the future, it's upcoming
             // If air date exists and is in the past, it's ready to watch
-            const hasAirDate = !!episode.air_date;
-            const isInFuture = hasAirDate && new Date(episode.air_date!) > new Date();
+            const airDate = parseLocalDate(episode.air_date);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const hasAirDate = !!airDate;
+            const isInFuture = hasAirDate && airDate > today;
             const isUpcoming = !hasAirDate || isInFuture;
 
             return {

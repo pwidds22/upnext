@@ -13,9 +13,10 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../contexts/AuthContext';
-import { followsService } from '../services/supabase/follows';
+import { followsService, UserPublicShow } from '../services/supabase/follows';
 import { ratingsService } from '../services/supabase/ratings';
 import { storageService } from '../services/storage';
+import { STATUS_CONFIG } from '../utils/constants';
 import { useFollowStatus, useFollowCounts } from '../hooks/useFollows';
 import FollowButton from '../components/FollowButton';
 import ShowPoster from '../components/ShowPoster';
@@ -26,10 +27,15 @@ import type { RootStackParamList, UserWithFollowStatus, TrackedShow } from '../t
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRouteProp = RouteProp<RootStackParamList, 'UserProfile'>;
 
+type ProfileTab = 'shows' | 'ratings';
+
 interface RatingWithShowInfo {
   id: string;
   tmdb_id: number;
   rating: number;
+  ratingType: 'show' | 'season' | 'episode';
+  seasonNumber?: number;
+  episodeNumber?: number;
   showTitle?: string;
   posterPath?: string | null;
 }
@@ -42,6 +48,9 @@ export default function UserProfileScreen() {
 
   const [profile, setProfile] = useState<UserWithFollowStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<ProfileTab>('shows');
+  const [publicShows, setPublicShows] = useState<UserPublicShow[]>([]);
+  const [showsLoading, setShowsLoading] = useState(false);
   const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
 
@@ -65,25 +74,40 @@ export default function UserProfileScreen() {
     loadProfile();
   }, [userId, currentUser?.id]);
 
+  // Load user's public shows
+  useEffect(() => {
+    async function loadShows() {
+      setShowsLoading(true);
+      try {
+        const shows = await followsService.getUserPublicShows(userId);
+        setPublicShows(shows);
+      } catch (e) {
+        console.error('Failed to load public shows:', e);
+      } finally {
+        setShowsLoading(false);
+      }
+    }
+    loadShows();
+  }, [userId]);
+
   // Load user's public ratings
   useEffect(() => {
     async function loadRatings() {
       setRatingsLoading(true);
       try {
-        const userRatings = await ratingsService.getUserShowRatings(userId);
-        // Filter to public only for other users
-        const publicRatings = isCurrentUser
-          ? userRatings
-          : userRatings.filter((r) => r.is_public);
+        const allRatings = await followsService.getUserPublicRatings(userId);
 
         // Enrich with show info from local storage
         const enrichedRatings: RatingWithShowInfo[] = await Promise.all(
-          publicRatings.slice(0, 6).map(async (rating) => {
-            const show = await storageService.getShow(rating.tmdb_id);
+          allRatings.map(async (rating) => {
+            const show = await storageService.getShow(rating.tmdbId);
             return {
-              id: rating.id,
-              tmdb_id: rating.tmdb_id,
+              id: `${rating.tmdbId}-${rating.ratingType}-${rating.seasonNumber ?? 0}-${rating.episodeNumber ?? 0}`,
+              tmdb_id: rating.tmdbId,
               rating: rating.rating,
+              ratingType: rating.ratingType,
+              seasonNumber: rating.seasonNumber,
+              episodeNumber: rating.episodeNumber,
               showTitle: show?.title,
               posterPath: show?.posterPath,
             };
@@ -98,7 +122,7 @@ export default function UserProfileScreen() {
       }
     }
     loadRatings();
-  }, [userId, isCurrentUser]);
+  }, [userId]);
 
   const handleFollowToggle = useCallback(async () => {
     await toggleFollow();
@@ -115,6 +139,34 @@ export default function UserProfileScreen() {
     },
     [navigation]
   );
+
+  const handleShowPress = useCallback(
+    (show: UserPublicShow) => {
+      // Create a TrackedShow-compatible object for navigation
+      const trackedShow: TrackedShow = {
+        tmdbId: show.tmdbId,
+        title: show.title,
+        posterPath: show.posterPath,
+        status: show.status,
+        addedAt: show.addedAt,
+        totalSeasons: 0,
+        totalEpisodes: 0,
+        streamingServices: [],
+      };
+      navigation.navigate('ShowDetail', { show: trackedShow });
+    },
+    [navigation]
+  );
+
+  const getRatingLabel = (rating: RatingWithShowInfo): string => {
+    if (rating.ratingType === 'season' && rating.seasonNumber !== undefined) {
+      return `Season ${rating.seasonNumber}`;
+    }
+    if (rating.ratingType === 'episode' && rating.seasonNumber !== undefined && rating.episodeNumber !== undefined) {
+      return `S${rating.seasonNumber}E${rating.episodeNumber}`;
+    }
+    return '';
+  };
 
   if (loading) {
     return (
@@ -205,44 +257,113 @@ export default function UserProfileScreen() {
         )}
       </View>
 
-      {/* Ratings Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          {isCurrentUser ? 'My Ratings' : 'Ratings'}
-        </Text>
-
-        {ratingsLoading ? (
-          <ActivityIndicator color={COLORS.primary} style={{ padding: 20 }} />
-        ) : ratings.length === 0 ? (
-          <View style={styles.emptyRatings}>
-            <Ionicons name="star-outline" size={32} color={COLORS.textSecondary} />
-            <Text style={styles.emptyRatingsText}>No ratings yet</Text>
-          </View>
-        ) : (
-          <View style={styles.ratingsGrid}>
-            {ratings.map((rating) => (
-              <TouchableOpacity
-                key={rating.id}
-                style={styles.ratingCard}
-                onPress={() => handleRatingPress(rating.tmdb_id)}
-              >
-                <ShowPoster
-                  path={rating.posterPath ?? null}
-                  size="small"
-                  width={50}
-                  height={75}
-                />
-                <View style={styles.ratingCardInfo}>
-                  <Text style={styles.ratingCardTitle} numberOfLines={2}>
-                    {rating.showTitle || `Show #${rating.tmdb_id}`}
-                  </Text>
-                  <StarRating value={rating.rating} size={14} readonly />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+      {/* Tabs */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'shows' && styles.tabActive]}
+          onPress={() => setActiveTab('shows')}
+        >
+          <Text style={[styles.tabText, activeTab === 'shows' && styles.tabTextActive]}>
+            Shows
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'ratings' && styles.tabActive]}
+          onPress={() => setActiveTab('ratings')}
+        >
+          <Text style={[styles.tabText, activeTab === 'ratings' && styles.tabTextActive]}>
+            Ratings
+          </Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Tab Content */}
+      {activeTab === 'shows' ? (
+        <View style={styles.section}>
+          {showsLoading ? (
+            <ActivityIndicator color={COLORS.primary} style={{ padding: 20 }} />
+          ) : publicShows.length === 0 ? (
+            <View style={styles.emptySection}>
+              <Ionicons name="tv-outline" size={32} color={COLORS.textSecondary} />
+              <Text style={styles.emptySectionText}>No shows yet</Text>
+            </View>
+          ) : (
+            <View style={styles.showsGrid}>
+              {publicShows.map((show) => (
+                <TouchableOpacity
+                  key={show.tmdbId}
+                  style={styles.showCard}
+                  onPress={() => handleShowPress(show)}
+                >
+                  <ShowPoster
+                    path={show.posterPath}
+                    size="small"
+                    width={90}
+                    height={135}
+                  />
+                  <Text style={styles.showCardTitle} numberOfLines={2}>
+                    {show.title}
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: `${STATUS_CONFIG[show.status].color}20` },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        { color: STATUS_CONFIG[show.status].color },
+                      ]}
+                    >
+                      {STATUS_CONFIG[show.status].label}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      ) : (
+        <View style={styles.section}>
+          {ratingsLoading ? (
+            <ActivityIndicator color={COLORS.primary} style={{ padding: 20 }} />
+          ) : ratings.length === 0 ? (
+            <View style={styles.emptySection}>
+              <Ionicons name="star-outline" size={32} color={COLORS.textSecondary} />
+              <Text style={styles.emptySectionText}>No ratings yet</Text>
+            </View>
+          ) : (
+            <View style={styles.ratingsGrid}>
+              {ratings.map((rating) => (
+                <TouchableOpacity
+                  key={rating.id}
+                  style={styles.ratingCard}
+                  onPress={() => handleRatingPress(rating.tmdb_id)}
+                >
+                  <ShowPoster
+                    path={rating.posterPath ?? null}
+                    size="small"
+                    width={50}
+                    height={75}
+                  />
+                  <View style={styles.ratingCardInfo}>
+                    <Text style={styles.ratingCardTitle} numberOfLines={1}>
+                      {rating.showTitle || `Show #${rating.tmdb_id}`}
+                    </Text>
+                    {rating.ratingType !== 'show' && (
+                      <Text style={styles.ratingCardSubtitle}>
+                        {getRatingLabel(rating)}
+                      </Text>
+                    )}
+                    <StarRating value={rating.rating} size={14} readonly />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -345,28 +466,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
   },
-  section: {
-    paddingTop: 24,
-    paddingHorizontal: 16,
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 8,
+    padding: 4,
   },
-  sectionTitle: {
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  tabActive: {
+    backgroundColor: COLORS.surface,
+  },
+  tabText: {
+    fontSize: 14,
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    fontWeight: '500',
   },
-  emptyRatings: {
+  tabTextActive: {
+    color: COLORS.text,
+  },
+  section: {
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+  emptySection: {
     alignItems: 'center',
     padding: 24,
     backgroundColor: COLORS.surface,
     borderRadius: 12,
     gap: 8,
   },
-  emptyRatingsText: {
+  emptySectionText: {
     color: COLORS.textSecondary,
     fontSize: 14,
+  },
+  showsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  showCard: {
+    width: 90,
+    marginBottom: 8,
+  },
+  showCardTitle: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 6,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   ratingsGrid: {
     flexDirection: 'row',
@@ -392,5 +557,10 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '500',
+  },
+  ratingCardSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    marginTop: -2,
   },
 });

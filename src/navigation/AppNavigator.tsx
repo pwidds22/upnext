@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import UpNextScreen from '../screens/UpNextScreen';
 import MyShowsScreen from '../screens/MyShowsScreen';
 import SearchScreen from '../screens/SearchScreen';
+import ActivityFeedScreen from '../screens/ActivityFeedScreen';
 import ShowDetailScreen from '../screens/ShowDetailScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
@@ -92,8 +93,10 @@ function MainTabs({ navigation }: { navigation: any }) {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'MyShows') {
             iconName = focused ? 'albums' : 'albums-outline';
-          } else {
+          } else if (route.name === 'Search') {
             iconName = focused ? 'search' : 'search-outline';
+          } else {
+            iconName = focused ? 'pulse' : 'pulse-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -126,6 +129,11 @@ function MainTabs({ navigation }: { navigation: any }) {
         name="Search"
         component={SearchScreen}
         options={{ title: 'Search' }}
+      />
+      <Tab.Screen
+        name="Activity"
+        component={ActivityFeedScreen}
+        options={{ title: 'Activity' }}
       />
     </Tab.Navigator>
   );

@@ -132,4 +132,29 @@ export const showsCloudService = {
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
     return data?.id ?? null;
   },
+
+  // Update show privacy setting
+  async updateShowPrivacy(userId: string, tmdbId: number, isPublic: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('user_shows')
+      .update({ is_public: isPublic })
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId);
+
+    if (error) throw error;
+  },
+
+  // Get show privacy setting
+  async getShowPrivacy(userId: string, tmdbId: number): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('user_shows')
+      .select('is_public')
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    // Default to true (public) if not found
+    return data?.is_public ?? true;
+  },
 };
