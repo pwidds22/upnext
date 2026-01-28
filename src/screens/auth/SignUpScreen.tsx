@@ -137,8 +137,8 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
         setError(signUpError);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
-        setSuccess(true);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onSkip(); // Go directly to main app (no email confirmation needed)
       }
     } catch (e) {
       setError('Something went wrong. Please try again.');

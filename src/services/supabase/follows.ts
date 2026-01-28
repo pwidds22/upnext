@@ -43,6 +43,32 @@ export const followsService = {
     return !data; // Available if no profile found
   },
 
+  // Get profile by username (for signin with username)
+  async getProfileByUsername(username: string): Promise<UserProfile | null> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url, bio, is_searchable')
+      .eq('username', username.toLowerCase())
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+    return profileFromRow(data);
+  },
+
+  // Get email by user id (for signin with username)
+  async getEmailByUserId(userId: string): Promise<string | null> {
+    const { data, error } = await supabase.rpc('get_user_email', {
+      user_id: userId,
+    });
+
+    if (error) {
+      console.error('Failed to get email:', error);
+      return null;
+    }
+    return data;
+  },
+
   // Update profile username and display name
   async updateProfile(
     userId: string,

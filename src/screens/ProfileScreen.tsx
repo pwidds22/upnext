@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,10 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -14,14 +18,286 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
+import { followsService } from '../services/supabase/follows';
 import { storageService } from '../services/storage';
 import { useFollowCounts } from '../hooks/useFollows';
 import { COLORS } from '../utils/constants';
-import { RootStackParamList, TrackedShow } from '../types';
+import { RootStackParamList, TrackedShow, UserProfile } from '../types';
 import StarRating, { formatRating } from '../components/StarRating';
 import ShowPoster from '../components/ShowPoster';
 import SignInScreen from './auth/SignInScreen';
 import SignUpScreen from './auth/SignUpScreen';
+
+// Username validation: 3-20 chars, alphanumeric and underscores only
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
+
+function validateUsername(username: string): string | null {
+  if (!username.trim()) {
+    return 'Username is required';
+  }
+  if (username.length < 3) {
+    return 'Username must be at least 3 characters';
+  }
+  if (username.length > 20) {
+    return 'Username must be 20 characters or less';
+  }
+  if (!USERNAME_REGEX.test(username)) {
+    return 'Username can only contain letters, numbers, and underscores';
+  }
+  return null;
+}
+
+// Edit Profile Modal Component
+interface EditProfileModalProps {
+  visible: boolean;
+  onClose: () => void;
+  currentProfile: UserProfile | null;
+  userId: string;
+  onSave: (updated: UserProfile) => void;
+}
+
+function EditProfileModal({
+  visible,
+  onClose,
+  currentProfile,
+  userId,
+  onSave,
+}: EditProfileModalProps) {
+  const [username, setUsername] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [bio, setBio] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<
+    'idle' | 'available' | 'taken' | 'unchanged'
+  >('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  // Initialize form when modal opens
+  useEffect(() => {
+    if (visible && currentProfile) {
+      setUsername(currentProfile.username || '');
+      setDisplayName(currentProfile.displayName || '');
+      setBio(currentProfile.bio || '');
+      setUsernameStatus('unchanged');
+      setError(null);
+    }
+  }, [visible, currentProfile]);
+
+  // Check username availability with debounce
+  const checkAvailability = useCallback(
+    async (value: string) => {
+      if (
+        value.toLowerCase() === currentProfile?.username?.toLowerCase()
+      ) {
+        setUsernameStatus('unchanged');
+        return;
+      }
+
+      const validationError = validateUsername(value);
+      if (validationError) {
+        setUsernameStatus('idle');
+        return;
+      }
+
+      setCheckingUsername(true);
+      try {
+        const available = await followsService.isUsernameAvailable(value);
+        setUsernameStatus(available ? 'available' : 'taken');
+      } catch (e) {
+        console.error('Failed to check username:', e);
+        setUsernameStatus('idle');
+      } finally {
+        setCheckingUsername(false);
+      }
+    },
+    [currentProfile?.username]
+  );
+
+  const handleUsernameChange = useCallback(
+    (value: string) => {
+      // Only allow valid characters while typing
+      const cleaned = value.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+      setUsername(cleaned);
+
+      // Check if unchanged from original
+      if (cleaned.toLowerCase() === currentProfile?.username?.toLowerCase()) {
+        setUsernameStatus('unchanged');
+        return;
+      }
+
+      setUsernameStatus('idle');
+
+      // Debounce the availability check
+      if (cleaned.length >= 3) {
+        const timer = setTimeout(() => checkAvailability(cleaned), 500);
+        return () => clearTimeout(timer);
+      }
+    },
+    [currentProfile?.username, checkAvailability]
+  );
+
+  const handleSave = async () => {
+    // Validate username format
+    const usernameError = validateUsername(username);
+    if (usernameError) {
+      setError(usernameError);
+      return;
+    }
+
+    // Check if taken
+    if (usernameStatus === 'taken') {
+      setError('Username is already taken');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      // Final availability check if username changed
+      if (username.toLowerCase() !== currentProfile?.username?.toLowerCase()) {
+        const available = await followsService.isUsernameAvailable(username);
+        if (!available) {
+          setError('Username is already taken');
+          setUsernameStatus('taken');
+          setSaving(false);
+          return;
+        }
+      }
+
+      await followsService.updateProfile(userId, {
+        username,
+        displayName: displayName || undefined,
+        bio: bio || undefined,
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSave({
+        id: userId,
+        username: username.toLowerCase(),
+        displayName: displayName || null,
+        avatarUrl: currentProfile?.avatarUrl || null,
+        bio: bio || null,
+      });
+      onClose();
+    } catch (e) {
+      console.error('Failed to update profile:', e);
+      setError('Failed to update profile. Please try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getStatusIcon = () => {
+    if (checkingUsername) {
+      return <ActivityIndicator size="small" color={COLORS.textSecondary} />;
+    }
+    if (usernameStatus === 'available') {
+      return <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />;
+    }
+    if (usernameStatus === 'taken') {
+      return <Ionicons name="close-circle" size={20} color={COLORS.error} />;
+    }
+    if (usernameStatus === 'unchanged') {
+      return <Ionicons name="checkmark-circle" size={20} color={COLORS.textSecondary} />;
+    }
+    return null;
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalContainer}
+      >
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={onClose} style={styles.modalHeaderButton}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Edit Profile</Text>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={saving}
+            style={styles.modalHeaderButton}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            ) : (
+              <Text style={styles.saveText}>Save</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {error && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={18} color={COLORS.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Username</Text>
+            <View style={styles.inputWithIcon}>
+              <Ionicons name="at" size={20} color={COLORS.textSecondary} />
+              <TextInput
+                style={styles.textInput}
+                value={username}
+                onChangeText={handleUsernameChange}
+                placeholder="username"
+                placeholderTextColor={COLORS.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {getStatusIcon()}
+            </View>
+            <Text style={styles.inputHint}>
+              3-20 characters, letters, numbers, and underscores only
+            </Text>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Display Name</Text>
+            <View style={styles.inputWithIcon}>
+              <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} />
+              <TextInput
+                style={styles.textInput}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Display Name (optional)"
+                placeholderTextColor={COLORS.textTertiary}
+                maxLength={50}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Bio</Text>
+            <TextInput
+              style={[styles.textInput, styles.bioInput]}
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Tell us about yourself (optional)"
+              placeholderTextColor={COLORS.textTertiary}
+              multiline
+              numberOfLines={3}
+              maxLength={160}
+              textAlignVertical="top"
+            />
+            <Text style={styles.charCount}>{bio.length}/160</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -37,6 +313,9 @@ export default function ProfileScreen() {
   const [authScreen, setAuthScreen] = useState<'signIn' | 'signUp' | null>(null);
   const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [editModalVisible, setEditModalVisible] = useState(false);
 
   // Follow counts for signed-in user
   const { followers, following, loading: followCountsLoading } = useFollowCounts(
@@ -76,6 +355,39 @@ export default function ProfileScreen() {
     }
 
     loadRatings();
+  }, [user]);
+
+  // Load user's profile
+  useEffect(() => {
+    async function loadProfile() {
+      if (!user) {
+        setProfile(null);
+        setProfileLoading(false);
+        return;
+      }
+
+      setProfileLoading(true);
+      try {
+        const data = await followsService.getUserProfile(user.id);
+        setProfile(data);
+      } catch (e) {
+        console.error('Failed to load profile:', e);
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+
+    loadProfile();
+  }, [user]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await followsService.getUserProfile(user.id);
+      setProfile(data);
+    } catch (e) {
+      console.error('Failed to refresh profile:', e);
+    }
   }, [user]);
 
   const handleSignOut = async () => {
@@ -126,13 +438,25 @@ export default function ProfileScreen() {
   // User is signed in
   if (user) {
     return (
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileHeader}>
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarTextLarge}>
-              {user.email?.[0].toUpperCase() || 'U'}
+              {(profile?.displayName?.[0] || profile?.username?.[0] || user.email?.[0] || 'U').toUpperCase()}
             </Text>
           </View>
+          {profileLoading ? (
+            <ActivityIndicator color={COLORS.textSecondary} style={{ marginVertical: 8 }} />
+          ) : (
+            <>
+              <Text style={styles.displayName}>
+                {profile?.displayName || profile?.username || user.email?.split('@')[0]}
+              </Text>
+              {profile?.username && (
+                <Text style={styles.username}>@{profile.username}</Text>
+              )}
+            </>
+          )}
           <Text style={styles.email}>{user.email}</Text>
           <View style={styles.syncBadge}>
             <Ionicons name="cloud-done" size={14} color={COLORS.primary} />
@@ -146,7 +470,7 @@ export default function ProfileScreen() {
               onPress={() =>
                 navigation.navigate('Followers', {
                   userId: user.id,
-                  username: user.email?.split('@')[0],
+                  username: profile?.username || user.email?.split('@')[0],
                 })
               }
             >
@@ -163,7 +487,7 @@ export default function ProfileScreen() {
               onPress={() =>
                 navigation.navigate('Following', {
                   userId: user.id,
-                  username: user.email?.split('@')[0],
+                  username: profile?.username || user.email?.split('@')[0],
                 })
               }
             >
@@ -190,6 +514,15 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setEditModalVisible(true)}
+          >
+            <Ionicons name="person-outline" size={22} color={COLORS.text} />
+            <Text style={styles.menuItemText}>Edit Profile</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>
             <Ionicons name="sync-outline" size={22} color={COLORS.text} />
@@ -258,6 +591,17 @@ export default function ProfileScreen() {
           <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
+
+        <EditProfileModal
+          visible={editModalVisible}
+          onClose={() => setEditModalVisible(false)}
+          currentProfile={profile}
+          userId={user.id}
+          onSave={(updated) => {
+            setProfile(updated);
+            refreshProfile();
+          }}
+        />
       </ScrollView>
     );
   }
@@ -315,6 +659,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  scrollContent: {
+    paddingBottom: 40,
+  },
   profileHeader: {
     alignItems: 'center',
     paddingVertical: 32,
@@ -335,10 +682,20 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '600',
   },
-  email: {
+  displayName: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  username: {
+    color: COLORS.textSecondary,
+    fontSize: 15,
+    marginBottom: 4,
+  },
+  email: {
+    color: COLORS.textTertiary,
+    fontSize: 13,
   },
   syncBadge: {
     flexDirection: 'row',
@@ -543,5 +900,97 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 14,
     fontWeight: '500',
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalHeaderButton: {
+    minWidth: 60,
+  },
+  cancelText: {
+    color: COLORS.text,
+    fontSize: 16,
+  },
+  modalTitle: {
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  saveText: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.error}20`,
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    flex: 1,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  inputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  textInput: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 16,
+    paddingVertical: 12,
+  },
+  inputHint: {
+    color: COLORS.textTertiary,
+    fontSize: 12,
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+  bioInput: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    minHeight: 80,
+  },
+  charCount: {
+    color: COLORS.textTertiary,
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
   },
 });

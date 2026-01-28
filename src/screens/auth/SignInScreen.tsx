@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
+import { followsService } from '../../services/supabase/follows';
 import { COLORS } from '../../utils/constants';
 
 interface Props {
@@ -22,28 +23,57 @@ interface Props {
 
 export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSignIn = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter email and password');
+    const input = emailOrUsername.trim();
+    if (!input || !password.trim()) {
+      setError('Please enter email/username and password');
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const { error: signInError } = await signIn(email.trim(), password);
+    try {
+      let email = input;
 
-    if (signInError) {
-      setError(signInError);
+      // If input doesn't contain @, treat as username and look up email
+      if (!input.includes('@')) {
+        const profile = await followsService.getProfileByUsername(input);
+        if (!profile) {
+          setError('Username not found');
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setLoading(false);
+          return;
+        }
+        // Get email from auth.users via the profile id
+        const userEmail = await followsService.getEmailByUserId(profile.id);
+        if (!userEmail) {
+          setError('Could not find account for this username');
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setLoading(false);
+          return;
+        }
+        email = userEmail;
+      }
+
+      const { error: signInError } = await signIn(email, password);
+
+      if (signInError) {
+        setError(signInError);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onSkip(); // Close the signin screen on success
+      }
+    } catch (e) {
+      setError('Sign in failed. Please try again.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } else {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
     setLoading(false);
@@ -73,17 +103,17 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
           )}
 
           <View style={styles.inputContainer}>
-            <Ionicons name="mail-outline" size={20} color={COLORS.textSecondary} />
+            <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} />
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="Email or Username"
               placeholderTextColor={COLORS.textSecondary}
-              value={email}
-              onChangeText={setEmail}
+              value={emailOrUsername}
+              onChangeText={setEmailOrUsername}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
-              textContentType="emailAddress"
+              textContentType="username"
             />
           </View>
 

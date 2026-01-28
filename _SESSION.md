@@ -4,38 +4,33 @@ Branch: master
 
 ## Completed This Session
 
-### Activity Feed Improvements & User Profile Enhancement - COMPLETE
-Following plan at `.claude/plans/sprightly-hatching-nygaard.md`
+### Auth/Signup Fixes - COMPLETE
+- [x] **Username signin** - SignInScreen now accepts email OR username
+  - Added `getProfileByUsername()` and `getEmailByUserId()` to follows service
+  - Created `get_user_email` database function (migration applied)
+  - `src/screens/auth/SignInScreen.tsx` - Updated to support username login
+  - `src/services/supabase/follows.ts` - Added new lookup methods
 
-- [x] **Phase 1: Fix Activity Feed Quality**
-  - Fixed `getShowAddActivity()` to only show completed shows (not "started watching")
-  - Fixed `aggregateEpisodeWatches()` to filter out bulk marking (6+ episodes in 60s)
-  - Fixed `getRatingActivity()` to include season/episode ratings
-  - Added `getUserRecentActivity()` for inline dropdown feature
+- [x] **Signin redirect fix** - Screen now closes after successful signin
+  - Was showing signin screen even after success, now calls `onSkip()`
 
-- [x] **Phase 2: Season Rating UI**
-  - Added star rating button to each season header in ShowDetailScreen
-  - Users can now rate individual seasons
-  - Season ratings appear in activity feed
+- [x] **Signup redirect fix** - Goes directly to app after signup
+  - Removed email confirmation screen (email confirm disabled in Supabase)
+  - `src/screens/auth/SignUpScreen.tsx` - Now calls `onSkip()` on success
 
-- [x] **Phase 3: Enhanced User Profile**
-  - Added Shows/Ratings tabs to UserProfileScreen
-  - Shows tab displays all public shows with status badges
-  - Ratings tab shows all public ratings (scrollable)
-  - Added `getUserPublicShows()` service method
+- [x] **Profile page layout fix** - Sign out button no longer cut off
+  - Added `contentContainerStyle` with `paddingBottom: 40` to ScrollView
+  - `src/screens/ProfileScreen.tsx`
 
-- [x] **Phase 4: Show Privacy**
-  - Database migration: `add_show_privacy` - Added `is_public` column to `user_shows`
-  - Added privacy toggle (eye icon) to ShowDetailScreen
-  - Toggle shows Alert explaining what it does
-  - Users can hide shows from their profile
-
-- [x] **Date Display Fix**
-  - Updated `formatAirDate` to use manual formatting instead of `toLocaleDateString`
-  - Avoids any potential locale/timezone issues
-  - Note: TMDB has incorrect data for some shows (e.g., Shrinking S2E10 shows 1/27 instead of 1/28) - reported to TMDB support
+### Edit Profile / Username Change - COMPLETE
+- [x] Added profile fetch to ProfileScreen (username, displayName, bio)
+- [x] Updated profile header to show displayName + @username
+- [x] Added "Edit Profile" menu item in Account section
+- [x] Created EditProfileModal with validation and availability check
+- `src/screens/ProfileScreen.tsx` - All profile editing features
 
 ### Previous Session Work
+- Activity Feed Improvements & User Profile Enhancement
 - Activity Feed & Friends Watching feature
 - UX improvements (auto-complete, smart seasons, TMDB ratings, future seasons)
 - Recommendations improvements (ratings, date filter, dismiss feature)
@@ -43,7 +38,7 @@ Following plan at `.claude/plans/sprightly-hatching-nygaard.md`
 
 ## App Status
 - Core features working (search, tracking, episodes)
-- Auth UI ready with username selection on signup
+- **AUTH COMPLETE** - Signup, signin (email or username), no email confirmation
 - Supabase connected and tables created
 - Sync engine complete
 - Rating system working (5-star with half-star toggle)
@@ -52,7 +47,7 @@ Following plan at `.claude/plans/sprightly-hatching-nygaard.md`
 - **RECOMMENDATIONS COMPLETE** - Trending + "For You" with ratings, 15-year filter, dismiss feature
 - **UX IMPROVEMENTS COMPLETE** - Auto-mark on complete, smart season opening, TMDB ratings
 - **ACTIVITY FEED COMPLETE** - Friends watching on Search, Activity tab with full feed
-- **ACTIVITY FEED IMPROVEMENTS COMPLETE** - Cleaner feed, season ratings, enhanced profiles, show privacy
+- **PROFILE EDITING COMPLETE** - Edit username, display name, bio from ProfileScreen
 
 ## Database Migrations Applied
 1. `create_profiles`
@@ -67,28 +62,24 @@ Following plan at `.claude/plans/sprightly-hatching-nygaard.md`
 10. `create_user_dismissed_shows`
 11. `add_activity_feed_policies`
 12. `add_show_privacy` - Added `is_public` column to `user_shows`
+13. `add_get_user_email_function` - Function to get email by user id (for username signin)
 
 ## Files Modified This Session
-- `src/services/supabase/activity.ts` - Improved feed quality, added season/episode ratings
-- `src/services/supabase/ratings.ts` - Added `getUserSeasonRating()`
-- `src/services/supabase/follows.ts` - Added `getUserPublicShows()`
-- `src/services/supabase/shows.ts` - Added `updateShowPrivacy()`
-- `src/screens/ShowDetailScreen.tsx` - Season rating UI, privacy toggle with Alert feedback
-- `src/screens/UserProfileScreen.tsx` - Shows/Ratings tabs
-- `src/components/ActivityItem.tsx` - Handle season/episode rating descriptions
-- `src/types/index.ts` - Added `ratingType`, `seasonNumber`, `episodeNumber` to ActivityItem
-- `src/utils/constants.ts` - Manual date formatting in `formatAirDate`
+- `src/screens/ProfileScreen.tsx` - Profile fetch, Edit Profile modal, scroll padding fix
+- `src/screens/auth/SignInScreen.tsx` - Username signin support, redirect fix
+- `src/screens/auth/SignUpScreen.tsx` - Direct redirect after signup (no email confirm)
+- `src/services/supabase/follows.ts` - Added `getProfileByUsername()`, `getEmailByUserId()`
 
 ## Known Issues
-- TMDB data quality: Some air dates are incorrect (e.g., Shrinking S2E10). Reported to TMDB support forum. Our code correctly displays what TMDB returns.
+- TMDB data quality: Some air dates are incorrect (e.g., Shrinking S2E10). Reported to TMDB support forum.
 
 ## Next Steps
 
-### Polish
-- [ ] Allow existing users to change username in ProfileScreen
-- [ ] Add profile editing (display name, bio, avatar)
+### Future Tasks
+- [ ] Show About section: either add more data (overview, genres, network) or remove it
+- [ ] TMDB rating consistency: MyShows shows 10-star, ShowDetail shows 5-star - make both 5-star
+- [ ] Add avatar upload support (low priority)
 - [ ] Real-time updates with Supabase subscriptions (optional)
-- [ ] Inline user activity dropdown in activity feed (Phase 3 from plan - optional enhancement)
 
 ## Build Info
 - Expo SDK: 54
