@@ -1,28 +1,28 @@
 # UpNext - Session State
 Updated: 2026-01-29 | Branch: master
 
-## Status: Movies Implemented, UX Polish Complete
+## Status: Pre-Rewatch Research Phase
 
 ### Completed This Session
-- **Movie tracking** - Full implementation complete
-  - Search movies with trending/for you/top rated sections
-  - Add movies with status selection (Watchlist/Watched) and rating from search modal
-  - Movie detail screen with streaming providers
-  - Library shows movies with TV/Movies filter
-- **Dismiss movies** - X button on movie cards in search (like TV shows)
-- **Terminology consistency** - Changed "Completed" to "Watched" for TV shows
-- **Collapsible sections** - Library sections can be collapsed/expanded with chevron arrows
-- **Hide Watched toggle** - Compact eye icon (shows "Hidden" when active)
-- **Filter persistence** - Library remembers All/TV/Movies preference
-- **Database fixes** - Fixed ON CONFLICT errors with check-then-insert pattern
+- **Session review** - Reviewed project state, uncommitted changes, roadmap
+- **Deep research prep** - Created prompt for Claude deep research to investigate:
+  - Why users want rewatch tracking and how it should work
+  - Most requested features from TV Time, Trakt, etc. refugees
+  - Deal breakers and pain points from Reddit communities
 
-### Key Files Modified
-- `src/screens/SearchScreen.tsx` - Status selection + rating in add modals
-- `src/screens/MyShowsScreen.tsx` - Collapsible sections, hide toggle, terminology
-- `src/hooks/useMovieRecommendations.ts` - Added dismiss functionality
-- `src/components/MovieCard.tsx` - Added onDismiss prop
-- `src/services/storage.ts` - Added dismissed_movies table & methods
-- `src/utils/constants.ts` - Changed "Completed" label to "Watched"
+### In Progress
+- **Rewatch tracking research** - Awaiting deep research results from user
+  - User will provide findings in next session
+  - Need to understand user expectations before implementation
+
+### Previous Session Completed
+- **Movie tracking** - Full implementation complete
+- **Dismiss movies** - X button on movie cards
+- **Terminology consistency** - "Completed" → "Watched"
+- **Collapsible sections** - Library sections expandable
+- **Hide Watched toggle** - Compact eye icon
+- **Filter persistence** - Library remembers preference
+- **Database fixes** - ON CONFLICT errors resolved
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -54,13 +54,20 @@ Updated: 2026-01-29 | Branch: master
 |---|---------|-------|
 | 7 | Native X posting | Twitter API OAuth required |
 
+## Next Steps
+1. **Receive deep research results** - User running Claude deep research on rewatch tracking + feature requests
+2. **Analyze findings** - Understand what users actually want from rewatch tracking
+3. **Design rewatch implementation** - Based on research, not assumptions
+4. **Implement rewatch tracking** - After research validates approach
+
 ## Technical Notes for Next Features
 
-### Rewatch Tracking
+### Rewatch Tracking (pending research)
 - Current: `upsertEpisode` with `onConflict` overwrites existing watch
 - Need: Remove unique constraint, change to INSERT for rewatches
 - Add UI to show watch history per episode
 - Update ID generation to include timestamp
+- **Waiting for:** Deep research on user expectations
 
 ### Share Profile
 - Generate public URL: `upnext.app/user/{username}`
