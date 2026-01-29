@@ -1,5 +1,11 @@
+// Media type discriminator
+export type MediaType = 'tv' | 'movie';
+
 // Show tracking status
 export type ShowStatus = 'watching' | 'waiting' | 'watchlist' | 'completed' | 'dropped';
+
+// Movie tracking status (subset - movies don't have "watching" progression)
+export type MovieStatus = 'watchlist' | 'watched' | 'dropped';
 
 // Sync status for offline-first architecture
 export type SyncStatus = 'pending' | 'synced' | 'error';
@@ -17,7 +23,7 @@ export interface UserShowRow {
   tmdb_id: number;
   title: string;
   poster_path: string | null;
-  status: ShowStatus;
+  status: ShowStatus | MovieStatus;
   added_at: string;
   total_seasons: number;
   total_episodes: number;
@@ -27,6 +33,10 @@ export interface UserShowRow {
   synced_at: string;
   updated_at: string;
   deleted_at: string | null;
+  // Movie support fields
+  media_type: MediaType;
+  release_date: string | null;
+  runtime: number | null;
 }
 
 export interface UserWatchedEpisodeRow {
@@ -67,6 +77,7 @@ export interface SyncQueueItem {
 
 // Locally stored tracked show
 export interface TrackedShow {
+  mediaType: 'tv';
   tmdbId: number;
   title: string;
   posterPath: string | null;
@@ -81,6 +92,26 @@ export interface TrackedShow {
   remoteId?: string;
   lastSyncedAt?: string;
 }
+
+// Locally stored tracked movie
+export interface TrackedMovie {
+  mediaType: 'movie';
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  status: MovieStatus;
+  addedAt: string; // ISO date string
+  releaseDate: string | null;
+  runtime: number | null; // minutes
+  streamingServices: string[];
+  // Sync fields (optional - not present in legacy data)
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+  lastSyncedAt?: string;
+}
+
+// Union type for library items
+export type TrackedMedia = TrackedShow | TrackedMovie;
 
 // Locally stored watched episode
 export interface WatchedEpisode {
@@ -175,11 +206,41 @@ export interface TMDBProvider {
   display_priority?: number;
 }
 
+// Movie-specific TMDB types
+export interface TMDBMovieSearchResponse {
+  page: number;
+  results: TMDBMovie[];
+  total_pages: number;
+  total_results: number;
+}
+
+export interface TMDBMovie {
+  id: number;
+  title: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  overview: string | null;
+  release_date: string | null;
+  runtime: number | null;
+  genres?: TMDBGenre[];
+  vote_average?: number;
+  vote_count?: number;
+  status?: string;
+  tagline?: string;
+  production_companies?: Array<{
+    id: number;
+    name: string;
+    logo_path: string | null;
+  }>;
+}
+
 // Navigation types
 export type RootStackParamList = {
   Main: undefined;
   ShowDetail: { show: TrackedShow };
   AddShow: { tmdbShow: TMDBShow };
+  MovieDetail: { movie: TrackedMovie };
+  AddMovie: { tmdbMovie: TMDBMovie };
   Auth: undefined;
   Profile: undefined;
   UserSearch: undefined;
@@ -195,7 +256,7 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   UpNext: undefined;
-  MyShows: undefined;
+  Library: undefined;
   Search: undefined;
   Activity: undefined;
 };
@@ -213,7 +274,7 @@ export interface UpNextEpisode {
 }
 
 // Rating types
-export type RatingType = 'show' | 'season' | 'episode';
+export type RatingType = 'show' | 'season' | 'episode' | 'movie';
 
 export interface UserRating {
   id: string;
@@ -357,7 +418,7 @@ export interface UserDismissedShowRow {
 }
 
 // Activity Feed types
-export type ActivityType = 'episode_watch' | 'show_add' | 'rating' | 'reaction';
+export type ActivityType = 'episode_watch' | 'show_add' | 'movie_watch' | 'rating' | 'reaction';
 
 export interface ActivityItem {
   id: string;
@@ -365,17 +426,19 @@ export interface ActivityItem {
   userId: string;
   user: UserProfile;
   tmdbId: number;
-  showTitle: string;
+  showTitle: string; // Also used for movie title
   posterPath: string | null;
   timestamp: string;
+  mediaType?: MediaType; // 'tv' or 'movie'
   // Type-specific data
   seasonNumber?: number;
   episodeNumber?: number;
   episodeTitle?: string;
   rating?: number;
-  ratingType?: RatingType; // For rating activities: show, season, or episode
+  ratingType?: RatingType; // For rating activities: show, season, episode, or movie
   reaction?: EpisodeReactionType;
   showStatus?: ShowStatus;
+  movieStatus?: MovieStatus;
   // Aggregation data (for batched episode watches)
   isAggregated?: boolean;
   episodeCount?: number;

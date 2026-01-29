@@ -15,6 +15,7 @@ import MyShowsScreen from '../screens/MyShowsScreen';
 import SearchScreen from '../screens/SearchScreen';
 import ActivityFeedScreen from '../screens/ActivityFeedScreen';
 import ShowDetailScreen from '../screens/ShowDetailScreen';
+import MovieDetailScreen from '../screens/MovieDetailScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -91,7 +92,7 @@ function MainTabs({ navigation }: { navigation: any }) {
 
           if (route.name === 'UpNext') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'MyShows') {
+          } else if (route.name === 'Library') {
             iconName = focused ? 'albums' : 'albums-outline';
           } else if (route.name === 'Search') {
             iconName = focused ? 'search' : 'search-outline';
@@ -121,9 +122,9 @@ function MainTabs({ navigation }: { navigation: any }) {
         options={{ title: 'Home' }}
       />
       <Tab.Screen
-        name="MyShows"
+        name="Library"
         component={MyShowsScreen}
-        options={{ title: 'My Shows' }}
+        options={{ title: 'Library' }}
       />
       <Tab.Screen
         name="Search"
@@ -161,6 +162,13 @@ export default function AppNavigator() {
           component={ShowDetailScreen}
           options={({ route }) => ({
             title: route.params.show.title,
+          })}
+        />
+        <Stack.Screen
+          name="MovieDetail"
+          component={MovieDetailScreen}
+          options={({ route }) => ({
+            title: route.params.movie.title,
           })}
         />
         <Stack.Screen

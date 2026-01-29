@@ -1,7 +1,7 @@
 import { supabase } from './client';
 
 // Rating type (matches database)
-export type RatingType = 'show' | 'season' | 'episode';
+export type RatingType = 'show' | 'season' | 'episode' | 'movie';
 
 // Database row type
 export interface UserRatingRow {
@@ -331,6 +331,133 @@ export const ratingsService = {
       .eq('user_id', userId)
       .eq('tmdb_id', tmdbId)
       .eq('rating_type', 'show');
+
+    if (error) throw error;
+  },
+
+  // ==================== MOVIE RATING METHODS ====================
+
+  // Rate a movie (create or update)
+  async rateMovie(
+    userId: string,
+    input: RatingInput
+  ): Promise<UserRatingRow> {
+    // Check if rating already exists
+    const existing = await this.getUserMovieRating(userId, input.tmdbId);
+
+    if (existing) {
+      // Update existing rating
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .update({
+          rating: input.rating,
+          review: input.review ?? null,
+          is_public: input.isPublic ?? false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Insert new rating
+      const { data, error } = await supabase
+        .from('user_ratings')
+        .insert({
+          user_id: userId,
+          tmdb_id: input.tmdbId,
+          rating_type: 'movie' as RatingType,
+          season_number: null,
+          episode_number: null,
+          rating: input.rating,
+          review: input.review ?? null,
+          is_public: input.isPublic ?? false,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+  },
+
+  // Get current user's rating for a movie
+  async getUserMovieRating(userId: string, tmdbId: number): Promise<UserRatingRow | null> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'movie')
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+    return data;
+  },
+
+  // Get all movie ratings for a user
+  async getUserMovieRatings(userId: string): Promise<UserRatingRow[]> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('rating_type', 'movie')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  // Get all public ratings for a movie (community ratings)
+  async getPublicMovieRatings(tmdbId: number): Promise<RatingWithUser[]> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select(`
+        *,
+        profiles (
+          username,
+          display_name,
+          avatar_url
+        )
+      `)
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'movie')
+      .eq('is_public', true)
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+    return (data ?? []) as RatingWithUser[];
+  },
+
+  // Calculate average rating for a movie
+  async getMovieAverageRating(tmdbId: number): Promise<{ average: number; count: number } | null> {
+    const { data, error } = await supabase
+      .from('user_ratings')
+      .select('rating')
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'movie')
+      .eq('is_public', true);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+
+    const sum = data.reduce((acc, row) => acc + Number(row.rating), 0);
+    return {
+      average: sum / data.length,
+      count: data.length,
+    };
+  },
+
+  // Delete movie rating by tmdb_id
+  async deleteMovieRating(userId: string, tmdbId: number): Promise<void> {
+    const { error } = await supabase
+      .from('user_ratings')
+      .delete()
+      .eq('user_id', userId)
+      .eq('tmdb_id', tmdbId)
+      .eq('rating_type', 'movie');
 
     if (error) throw error;
   },

@@ -62,7 +62,7 @@ export const STATUS_CONFIG = {
     icon: 'list',
   },
   completed: {
-    label: 'Completed',
+    label: 'Watched',
     color: COLORS.primary,
     icon: 'checkmark-circle',
   },

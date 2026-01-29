@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { TrackedShow, WatchedEpisode, ShowStatus, SyncStatus, SyncOperation, SyncQueueItem, EpisodeReaction, EpisodeReactionType } from '../types';
+import { TrackedShow, TrackedMovie, TrackedMedia, WatchedEpisode, ShowStatus, MovieStatus, SyncStatus, SyncOperation, SyncQueueItem, EpisodeReaction, EpisodeReactionType, MediaType } from '../types';
 
 const DB_NAME = 'showbuddy.db';
 const DEFAULT_SYNC_STATUS: SyncStatus = 'pending';
@@ -116,6 +116,43 @@ class StorageService {
 
       CREATE INDEX IF NOT EXISTS idx_dismissed_tmdb ON dismissed_shows(tmdb_id);
     `);
+
+    // Create dismissed movies table (for hiding movie recommendations)
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS dismissed_movies (
+        id TEXT PRIMARY KEY,
+        tmdb_id INTEGER NOT NULL UNIQUE,
+        dismissed_at TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending',
+        remote_id TEXT,
+        last_synced_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_dismissed_movie_tmdb ON dismissed_movies(tmdb_id);
+    `);
+
+    // Migration: add movie support columns to tracked_shows
+    const movieColumns = [
+      { name: 'media_type', type: "TEXT DEFAULT 'tv'" },
+      { name: 'release_date', type: 'TEXT' },
+      { name: 'runtime', type: 'INTEGER' },
+    ];
+
+    for (const col of movieColumns) {
+      try {
+        await this.db.runAsync(`ALTER TABLE tracked_shows ADD COLUMN ${col.name} ${col.type}`);
+      } catch {
+        // Column already exists, ignore error
+      }
+    }
+
+    // Migration: add unique constraint on (tmdb_id, media_type) for movies/shows with same ID
+    // This allows both a movie and TV show to have the same TMDB ID (since TMDB uses separate ID spaces)
+    try {
+      await this.db.runAsync(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tmdb_media_type ON tracked_shows(tmdb_id, media_type)`);
+    } catch {
+      // Index already exists, ignore error
+    }
   }
 
   // Tracked Shows
@@ -135,9 +172,11 @@ class StorageService {
       sync_status: SyncStatus | null;
       remote_id: string | null;
       last_synced_at: string | null;
-    }>('SELECT * FROM tracked_shows ORDER BY added_at DESC');
+      media_type: MediaType | null;
+    }>("SELECT * FROM tracked_shows WHERE media_type = 'tv' OR media_type IS NULL ORDER BY added_at DESC");
 
     return rows.map((row) => ({
+      mediaType: 'tv' as const,
       tmdbId: row.tmdb_id,
       title: row.title,
       posterPath: row.poster_path,
@@ -169,9 +208,10 @@ class StorageService {
       sync_status: SyncStatus | null;
       remote_id: string | null;
       last_synced_at: string | null;
-    }>('SELECT * FROM tracked_shows WHERE status = ? ORDER BY added_at DESC', [status]);
+    }>("SELECT * FROM tracked_shows WHERE status = ? AND (media_type = 'tv' OR media_type IS NULL) ORDER BY added_at DESC", [status]);
 
     return rows.map((row) => ({
+      mediaType: 'tv' as const,
       tmdbId: row.tmdb_id,
       title: row.title,
       posterPath: row.poster_path,
@@ -203,11 +243,12 @@ class StorageService {
       sync_status: SyncStatus | null;
       remote_id: string | null;
       last_synced_at: string | null;
-    }>('SELECT * FROM tracked_shows WHERE tmdb_id = ?', [tmdbId]);
+    }>("SELECT * FROM tracked_shows WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)", [tmdbId]);
 
     if (!row) return null;
 
     return {
+      mediaType: 'tv' as const,
       tmdbId: row.tmdb_id,
       title: row.title,
       posterPath: row.poster_path,
@@ -226,26 +267,54 @@ class StorageService {
   async addShow(show: TrackedShow): Promise<void> {
     if (!this.db) await this.init();
 
-    await this.db!.runAsync(
-      `INSERT OR REPLACE INTO tracked_shows
-       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        show.tmdbId,
-        show.title,
-        show.posterPath,
-        show.status,
-        show.addedAt,
-        show.totalSeasons,
-        show.totalEpisodes,
-        show.airedEpisodes ?? null,
-        JSON.stringify(show.streamingServices),
-        DEFAULT_SYNC_STATUS,
-      ]
+    // Check if a TV show with this tmdb_id already exists
+    const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
+      "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'tv'",
+      [show.tmdbId]
     );
 
+    if (existing) {
+      // Update existing show
+      await this.db!.runAsync(
+        `UPDATE tracked_shows SET
+           title = ?, poster_path = ?, status = ?, total_seasons = ?, total_episodes = ?,
+           aired_episodes = ?, streaming_services = ?, sync_status = ?
+         WHERE tmdb_id = ? AND media_type = 'tv'`,
+        [
+          show.title,
+          show.posterPath,
+          show.status,
+          show.totalSeasons,
+          show.totalEpisodes,
+          show.airedEpisodes ?? null,
+          JSON.stringify(show.streamingServices),
+          DEFAULT_SYNC_STATUS,
+          show.tmdbId,
+        ]
+      );
+    } else {
+      // Insert new show
+      await this.db!.runAsync(
+        `INSERT INTO tracked_shows
+         (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status, media_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tv')`,
+        [
+          show.tmdbId,
+          show.title,
+          show.posterPath,
+          show.status,
+          show.addedAt,
+          show.totalSeasons,
+          show.totalEpisodes,
+          show.airedEpisodes ?? null,
+          JSON.stringify(show.streamingServices),
+          DEFAULT_SYNC_STATUS,
+        ]
+      );
+    }
+
     // Queue for sync
-    await this.addToSyncQueue('tracked_shows', show.tmdbId.toString(), 'create', show);
+    await this.addToSyncQueue('tracked_shows', show.tmdbId.toString(), 'create', { ...show, mediaType: 'tv' });
   }
 
   async updateAiredEpisodes(tmdbId: number, airedEpisodes: number): Promise<void> {
@@ -526,9 +595,10 @@ class StorageService {
       sync_status: SyncStatus | null;
       remote_id: string | null;
       last_synced_at: string | null;
-    }>('SELECT * FROM tracked_shows WHERE sync_status = ? OR sync_status IS NULL', [DEFAULT_SYNC_STATUS]);
+    }>("SELECT * FROM tracked_shows WHERE (sync_status = ? OR sync_status IS NULL) AND (media_type = 'tv' OR media_type IS NULL)", [DEFAULT_SYNC_STATUS]);
 
     return rows.map((row) => ({
+      mediaType: 'tv' as const,
       tmdbId: row.tmdb_id,
       title: row.title,
       posterPath: row.poster_path,
@@ -748,6 +818,284 @@ class StorageService {
     );
 
     return (row?.count ?? 0) > 0;
+  }
+
+  // ==================== DISMISSED MOVIES ====================
+
+  async getDismissedMovieIds(): Promise<Set<number>> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{ tmdb_id: number }>(
+      'SELECT tmdb_id FROM dismissed_movies'
+    );
+
+    return new Set(rows.map((row) => row.tmdb_id));
+  }
+
+  async dismissMovie(tmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    const id = `dismissed-movie-${tmdbId}`;
+    const now = new Date().toISOString();
+
+    await this.db!.runAsync(
+      `INSERT OR REPLACE INTO dismissed_movies
+       (id, tmdb_id, dismissed_at, sync_status)
+       VALUES (?, ?, ?, ?)`,
+      [id, tmdbId, now, DEFAULT_SYNC_STATUS]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('dismissed_movies', id, 'create', {
+      id,
+      tmdbId,
+      dismissedAt: now,
+    });
+  }
+
+  // ==================== MOVIE METHODS ====================
+
+  async getAllMovies(): Promise<TrackedMovie[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      tmdb_id: number;
+      title: string;
+      poster_path: string | null;
+      status: MovieStatus;
+      added_at: string;
+      streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+      release_date: string | null;
+      runtime: number | null;
+    }>("SELECT * FROM tracked_shows WHERE media_type = 'movie' ORDER BY added_at DESC");
+
+    return rows.map((row) => ({
+      mediaType: 'movie' as const,
+      tmdbId: row.tmdb_id,
+      title: row.title,
+      posterPath: row.poster_path,
+      status: row.status,
+      addedAt: row.added_at,
+      releaseDate: row.release_date,
+      runtime: row.runtime,
+      streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    }));
+  }
+
+  async getMoviesByStatus(status: MovieStatus): Promise<TrackedMovie[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      tmdb_id: number;
+      title: string;
+      poster_path: string | null;
+      status: MovieStatus;
+      added_at: string;
+      streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+      release_date: string | null;
+      runtime: number | null;
+    }>("SELECT * FROM tracked_shows WHERE status = ? AND media_type = 'movie' ORDER BY added_at DESC", [status]);
+
+    return rows.map((row) => ({
+      mediaType: 'movie' as const,
+      tmdbId: row.tmdb_id,
+      title: row.title,
+      posterPath: row.poster_path,
+      status: row.status,
+      addedAt: row.added_at,
+      releaseDate: row.release_date,
+      runtime: row.runtime,
+      streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    }));
+  }
+
+  async getMovie(tmdbId: number): Promise<TrackedMovie | null> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{
+      tmdb_id: number;
+      title: string;
+      poster_path: string | null;
+      status: MovieStatus;
+      added_at: string;
+      streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+      release_date: string | null;
+      runtime: number | null;
+    }>("SELECT * FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'", [tmdbId]);
+
+    if (!row) return null;
+
+    return {
+      mediaType: 'movie' as const,
+      tmdbId: row.tmdb_id,
+      title: row.title,
+      posterPath: row.poster_path,
+      status: row.status,
+      addedAt: row.added_at,
+      releaseDate: row.release_date,
+      runtime: row.runtime,
+      streamingServices: JSON.parse(row.streaming_services || '[]'),
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    };
+  }
+
+  async addMovie(movie: TrackedMovie): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Check if a movie with this tmdb_id already exists
+    const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
+      "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'",
+      [movie.tmdbId]
+    );
+
+    if (existing) {
+      // Update existing movie
+      await this.db!.runAsync(
+        `UPDATE tracked_shows SET
+           title = ?, poster_path = ?, status = ?, streaming_services = ?,
+           release_date = ?, runtime = ?, sync_status = ?
+         WHERE tmdb_id = ? AND media_type = 'movie'`,
+        [
+          movie.title,
+          movie.posterPath,
+          movie.status,
+          JSON.stringify(movie.streamingServices),
+          movie.releaseDate,
+          movie.runtime,
+          DEFAULT_SYNC_STATUS,
+          movie.tmdbId,
+        ]
+      );
+    } else {
+      // Insert new movie
+      await this.db!.runAsync(
+        `INSERT INTO tracked_shows
+         (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, streaming_services, sync_status, media_type, release_date, runtime)
+         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 'movie', ?, ?)`,
+        [
+          movie.tmdbId,
+          movie.title,
+          movie.posterPath,
+          movie.status,
+          movie.addedAt,
+          JSON.stringify(movie.streamingServices),
+          DEFAULT_SYNC_STATUS,
+          movie.releaseDate,
+          movie.runtime,
+        ]
+      );
+    }
+
+    // Queue for sync
+    await this.addToSyncQueue('tracked_shows', `movie-${movie.tmdbId}`, 'create', movie);
+  }
+
+  async updateMovieStatus(tmdbId: number, status: MovieStatus): Promise<void> {
+    if (!this.db) await this.init();
+
+    await this.db!.runAsync(
+      "UPDATE tracked_shows SET status = ?, sync_status = ? WHERE tmdb_id = ? AND media_type = 'movie'",
+      [status, DEFAULT_SYNC_STATUS, tmdbId]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('tracked_shows', `movie-${tmdbId}`, 'update', { tmdbId, status, mediaType: 'movie' });
+  }
+
+  async deleteMovie(tmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('tracked_shows', `movie-${tmdbId}`, 'delete', { tmdbId, mediaType: 'movie' });
+
+    await this.db!.runAsync("DELETE FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'", [tmdbId]);
+  }
+
+  async isMovieTracked(tmdbId: number): Promise<boolean> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) as count FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'",
+      [tmdbId]
+    );
+
+    return (row?.count ?? 0) > 0;
+  }
+
+  // Get all media (shows + movies) for library screen
+  async getAllMedia(): Promise<TrackedMedia[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      tmdb_id: number;
+      title: string;
+      poster_path: string | null;
+      status: string;
+      added_at: string;
+      total_seasons: number;
+      total_episodes: number;
+      aired_episodes: number | null;
+      streaming_services: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+      media_type: MediaType | null;
+      release_date: string | null;
+      runtime: number | null;
+    }>('SELECT * FROM tracked_shows ORDER BY added_at DESC');
+
+    return rows.map((row) => {
+      const mediaType = row.media_type || 'tv';
+      if (mediaType === 'movie') {
+        return {
+          mediaType: 'movie' as const,
+          tmdbId: row.tmdb_id,
+          title: row.title,
+          posterPath: row.poster_path,
+          status: row.status as MovieStatus,
+          addedAt: row.added_at,
+          releaseDate: row.release_date,
+          runtime: row.runtime,
+          streamingServices: JSON.parse(row.streaming_services || '[]'),
+          syncStatus: row.sync_status ?? undefined,
+          remoteId: row.remote_id ?? undefined,
+          lastSyncedAt: row.last_synced_at ?? undefined,
+        } as TrackedMovie;
+      } else {
+        return {
+          mediaType: 'tv' as const,
+          tmdbId: row.tmdb_id,
+          title: row.title,
+          posterPath: row.poster_path,
+          status: row.status as ShowStatus,
+          addedAt: row.added_at,
+          totalSeasons: row.total_seasons,
+          totalEpisodes: row.total_episodes,
+          airedEpisodes: row.aired_episodes ?? undefined,
+          streamingServices: JSON.parse(row.streaming_services || '[]'),
+          syncStatus: row.sync_status ?? undefined,
+          remoteId: row.remote_id ?? undefined,
+          lastSyncedAt: row.last_synced_at ?? undefined,
+        } as TrackedShow;
+      }
+    });
   }
 
   // Clear all local data (used on sign out to prevent data bleeding between accounts)

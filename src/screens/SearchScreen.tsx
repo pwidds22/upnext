@@ -12,13 +12,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TMDBShow, TrackedShow } from '../types';
+import { TMDBShow, TMDBMovie, TrackedShow, TrackedMovie, MediaType, ShowStatus, MovieStatus } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
+import { ratingsService } from '../services/supabase/ratings';
+import { useAuth } from '../contexts/AuthContext';
 import ShowPoster from '../components/ShowPoster';
 import ShowCard from '../components/ShowCard';
+import MovieCard from '../components/MovieCard';
 import FriendsWatchingCard from '../components/FriendsWatchingCard';
+import StarRating from '../components/StarRating';
 import { useRecommendations } from '../hooks/useRecommendations';
+import { useMovieRecommendations } from '../hooks/useMovieRecommendations';
 import { useFriendsWatching } from '../hooks/useFriendsWatching';
 import {
   COLORS,
@@ -27,28 +32,48 @@ import {
   getYearFromDate,
 } from '../utils/constants';
 
+type SearchType = 'tv' | 'movie';
+
 export default function SearchScreen() {
+  const [searchType, setSearchType] = useState<SearchType>('tv');
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<TMDBShow[]>([]);
+  const [showResults, setShowResults] = useState<TMDBShow[]>([]);
+  const [movieResults, setMovieResults] = useState<TMDBMovie[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [trackedIds, setTrackedIds] = useState<Set<number>>(new Set());
+  const [trackedShowIds, setTrackedShowIds] = useState<Set<number>>(new Set());
+  const [trackedMovieIds, setTrackedMovieIds] = useState<Set<number>>(new Set());
+
+  // Auth
+  const { user } = useAuth();
 
   // Modal state
   const [selectedShow, setSelectedShow] = useState<TMDBShow | null>(null);
+  const [selectedMovie, setSelectedMovie] = useState<TMDBMovie | null>(null);
   const [addingShow, setAddingShow] = useState(false);
+  const [addingMovie, setAddingMovie] = useState(false);
+  const [selectedShowStatus, setSelectedShowStatus] = useState<ShowStatus>('watchlist');
+  const [selectedMovieStatus, setSelectedMovieStatus] = useState<MovieStatus>('watchlist');
+  const [modalRating, setModalRating] = useState<number>(0);
 
-  // Recommendations (pass trackedIds to filter out shows user already has)
-  const { trending, forYou, loading: recsLoading, dismissShow } = useRecommendations(trackedIds);
+  // TV show recommendations (pass trackedIds to filter out shows user already has)
+  const { trending, forYou, topRated, loading: recsLoading, dismissShow } = useRecommendations(trackedShowIds);
+
+  // Movie recommendations
+  const { trending: movieTrending, forYou: movieForYou, topRated: movieTopRated, loading: movieRecsLoading, dismissMovie } = useMovieRecommendations(trackedMovieIds);
 
   // Friends watching (shows from people you follow)
-  const { shows: friendsWatching, loading: friendsLoading } = useFriendsWatching(trackedIds);
+  const { shows: friendsWatching, loading: friendsLoading } = useFriendsWatching(trackedShowIds);
 
-  // Load tracked show IDs
+  // Load tracked IDs for both shows and movies
   useEffect(() => {
     async function loadTracked() {
-      const shows = await storageService.getAllShows();
-      setTrackedIds(new Set(shows.map((s) => s.tmdbId)));
+      const [shows, movies] = await Promise.all([
+        storageService.getAllShows(),
+        storageService.getAllMovies(),
+      ]);
+      setTrackedShowIds(new Set(shows.map((s) => s.tmdbId)));
+      setTrackedMovieIds(new Set(movies.map((m) => m.tmdbId)));
     }
     loadTracked();
   }, []);
@@ -56,7 +81,8 @@ export default function SearchScreen() {
   // Debounced search
   useEffect(() => {
     if (!query.trim()) {
-      setResults([]);
+      setShowResults([]);
+      setMovieResults([]);
       setError(null);
       return;
     }
@@ -66,20 +92,32 @@ export default function SearchScreen() {
       setError(null);
 
       try {
-        const searchResults = await tmdbService.searchShows(query);
-        setResults(searchResults.slice(0, MAX_SEARCH_RESULTS));
+        if (searchType === 'tv') {
+          const searchResults = await tmdbService.searchShows(query);
+          setShowResults(searchResults.slice(0, MAX_SEARCH_RESULTS));
+        } else {
+          const searchResults = await tmdbService.searchMovies(query);
+          setMovieResults(searchResults.slice(0, MAX_SEARCH_RESULTS));
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Search failed');
-        setResults([]);
+        setShowResults([]);
+        setMovieResults([]);
       } finally {
         setLoading(false);
       }
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, searchType]);
 
-  const handleAddShow = useCallback(async (show: TMDBShow) => {
+  // Clear results when switching search type
+  useEffect(() => {
+    setShowResults([]);
+    setMovieResults([]);
+  }, [searchType]);
+
+  const handleAddShow = useCallback(async (show: TMDBShow, status: ShowStatus, rating: number) => {
     setAddingShow(true);
 
     try {
@@ -87,10 +125,11 @@ export default function SearchScreen() {
       const details = await tmdbService.getShowDetails(show.id);
 
       const trackedShow: TrackedShow = {
+        mediaType: 'tv',
         tmdbId: show.id,
         title: show.name,
         posterPath: show.poster_path,
-        status: 'watching',
+        status,
         addedAt: new Date().toISOString(),
         totalSeasons: details.number_of_seasons ?? 0,
         totalEpisodes: details.number_of_episodes ?? 0,
@@ -98,23 +137,79 @@ export default function SearchScreen() {
       };
 
       await storageService.addShow(trackedShow);
-      setTrackedIds((prev) => new Set([...prev, show.id]));
+      setTrackedShowIds((prev) => new Set([...prev, show.id]));
+
+      // Save rating if provided and user is logged in
+      if (rating > 0 && user) {
+        await ratingsService.rateShow(user.id, {
+          tmdbId: show.id,
+          rating,
+          isPublic: true,
+        });
+      }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSelectedShow(null);
+      setSelectedShowStatus('watchlist');
+      setModalRating(0);
       setQuery('');
-      setResults([]);
+      setShowResults([]);
     } catch (e) {
       console.error('Failed to add show:', e);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setAddingShow(false);
     }
-  }, []);
+  }, [user]);
 
-  const renderItem = useCallback(
+  const handleAddMovie = useCallback(async (movie: TMDBMovie, status: MovieStatus, rating: number) => {
+    setAddingMovie(true);
+
+    try {
+      // Get full movie details
+      const details = await tmdbService.getMovieDetails(movie.id);
+
+      const trackedMovie: TrackedMovie = {
+        mediaType: 'movie',
+        tmdbId: movie.id,
+        title: movie.title,
+        posterPath: movie.poster_path,
+        status,
+        addedAt: new Date().toISOString(),
+        releaseDate: details.release_date,
+        runtime: details.runtime,
+        streamingServices: [],
+      };
+
+      await storageService.addMovie(trackedMovie);
+      setTrackedMovieIds((prev) => new Set([...prev, movie.id]));
+
+      // Save rating if provided and user is logged in
+      if (rating > 0 && user) {
+        await ratingsService.rateMovie(user.id, {
+          tmdbId: movie.id,
+          rating,
+          isPublic: true,
+        });
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSelectedMovie(null);
+      setSelectedMovieStatus('watchlist');
+      setModalRating(0);
+      setQuery('');
+      setMovieResults([]);
+    } catch (e) {
+      console.error('Failed to add movie:', e);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setAddingMovie(false);
+    }
+  }, [user]);
+
+  const renderShowItem = useCallback(
     ({ item }: { item: TMDBShow }) => {
-      const isTracked = trackedIds.has(item.id);
+      const isTracked = trackedShowIds.has(item.id);
       const year = getYearFromDate(item.first_air_date);
 
       return (
@@ -148,7 +243,46 @@ export default function SearchScreen() {
         </TouchableOpacity>
       );
     },
-    [trackedIds]
+    [trackedShowIds]
+  );
+
+  const renderMovieItem = useCallback(
+    ({ item }: { item: TMDBMovie }) => {
+      const isTracked = trackedMovieIds.has(item.id);
+      const year = getYearFromDate(item.release_date);
+
+      return (
+        <TouchableOpacity
+          style={styles.resultRow}
+          onPress={() => setSelectedMovie(item)}
+          activeOpacity={0.7}
+        >
+          <ShowPoster path={item.poster_path} size="small" />
+
+          <View style={styles.resultInfo}>
+            <View style={styles.titleRow}>
+              <Text style={styles.resultTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
+              {isTracked && (
+                <Ionicons name="checkmark-circle" size={16} color={COLORS.primary} />
+              )}
+            </View>
+
+            {year && <Text style={styles.resultYear}>{year}</Text>}
+
+            {item.overview && (
+              <Text style={styles.resultOverview} numberOfLines={2}>
+                {item.overview}
+              </Text>
+            )}
+          </View>
+
+          <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+        </TouchableOpacity>
+      );
+    },
+    [trackedMovieIds]
   );
 
   const renderRecommendations = () => {
@@ -202,6 +336,26 @@ export default function SearchScreen() {
           </View>
         )}
 
+        {topRated.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Top Rated</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {topRated.map((show) => (
+                <ShowCard
+                  key={show.id}
+                  show={show}
+                  onPress={setSelectedShow}
+                  onDismiss={(s) => dismissShow(s.id)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {friendsWatching.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Friends Are Watching</Text>
@@ -224,6 +378,90 @@ export default function SearchScreen() {
     );
   };
 
+  const renderMovieRecommendations = () => {
+    if (movieRecsLoading) {
+      return (
+        <View style={styles.recsLoadingContainer}>
+          <ActivityIndicator color={COLORS.primary} />
+        </View>
+      );
+    }
+
+    if (movieTrending.length === 0 && movieForYou.length === 0 && movieTopRated.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="film-outline" size={48} color={COLORS.textSecondary} />
+          <Text style={styles.emptyTitle}>Search Movies</Text>
+          <Text style={styles.emptyText}>Find movies to add to your watchlist</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={styles.recommendationsContainer}>
+        {movieTrending.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Trending This Week</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {movieTrending.map((movie) => (
+                <MovieCard
+                  key={movie.id}
+                  movie={movie}
+                  onPress={setSelectedMovie}
+                  onDismiss={(m) => dismissMovie(m.id)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {movieForYou.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>For You</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {movieForYou.map((movie) => (
+                <MovieCard
+                  key={movie.id}
+                  movie={movie}
+                  onPress={setSelectedMovie}
+                  onDismiss={(m) => dismissMovie(m.id)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {movieTopRated.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Top Rated</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {movieTopRated.map((movie) => (
+                <MovieCard
+                  key={movie.id}
+                  movie={movie}
+                  onPress={setSelectedMovie}
+                  onDismiss={(m) => dismissMovie(m.id)}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
   const renderEmpty = () => {
     if (loading) return null;
 
@@ -237,28 +475,57 @@ export default function SearchScreen() {
       );
     }
 
+    const results = searchType === 'tv' ? showResults : movieResults;
+    const typeLabel = searchType === 'tv' ? 'shows' : 'movies';
+
     if (query && results.length === 0) {
       return (
         <View style={styles.emptyContainer}>
           <Ionicons name="search-outline" size={48} color={COLORS.textSecondary} />
           <Text style={styles.emptyTitle}>No Results</Text>
-          <Text style={styles.emptyText}>No shows found for "{query}"</Text>
+          <Text style={styles.emptyText}>No {typeLabel} found for "{query}"</Text>
         </View>
       );
     }
 
     // Show recommendations when no query
-    return renderRecommendations();
+    if (searchType === 'tv') {
+      return renderRecommendations();
+    }
+
+    return renderMovieRecommendations();
   };
+
+  const results = searchType === 'tv' ? showResults : movieResults;
 
   return (
     <View style={styles.container}>
+      {/* Search Type Toggle */}
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity
+          style={[styles.toggleButton, searchType === 'tv' && styles.toggleButtonActive]}
+          onPress={() => setSearchType('tv')}
+        >
+          <Text style={[styles.toggleText, searchType === 'tv' && styles.toggleTextActive]}>
+            TV Shows
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleButton, searchType === 'movie' && styles.toggleButtonActive]}
+          onPress={() => setSearchType('movie')}
+        >
+          <Text style={[styles.toggleText, searchType === 'movie' && styles.toggleTextActive]}>
+            Movies
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={COLORS.textSecondary} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search TV shows..."
+          placeholder={searchType === 'tv' ? 'Search TV shows...' : 'Search movies...'}
           placeholderTextColor={COLORS.textSecondary}
           value={query}
           onChangeText={setQuery}
@@ -281,14 +548,25 @@ export default function SearchScreen() {
       )}
 
       {/* Results */}
-      <FlatList
-        data={results}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderItem}
-        ListEmptyComponent={renderEmpty}
-        contentContainerStyle={results.length === 0 ? styles.emptyList : undefined}
-        keyboardShouldPersistTaps="handled"
-      />
+      {searchType === 'tv' ? (
+        <FlatList
+          data={showResults}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderShowItem}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={showResults.length === 0 ? styles.emptyList : undefined}
+          keyboardShouldPersistTaps="handled"
+        />
+      ) : (
+        <FlatList
+          data={movieResults}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderMovieItem}
+          ListEmptyComponent={renderEmpty}
+          contentContainerStyle={movieResults.length === 0 ? styles.emptyList : undefined}
+          keyboardShouldPersistTaps="handled"
+        />
+      )}
 
       {/* Add Show Modal */}
       <Modal
@@ -329,26 +607,176 @@ export default function SearchScreen() {
                 <Text style={styles.modalOverview}>{selectedShow.overview}</Text>
               )}
 
-              {trackedIds.has(selectedShow.id) ? (
+              {trackedShowIds.has(selectedShow.id) ? (
                 <View style={styles.alreadyTracked}>
                   <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                  <Text style={styles.alreadyTrackedText}>Already in Watchlist</Text>
+                  <Text style={styles.alreadyTrackedText}>Already in Library</Text>
                 </View>
               ) : (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => handleAddShow(selectedShow)}
-                  disabled={addingShow}
-                >
-                  {addingShow ? (
-                    <ActivityIndicator color={COLORS.text} />
-                  ) : (
-                    <>
-                      <Ionicons name="add-circle" size={24} color={COLORS.text} />
-                      <Text style={styles.addButtonText}>Add to Watchlist</Text>
-                    </>
+                <>
+                  {/* Status Selection */}
+                  <View style={styles.statusSelection}>
+                    <Text style={styles.statusLabel}>Status</Text>
+                    <View style={styles.statusOptions}>
+                      {(['watchlist', 'watching', 'completed'] as ShowStatus[]).map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.statusOption,
+                            selectedShowStatus === status && styles.statusOptionActive,
+                          ]}
+                          onPress={() => {
+                            setSelectedShowStatus(status);
+                            if (status !== 'completed') setModalRating(0);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.statusOptionText,
+                              selectedShowStatus === status && styles.statusOptionTextActive,
+                            ]}
+                          >
+                            {status === 'watchlist' ? 'Watchlist' : status === 'watching' ? 'Watching' : 'Watched'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Rating - only show for completed */}
+                  {selectedShowStatus === 'completed' && (
+                    <View style={styles.ratingSelection}>
+                      <Text style={styles.statusLabel}>Rating (optional)</Text>
+                      <StarRating
+                        value={modalRating}
+                        onChange={setModalRating}
+                        size={32}
+                      />
+                    </View>
                   )}
-                </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => handleAddShow(selectedShow, selectedShowStatus, modalRating)}
+                    disabled={addingShow}
+                  >
+                    {addingShow ? (
+                      <ActivityIndicator color={COLORS.text} />
+                    ) : (
+                      <>
+                        <Ionicons name="add-circle" size={24} color={COLORS.text} />
+                        <Text style={styles.addButtonText}>Add to Library</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        )}
+      </Modal>
+
+      {/* Add Movie Modal */}
+      <Modal
+        visible={!!selectedMovie}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedMovie(null)}
+      >
+        {selectedMovie && (
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setSelectedMovie(null)}>
+                <Text style={styles.modalCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Add Movie</Text>
+              <View style={{ width: 60 }} />
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <ShowPoster path={selectedMovie.poster_path} size="large" style={styles.modalPoster} />
+
+              <Text style={styles.modalShowTitle}>{selectedMovie.title}</Text>
+
+              {getYearFromDate(selectedMovie.release_date) && (
+                <Text style={styles.modalYear}>
+                  {getYearFromDate(selectedMovie.release_date)}
+                </Text>
+              )}
+
+              {selectedMovie.runtime && (
+                <Text style={styles.modalSeasons}>
+                  {Math.floor(selectedMovie.runtime / 60)}h {selectedMovie.runtime % 60}m
+                </Text>
+              )}
+
+              {selectedMovie.overview && (
+                <Text style={styles.modalOverview}>{selectedMovie.overview}</Text>
+              )}
+
+              {trackedMovieIds.has(selectedMovie.id) ? (
+                <View style={styles.alreadyTracked}>
+                  <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                  <Text style={styles.alreadyTrackedText}>Already in Library</Text>
+                </View>
+              ) : (
+                <>
+                  {/* Status Selection */}
+                  <View style={styles.statusSelection}>
+                    <Text style={styles.statusLabel}>Status</Text>
+                    <View style={styles.statusOptions}>
+                      {(['watchlist', 'watched'] as MovieStatus[]).map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.statusOption,
+                            selectedMovieStatus === status && styles.statusOptionActive,
+                          ]}
+                          onPress={() => {
+                            setSelectedMovieStatus(status);
+                            if (status !== 'watched') setModalRating(0);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.statusOptionText,
+                              selectedMovieStatus === status && styles.statusOptionTextActive,
+                            ]}
+                          >
+                            {status === 'watchlist' ? 'Watchlist' : 'Watched'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Rating - only show for watched */}
+                  {selectedMovieStatus === 'watched' && (
+                    <View style={styles.ratingSelection}>
+                      <Text style={styles.statusLabel}>Rating (optional)</Text>
+                      <StarRating
+                        value={modalRating}
+                        onChange={setModalRating}
+                        size={32}
+                      />
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => handleAddMovie(selectedMovie, selectedMovieStatus, modalRating)}
+                    disabled={addingMovie}
+                  >
+                    {addingMovie ? (
+                      <ActivityIndicator color={COLORS.text} />
+                    ) : (
+                      <>
+                        <Ionicons name="add-circle" size={24} color={COLORS.text} />
+                        <Text style={styles.addButtonText}>Add to Library</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
               )}
             </ScrollView>
           </View>
@@ -362,6 +790,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 10,
+    padding: 4,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  toggleButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  toggleText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  toggleTextActive: {
+    color: COLORS.text,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -534,5 +987,47 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 17,
     fontWeight: '600',
+  },
+  // Status selection styles
+  statusSelection: {
+    width: '100%',
+    marginTop: 16,
+  },
+  statusLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  statusOptions: {
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  statusOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: COLORS.surfaceLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statusOptionActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  statusOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  statusOptionTextActive: {
+    color: COLORS.text,
+  },
+  ratingSelection: {
+    width: '100%',
+    marginTop: 16,
+    alignItems: 'center',
   },
 });

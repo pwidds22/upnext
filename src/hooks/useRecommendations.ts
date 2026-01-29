@@ -24,6 +24,7 @@ function isCacheValid(key: string): boolean {
 export function useRecommendations(trackedIds: Set<number>) {
   const [trending, setTrending] = useState<TMDBShow[]>([]);
   const [forYou, setForYou] = useState<TMDBShow[]>([]);
+  const [topRated, setTopRated] = useState<TMDBShow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
@@ -52,10 +53,12 @@ export function useRecommendations(trackedIds: Set<number>) {
       // Load from cache if valid
       const cachedTrending = isCacheValid('trending') ? cache['trending'].data : null;
       const cachedForYou = isCacheValid(genreCacheKey) ? cache[genreCacheKey].data : null;
+      const cachedTopRated = isCacheValid('topRated') ? cache['topRated'].data : null;
 
-      const [trendingData, forYouData] = await Promise.all([
+      const [trendingData, forYouData, topRatedData] = await Promise.all([
         cachedTrending ?? tmdbService.getTrending('week'),
         cachedForYou ?? (genreIds.length > 0 ? tmdbService.discoverByGenres(genreIds) : tmdbService.getPopular()),
+        cachedTopRated ?? tmdbService.getTopRated(),
       ]);
 
       // Update cache with raw data (before filtering)
@@ -65,18 +68,37 @@ export function useRecommendations(trackedIds: Set<number>) {
       if (!cachedForYou) {
         cache[genreCacheKey] = { data: forYouData, timestamp: Date.now() };
       }
+      if (!cachedTopRated) {
+        cache['topRated'] = { data: topRatedData, timestamp: Date.now() };
+      }
 
-      // Filter out tracked and dismissed shows, then limit to MAX_ITEMS
+      // Create a set to track IDs we've already used (for deduplication)
+      const usedIds = new Set<number>([...excludeIds, ...dismissed]);
+
+      // Filter trending first (highest priority)
       const filteredTrending = trendingData
-        .filter((show) => !excludeIds.has(show.id) && !dismissed.has(show.id))
+        .filter((show) => !usedIds.has(show.id))
         .slice(0, MAX_ITEMS);
 
+      // Add trending IDs to usedIds
+      filteredTrending.forEach((show) => usedIds.add(show.id));
+
+      // Filter forYou, excluding trending shows
       const filteredForYou = forYouData
-        .filter((show) => !excludeIds.has(show.id) && !dismissed.has(show.id))
+        .filter((show) => !usedIds.has(show.id))
+        .slice(0, MAX_ITEMS);
+
+      // Add forYou IDs to usedIds
+      filteredForYou.forEach((show) => usedIds.add(show.id));
+
+      // Filter topRated, excluding trending and forYou shows
+      const filteredTopRated = topRatedData
+        .filter((show) => !usedIds.has(show.id))
         .slice(0, MAX_ITEMS);
 
       setTrending(filteredTrending);
       setForYou(filteredForYou);
+      setTopRated(filteredTopRated);
     } catch (e) {
       console.error('Failed to load recommendations:', e);
       setError(e instanceof Error ? e.message : 'Failed to load recommendations');
@@ -92,6 +114,7 @@ export function useRecommendations(trackedIds: Set<number>) {
     // Remove from current lists immediately for responsive UI
     setTrending((prev) => prev.filter((s) => s.id !== tmdbId));
     setForYou((prev) => prev.filter((s) => s.id !== tmdbId));
+    setTopRated((prev) => prev.filter((s) => s.id !== tmdbId));
   }, []);
 
   // Load recommendations when trackedIds or dismissedIds changes
@@ -102,6 +125,7 @@ export function useRecommendations(trackedIds: Set<number>) {
   return {
     trending,
     forYou,
+    topRated,
     loading,
     error,
     refresh: () => loadRecommendations(trackedIds, dismissedIds),
