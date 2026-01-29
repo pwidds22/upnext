@@ -8,6 +8,7 @@ import type {
   SyncResult,
   SyncQueueItem,
   TrackedShow,
+  ShowStatus,
   WatchedEpisode,
   EpisodeReaction,
   DismissedShow,
@@ -450,10 +451,11 @@ export const syncService = {
   // Convert Supabase row to TrackedShow
   rowToTrackedShow(row: UserShowRow): TrackedShow {
     return {
+      mediaType: 'tv',
       tmdbId: row.tmdb_id,
       title: row.title,
       posterPath: row.poster_path,
-      status: row.status,
+      status: row.status as ShowStatus,
       addedAt: row.added_at,
       totalSeasons: row.total_seasons,
       totalEpisodes: row.total_episodes,

@@ -14,6 +14,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 interface ActivityItemProps {
   activity: ActivityItemType;
   onShowPress: (tmdbId: number, title: string, posterPath: string | null) => void;
+  onMoviePress?: (tmdbId: number, title: string, posterPath: string | null) => void;
   onUserPress: (userId: string) => void;
   // If true, this is a nested activity item (inside user dropdown) - don't show user dropdown again
   isNested?: boolean;
@@ -40,7 +41,9 @@ function getActivityIcon(type: ActivityItemType['type']): { name: keyof typeof I
     case 'episode_watch':
       return { name: 'play-circle', color: COLORS.primary };
     case 'show_add':
-      return { name: 'add-circle', color: '#34C759' };
+      return { name: 'checkmark-circle', color: '#34C759' };
+    case 'movie_watch':
+      return { name: 'film', color: '#9B59B6' };
     case 'rating':
       return { name: 'star', color: '#FFD700' };
     case 'reaction':
@@ -68,12 +71,16 @@ function getActivityDescription(activity: ActivityItemType): string {
       }
     case 'show_add':
       return 'completed';
+    case 'movie_watch':
+      return 'watched';
     case 'rating':
       const stars = (activity.rating! / 2).toFixed(1);
       if (activity.ratingType === 'season' && activity.seasonNumber) {
         return `rated Season ${activity.seasonNumber} ${stars} stars`;
       } else if (activity.ratingType === 'episode' && activity.seasonNumber && activity.episodeNumber) {
         return `rated S${activity.seasonNumber}E${activity.episodeNumber} ${stars} stars`;
+      } else if (activity.ratingType === 'movie') {
+        return `rated ${stars} stars`;
       } else {
         return `rated ${stars} stars`;
       }
@@ -85,7 +92,7 @@ function getActivityDescription(activity: ActivityItemType): string {
   }
 }
 
-export default function ActivityItem({ activity, onShowPress, onUserPress, isNested = false }: ActivityItemProps) {
+export default function ActivityItem({ activity, onShowPress, onMoviePress, onUserPress, isNested = false }: ActivityItemProps) {
   const [episodesExpanded, setEpisodesExpanded] = useState(false);
   const [userExpanded, setUserExpanded] = useState(false);
   const [userActivity, setUserActivity] = useState<ActivityItemType[]>([]);
@@ -94,6 +101,15 @@ export default function ActivityItem({ activity, onShowPress, onUserPress, isNes
   const icon = getActivityIcon(activity.type);
   const username = activity.user.displayName || activity.user.username || 'User';
   const description = getActivityDescription(activity);
+
+  // Handle press on show/movie - route to appropriate handler based on media type
+  const handleMediaPress = () => {
+    if (activity.mediaType === 'movie' && onMoviePress) {
+      onMoviePress(activity.tmdbId, activity.showTitle, activity.posterPath);
+    } else {
+      onShowPress(activity.tmdbId, activity.showTitle, activity.posterPath);
+    }
+  };
 
   const toggleEpisodesExpanded = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -178,7 +194,7 @@ export default function ActivityItem({ activity, onShowPress, onUserPress, isNes
 
         <TouchableOpacity
           style={styles.showRow}
-          onPress={() => onShowPress(activity.tmdbId, activity.showTitle, activity.posterPath)}
+          onPress={handleMediaPress}
         >
           <Text style={[styles.showTitle, isNested && styles.nestedShowTitle]} numberOfLines={1}>
             {activity.showTitle}
@@ -238,11 +254,9 @@ export default function ActivityItem({ activity, onShowPress, onUserPress, isNes
         <Text style={[styles.timestamp, isNested && styles.nestedTimestamp]}>{getRelativeTime(activity.timestamp)}</Text>
       </View>
 
-      {/* Show poster */}
+      {/* Show/Movie poster */}
       {!isNested && (
-        <TouchableOpacity
-          onPress={() => onShowPress(activity.tmdbId, activity.showTitle, activity.posterPath)}
-        >
+        <TouchableOpacity onPress={handleMediaPress}>
           <ShowPoster path={activity.posterPath} size="small" width={40} height={60} />
         </TouchableOpacity>
       )}

@@ -11,7 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { RootStackParamList, ActivityItem as ActivityItemType, TrackedShow } from '../types';
+import { RootStackParamList, ActivityItem as ActivityItemType, TrackedShow, TrackedMovie } from '../types';
 import { useActivityFeed } from '../hooks/useActivityFeed';
 import { useAuth } from '../contexts/AuthContext';
 import ActivityItem from '../components/ActivityItem';
@@ -28,6 +28,7 @@ export default function ActivityFeedScreen() {
     (tmdbId: number, title: string, posterPath: string | null) => {
       // Create a minimal TrackedShow to navigate to ShowDetail
       const show: TrackedShow = {
+        mediaType: 'tv',
         tmdbId,
         title,
         posterPath,
@@ -38,6 +39,25 @@ export default function ActivityFeedScreen() {
         streamingServices: [],
       };
       navigation.navigate('ShowDetail', { show });
+    },
+    [navigation]
+  );
+
+  const handleMoviePress = useCallback(
+    (tmdbId: number, title: string, posterPath: string | null) => {
+      // Create a minimal TrackedMovie to navigate to MovieDetail
+      const movie: TrackedMovie = {
+        mediaType: 'movie',
+        tmdbId,
+        title,
+        posterPath,
+        status: 'watchlist',
+        addedAt: new Date().toISOString(),
+        releaseDate: null,
+        runtime: null,
+        streamingServices: [],
+      };
+      navigation.navigate('MovieDetail', { movie });
     },
     [navigation]
   );
@@ -54,10 +74,11 @@ export default function ActivityFeedScreen() {
       <ActivityItem
         activity={item}
         onShowPress={handleShowPress}
+        onMoviePress={handleMoviePress}
         onUserPress={handleUserPress}
       />
     ),
-    [handleShowPress, handleUserPress]
+    [handleShowPress, handleMoviePress, handleUserPress]
   );
 
   const renderEmpty = () => {

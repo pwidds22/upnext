@@ -144,6 +144,7 @@ export default function UserProfileScreen() {
     (show: UserPublicShow) => {
       // Create a TrackedShow-compatible object for navigation
       const trackedShow: TrackedShow = {
+        mediaType: 'tv',
         tmdbId: show.tmdbId,
         title: show.title,
         posterPath: show.posterPath,

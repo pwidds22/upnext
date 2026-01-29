@@ -317,8 +317,8 @@ export const followsService = {
     return (data ?? []).map((row: any) => profileFromRow(row.profiles as ProfileRow));
   },
 
-  // Get friend ratings for a show (for ShowDetailScreen)
-  async getFriendRatings(userId: string, tmdbId: number): Promise<FriendRating[]> {
+  // Get friend ratings for a show or movie (for ShowDetailScreen/MovieDetailScreen)
+  async getFriendRatings(userId: string, tmdbId: number, ratingType: 'show' | 'movie' = 'show'): Promise<FriendRating[]> {
     const { data: followingData } = await supabase
       .from('user_follows')
       .select('following_id')
@@ -340,7 +340,7 @@ export const followsService = {
       `
       )
       .eq('tmdb_id', tmdbId)
-      .eq('rating_type', 'show')
+      .eq('rating_type', ratingType)
       .eq('is_public', true)
       .in('user_id', followingIds);
 

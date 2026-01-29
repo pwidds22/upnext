@@ -6,7 +6,9 @@ import type {
   ActivityItem,
   ActivityType,
   ShowStatus,
+  MovieStatus,
   EpisodeReactionType,
+  MediaType,
 } from '../../types';
 
 // Convert database row to app type
@@ -117,9 +119,10 @@ export const activityService = {
     if (followingIds.length === 0) return [];
 
     // Fetch activities from multiple tables in parallel
-    const [episodeWatches, showAdds, ratings, reactions] = await Promise.all([
+    const [episodeWatches, showAdds, movieWatches, ratings, reactions] = await Promise.all([
       this.getEpisodeWatchActivity(followingIds, limit * 3, before), // Fetch more to aggregate
       this.getShowAddActivity(followingIds, limit, before),
+      this.getMovieWatchActivity(followingIds, limit, before),
       this.getRatingActivity(followingIds, limit, before),
       this.getReactionActivity(followingIds, limit, before),
     ]);
@@ -131,6 +134,7 @@ export const activityService = {
     const allActivities = [
       ...aggregatedEpisodeWatches,
       ...showAdds,
+      ...movieWatches,
       ...ratings,
       ...reactions,
     ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -346,10 +350,61 @@ export const activityService = {
       posterPath: row.poster_path,
       timestamp: row.updated_at,
       showStatus: row.status as ShowStatus,
+      mediaType: 'tv' as MediaType,
     }));
   },
 
-  // Get rating activity (includes show, season, and episode ratings)
+  // Get movie watch activity (movies marked as "watched")
+  async getMovieWatchActivity(
+    followingIds: string[],
+    limit: number,
+    before?: string
+  ): Promise<ActivityItem[]> {
+    let query = supabase
+      .from('user_shows')
+      .select(
+        `
+        id,
+        user_id,
+        tmdb_id,
+        title,
+        poster_path,
+        status,
+        updated_at,
+        profiles!user_shows_user_id_fkey (
+          id, username, display_name, avatar_url, bio, is_searchable
+        )
+      `
+      )
+      .in('user_id', followingIds)
+      .eq('media_type', 'movie')
+      .eq('status', 'watched')
+      .is('deleted_at', null)
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+    if (before) {
+      query = query.lt('updated_at', before);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data ?? []).map((row: any) => ({
+      id: `movie_${row.id}`,
+      type: 'movie_watch' as ActivityType,
+      userId: row.user_id,
+      user: profileFromRow(row.profiles as ProfileRow),
+      tmdbId: row.tmdb_id,
+      showTitle: row.title,
+      posterPath: row.poster_path,
+      timestamp: row.updated_at,
+      movieStatus: row.status as MovieStatus,
+      mediaType: 'movie' as MediaType,
+    }));
+  },
+
+  // Get rating activity (includes show, season, episode, and movie ratings)
   async getRatingActivity(
     followingIds: string[],
     limit: number,
@@ -394,13 +449,14 @@ export const activityService = {
       userId: row.user_id,
       user: profileFromRow(row.profiles as ProfileRow),
       tmdbId: row.tmdb_id,
-      showTitle: showTitles.get(row.tmdb_id)?.title ?? 'Unknown Show',
+      showTitle: showTitles.get(row.tmdb_id)?.title ?? (row.rating_type === 'movie' ? 'Unknown Movie' : 'Unknown Show'),
       posterPath: showTitles.get(row.tmdb_id)?.posterPath ?? null,
       timestamp: row.created_at,
       rating: row.rating,
       ratingType: row.rating_type,
       seasonNumber: row.season_number,
       episodeNumber: row.episode_number,
+      mediaType: (row.rating_type === 'movie' ? 'movie' : 'tv') as MediaType,
     }));
   },
 
@@ -502,9 +558,10 @@ export const activityService = {
     limit: number = 5
   ): Promise<ActivityItem[]> {
     // Fetch activities from multiple tables in parallel for this specific user
-    const [episodeWatches, showAdds, ratings, reactions] = await Promise.all([
+    const [episodeWatches, showAdds, movieWatches, ratings, reactions] = await Promise.all([
       this.getEpisodeWatchActivity([userId], limit * 2),
       this.getShowAddActivity([userId], limit),
+      this.getMovieWatchActivity([userId], limit),
       this.getRatingActivity([userId], limit),
       this.getReactionActivity([userId], limit),
     ]);
@@ -516,6 +573,7 @@ export const activityService = {
     const allActivities = [
       ...aggregatedEpisodeWatches,
       ...showAdds,
+      ...movieWatches,
       ...ratings,
       ...reactions,
     ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
