@@ -1,54 +1,52 @@
 # UpNext - Session State
 Updated: 2026-02-01 | Branch: master
 
-## Status: Rewatch Tracking Complete & Deployed
+## Status: Rewatch Tracking - Review Feedback Pending
+
+### Pending Review Fixes (Next Session)
+From code review - need to address these issues in `src/services/storage.ts`:
+
+1. **deleteShow bypasses sync for watched_episodes** (line 378)
+   - `DELETE FROM watched_episodes` runs directly without queueing sync
+   - Legacy watched_episodes deleted locally but not soft-deleted in cloud
+   - Could cause ghost records in cloud or re-sync resurrection
+
+2. **deleteShow doesn't clean up local reactions**
+   - `deleteReactionsForShow()` never called when show deleted
+   - Cloud properly cascades, but local episode_reactions orphaned
+   - Low priority since cloud is source of truth
+
+3. **Partial failure during delete sequence** (low severity)
+   - If `deleteShowWatchHistory` fails, data partially deleted
+   - Cloud cascade still works when show delete syncs
 
 ### Completed This Session
 - **Supabase migration applied** - `014_add_watch_history_tables.sql` deployed via MCP
   - `user_episode_watch_history` table created with RLS
   - `user_movie_watch_history` table created with RLS
   - All indexes and friend activity policies in place
+- **Code review fixes applied** (3 commits):
+  - Fixed payload field mismatch (`localId` → `id`) in sync.ts
+  - deleteShow/deleteMovie now use sync-aware methods
+  - Added `useSyncOptional()` for safe context access
+  - Activity feed merges legacy + history sources
+  - Added console.warn for debugging fallbacks
 
-### Completed Previous Session
-- **Deep research analysis** - Analyzed user research on rewatch tracking needs
-- **Rewatch tracking implementation** - Full episode + movie rewatch support:
-  - New `episode_watch_history` and `movie_watch_history` SQLite tables
-  - New Supabase migration (`014_add_watch_history_tables.sql`)
-  - Watch history service for Supabase sync
-  - Updated `useWatchedEpisodes` hook with `addWatch`, `removeLatestWatch`, `getWatchHistory`
-  - New `useMovieWatchHistory` hook
-  - New `WatchHistorySheet` component (modal showing watch history)
-  - Updated `EpisodeRow` with watch count badge and quick action menu
-  - Updated `MovieDetailScreen` with watch history section
-  - Activity feed updated to show rewatches from history tables
+### Commits This Session
+1. `33f7a83` - Add rewatch tracking for episodes and movies
+2. `ae40295` - Fix rewatch tracking issues from code review
+3. `a21a9cb` - Fix critical sync bug and improve delete handling
 
-### Key UX Decisions (Based on Research)
-- **No accidental taps**: Tapping watched episode shows quick action menu (Watch Again / Remove / History)
-- **Watch count badges**: Episodes/movies with 2+ watches show count badge
-- **Full history**: Users can view all watch dates and delete individual watches
-- **Backward compatible**: Falls back to old tables if history tables empty
-
-### Files Changed
-- `src/types/index.ts` - Added watch history types
-- `src/services/storage.ts` - Added watch history tables and methods
-- `src/services/supabase/watchHistory.ts` - New file for sync
-- `src/services/supabase/activity.ts` - Updated to use history tables
-- `src/hooks/useShowData.ts` - Added rewatch functions
+### Key Files Changed
+- `src/services/storage.ts` - Watch history tables, delete methods
+- `src/services/supabase/sync.ts` - Watch history sync handlers
+- `src/services/supabase/activity.ts` - Merged legacy + history sources
+- `src/services/supabase/watchHistory.ts` - New sync service
+- `src/contexts/SyncContext.tsx` - Added useSyncOptional()
+- `src/hooks/useShowData.ts` - Rewatch functions
 - `src/hooks/useMovieWatchHistory.ts` - New hook
-- `src/components/WatchHistorySheet.tsx` - New component
-- `src/components/EpisodeRow.tsx` - Added watch count badge and action menu
-- `src/screens/ShowDetailScreen.tsx` - Integrated rewatch UI
-- `src/screens/MovieDetailScreen.tsx` - Added watch history section
-- `supabase/migrations/014_add_watch_history_tables.sql` - New migration
-
-### Previous Session Completed
-- **Movie tracking** - Full implementation complete
-- **Dismiss movies** - X button on movie cards
-- **Terminology consistency** - "Completed" → "Watched"
-- **Collapsible sections** - Library sections expandable
-- **Hide Watched toggle** - Compact eye icon
-- **Filter persistence** - Library remembers preference
-- **Database fixes** - ON CONFLICT errors resolved
+- `src/components/WatchHistorySheet.tsx` - New modal
+- `src/components/EpisodeRow.tsx` - Watch count badge + action menu
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -66,7 +64,7 @@ Updated: 2026-02-01 | Branch: master
 | # | Feature | Complexity | Status |
 |---|---------|------------|--------|
 | 1 | ~~Movie tracking~~ | Medium-High | DONE |
-| 2 | ~~Rewatch tracking~~ | Medium | DONE |
+| 2 | ~~Rewatch tracking~~ | Medium | DONE (pending review fixes) |
 | 3 | **Share profile** | Low | Not started |
 | 4 | **Data export** | Low | Not started |
 
@@ -76,18 +74,10 @@ Updated: 2026-02-01 | Branch: master
 | 5 | **Widgets** | Medium |
 | 6 | **Watch stats** | Medium |
 
-### Later
-| # | Feature | Notes |
-|---|---------|-------|
-| 7 | Native X posting | Twitter API OAuth required |
-
 ## Next Steps
-1. **Test rewatch flow end-to-end** - Verify UI works correctly on device
-2. **Share profile** - Next feature on roadmap
-3. **Data export** - JSON/CSV export for user data portability
-
-## Database Migrations (14 to apply)
-`create_profiles`, `create_user_shows`, `create_watched_episodes`, `create_user_ratings`, `create_updated_at_triggers`, `fix_function_search_paths`, `create_episode_reactions`, `create_user_follows`, `fix_profile_username_from_email`, `create_user_dismissed_shows`, `add_activity_feed_policies`, `add_show_privacy`, `add_get_user_email_function`, **`add_watch_history_tables`** (NEW)
+1. **Fix deleteShow sync issues** - Address review feedback above
+2. **Test rewatch flow end-to-end** - Verify UI works correctly on device
+3. **Share profile** - Next feature on roadmap
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
