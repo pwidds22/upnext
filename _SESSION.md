@@ -1,26 +1,15 @@
 # UpNext - Session State
 Updated: 2026-02-01 | Branch: master
 
-## Status: Rewatch Tracking - Review Feedback Pending
-
-### Pending Review Fixes (Next Session)
-From code review - need to address these issues in `src/services/storage.ts`:
-
-1. **deleteShow bypasses sync for watched_episodes** (line 378)
-   - `DELETE FROM watched_episodes` runs directly without queueing sync
-   - Legacy watched_episodes deleted locally but not soft-deleted in cloud
-   - Could cause ghost records in cloud or re-sync resurrection
-
-2. **deleteShow doesn't clean up local reactions**
-   - `deleteReactionsForShow()` never called when show deleted
-   - Cloud properly cascades, but local episode_reactions orphaned
-   - Low priority since cloud is source of truth
-
-3. **Partial failure during delete sequence** (low severity)
-   - If `deleteShowWatchHistory` fails, data partially deleted
-   - Cloud cascade still works when show delete syncs
+## Status: Rewatch Tracking Complete
 
 ### Completed This Session
+- **Fixed deleteShow sync issues** from code review:
+  - Added `deleteWatchedEpisodesForShow()` - queues each episode for sync before delete
+  - Updated `deleteShow()` to call `deleteReactionsForShow()` - fixes orphaned reactions
+  - Reordered delete sequence: queue show → delete children → delete show
+
+### Previous Session Work
 - **Supabase migration applied** - `014_add_watch_history_tables.sql` deployed via MCP
   - `user_episode_watch_history` table created with RLS
   - `user_movie_watch_history` table created with RLS
@@ -64,7 +53,7 @@ From code review - need to address these issues in `src/services/storage.ts`:
 | # | Feature | Complexity | Status |
 |---|---------|------------|--------|
 | 1 | ~~Movie tracking~~ | Medium-High | DONE |
-| 2 | ~~Rewatch tracking~~ | Medium | DONE (pending review fixes) |
+| 2 | ~~Rewatch tracking~~ | Medium | DONE |
 | 3 | **Share profile** | Low | Not started |
 | 4 | **Data export** | Low | Not started |
 
@@ -75,9 +64,9 @@ From code review - need to address these issues in `src/services/storage.ts`:
 | 6 | **Watch stats** | Medium |
 
 ## Next Steps
-1. **Fix deleteShow sync issues** - Address review feedback above
-2. **Test rewatch flow end-to-end** - Verify UI works correctly on device
-3. **Share profile** - Next feature on roadmap
+1. **Test rewatch flow end-to-end** - Verify UI works correctly on device
+2. **Share profile** - Next feature on roadmap
+3. **Data export** - Let users download their data
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81

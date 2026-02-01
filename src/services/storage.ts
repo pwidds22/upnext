@@ -371,13 +371,39 @@ class StorageService {
   async deleteShow(tmdbId: number): Promise<void> {
     if (!this.db) await this.init();
 
-    // Queue for sync before deleting locally
+    // Queue show for sync before deleting locally
     await this.addToSyncQueue('tracked_shows', tmdbId.toString(), 'delete', { tmdbId });
 
-    await this.db!.runAsync('DELETE FROM tracked_shows WHERE tmdb_id = ?', [tmdbId]);
-    await this.db!.runAsync('DELETE FROM watched_episodes WHERE show_tmdb_id = ?', [tmdbId]);
-    // Use deleteShowWatchHistory to properly queue each watch for cloud sync
+    // Delete all related data with proper sync queueing
+    await this.deleteWatchedEpisodesForShow(tmdbId);
+    await this.deleteReactionsForShow(tmdbId);
     await this.deleteShowWatchHistory(tmdbId);
+
+    // Finally delete the show itself
+    await this.db!.runAsync('DELETE FROM tracked_shows WHERE tmdb_id = ?', [tmdbId]);
+  }
+
+  async deleteWatchedEpisodesForShow(showTmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Get all watched episodes for this show (use DISTINCT since we queue by episode, not by row)
+    const rows = await this.db!.getAllAsync<{ season_number: number; episode_number: number }>(
+      'SELECT DISTINCT season_number, episode_number FROM watched_episodes WHERE show_tmdb_id = ?',
+      [showTmdbId]
+    );
+
+    // Queue each episode for sync deletion
+    for (const row of rows) {
+      const id = `${showTmdbId}-${row.season_number}-${row.episode_number}`;
+      await this.addToSyncQueue('watched_episodes', id, 'delete', {
+        showTmdbId,
+        season: row.season_number,
+        episode: row.episode_number,
+      });
+    }
+
+    // Then delete locally
+    await this.db!.runAsync('DELETE FROM watched_episodes WHERE show_tmdb_id = ?', [showTmdbId]);
   }
 
   async isShowTracked(tmdbId: number): Promise<boolean> {
@@ -1054,12 +1080,14 @@ class StorageService {
   async deleteMovie(tmdbId: number): Promise<void> {
     if (!this.db) await this.init();
 
-    // Queue for sync before deleting locally
+    // Queue movie for sync before deleting locally
     await this.addToSyncQueue('tracked_shows', `movie-${tmdbId}`, 'delete', { tmdbId, mediaType: 'movie' });
 
-    await this.db!.runAsync("DELETE FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'", [tmdbId]);
-    // Use deleteAllMovieWatchHistory to properly queue each watch for cloud sync
+    // Delete watch history first (queues each watch for sync)
     await this.deleteAllMovieWatchHistory(tmdbId);
+
+    // Finally delete the movie itself
+    await this.db!.runAsync("DELETE FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'", [tmdbId]);
   }
 
   async isMovieTracked(tmdbId: number): Promise<boolean> {
