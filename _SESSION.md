@@ -4,10 +4,11 @@ Updated: 2026-02-01 | Branch: master
 ## Status: Rewatch Tracking Complete
 
 ### Completed This Session
-- **Fixed deleteShow sync issues** from code review:
+- **Fixed delete sync issues** from code review (`src/services/storage.ts`):
   - Added `deleteWatchedEpisodesForShow()` - queues each episode for sync before delete
   - Updated `deleteShow()` to call `deleteReactionsForShow()` - fixes orphaned reactions
-  - Reordered delete sequence: queue show → delete children → delete show
+  - Reordered `deleteShow()` and `deleteMovie()`: delete children before parent
+  - Passed 2 rounds of Claude Web code review
 
 ### Previous Session Work
 - **Supabase migration applied** - `014_add_watch_history_tables.sql` deployed via MCP
@@ -25,6 +26,7 @@ Updated: 2026-02-01 | Branch: master
 1. `33f7a83` - Add rewatch tracking for episodes and movies
 2. `ae40295` - Fix rewatch tracking issues from code review
 3. `a21a9cb` - Fix critical sync bug and improve delete handling
+4. `ed9a80b` - Fix delete sync issues: queue children before deleting parent
 
 ### Key Files Changed
 - `src/services/storage.ts` - Watch history tables, delete methods
