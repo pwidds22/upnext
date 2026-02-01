@@ -252,17 +252,18 @@ export const activityService = {
     return result;
   },
 
-  // Get episode watch activity - uses watch history table to show all watches including rewatches
+  // Get episode watch activity - merges watch history table (rewatches) with legacy table
   async getEpisodeWatchActivity(
     followingIds: string[],
     limit: number,
     before?: string
   ): Promise<ActivityItem[]> {
-    // Try to use the new watch history table first (for rewatch tracking)
-    // Fall back to the old watched_episodes table if history table doesn't exist or is empty
-    let historyData: any[] = [];
-    let historyError: any = null;
+    // Fetch from both tables and merge to ensure we show:
+    // 1. Old watches from before migration (legacy table)
+    // 2. New watches including rewatches (history table)
+    const allActivities: ActivityItem[] = [];
 
+    // Fetch from new watch history table (all watches including rewatches)
     try {
       let historyQuery = supabase
         .from('user_episode_watch_history')
@@ -289,34 +290,33 @@ export const activityService = {
         historyQuery = historyQuery.lt('watched_at', before);
       }
 
-      const result = await historyQuery;
-      historyData = result.data ?? [];
-      historyError = result.error;
-    } catch (e) {
-      historyError = e;
+      const { data: historyData, error: historyError } = await historyQuery;
+
+      if (!historyError && historyData && historyData.length > 0) {
+        const tmdbIds = [...new Set(historyData.map((row: any) => row.tmdb_show_id))];
+        const showTitles = await this.getShowTitles(tmdbIds, followingIds);
+
+        for (const row of historyData) {
+          allActivities.push({
+            id: `history_${row.id}`,
+            type: 'episode_watch' as ActivityType,
+            userId: row.user_id,
+            user: profileFromRow((Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as ProfileRow),
+            tmdbId: row.tmdb_show_id,
+            showTitle: showTitles.get(row.tmdb_show_id)?.title ?? 'Unknown Show',
+            posterPath: showTitles.get(row.tmdb_show_id)?.posterPath ?? null,
+            timestamp: row.watched_at,
+            seasonNumber: row.season_number,
+            episodeNumber: row.episode_number,
+            episodeTitle: row.episode_title,
+          });
+        }
+      }
+    } catch {
+      // History table may not exist yet, continue with legacy
     }
 
-    // If watch history has data, use it (shows all watches including rewatches)
-    if (!historyError && historyData.length > 0) {
-      const tmdbIds = [...new Set(historyData.map((row: any) => row.tmdb_show_id))];
-      const showTitles = await this.getShowTitles(tmdbIds, followingIds);
-
-      return historyData.map((row: any) => ({
-        id: `watch_${row.id}`,
-        type: 'episode_watch' as ActivityType,
-        userId: row.user_id,
-        user: profileFromRow(row.profiles as ProfileRow),
-        tmdbId: row.tmdb_show_id,
-        showTitle: showTitles.get(row.tmdb_show_id)?.title ?? 'Unknown Show',
-        posterPath: showTitles.get(row.tmdb_show_id)?.posterPath ?? null,
-        timestamp: row.watched_at,
-        seasonNumber: row.season_number,
-        episodeNumber: row.episode_number,
-        episodeTitle: row.episode_title,
-      }));
-    }
-
-    // Fall back to legacy watched_episodes table
+    // Also fetch from legacy watched_episodes table
     let query = supabase
       .from('user_watched_episodes')
       .select(
@@ -342,26 +342,46 @@ export const activityService = {
       query = query.lt('watched_at', before);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    const { data: legacyData, error: legacyError } = await query;
 
-    // Need to get show titles - batch fetch from user_shows
-    const tmdbIds = [...new Set((data ?? []).map((row: any) => row.tmdb_show_id))];
-    const showTitles = await this.getShowTitles(tmdbIds, followingIds);
+    if (!legacyError && legacyData && legacyData.length > 0) {
+      const tmdbIds = [...new Set(legacyData.map((row: any) => row.tmdb_show_id))];
+      const showTitles = await this.getShowTitles(tmdbIds, followingIds);
 
-    return (data ?? []).map((row: any) => ({
-      id: `watch_${row.id}`,
-      type: 'episode_watch' as ActivityType,
-      userId: row.user_id,
-      user: profileFromRow(row.profiles as ProfileRow),
-      tmdbId: row.tmdb_show_id,
-      showTitle: showTitles.get(row.tmdb_show_id)?.title ?? 'Unknown Show',
-      posterPath: showTitles.get(row.tmdb_show_id)?.posterPath ?? null,
-      timestamp: row.watched_at,
-      seasonNumber: row.season_number,
-      episodeNumber: row.episode_number,
-      episodeTitle: row.episode_title,
-    }));
+      // Only add legacy entries that don't duplicate history entries
+      // (same user, show, season, episode within 1 minute timestamp)
+      for (const row of legacyData) {
+        const isDuplicate = allActivities.some(
+          (a) =>
+            a.userId === row.user_id &&
+            a.tmdbId === row.tmdb_show_id &&
+            a.seasonNumber === row.season_number &&
+            a.episodeNumber === row.episode_number &&
+            Math.abs(new Date(a.timestamp).getTime() - new Date(row.watched_at).getTime()) < 60000
+        );
+
+        if (!isDuplicate) {
+          allActivities.push({
+            id: `legacy_${row.id}`,
+            type: 'episode_watch' as ActivityType,
+            userId: row.user_id,
+            user: profileFromRow((Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as ProfileRow),
+            tmdbId: row.tmdb_show_id,
+            showTitle: showTitles.get(row.tmdb_show_id)?.title ?? 'Unknown Show',
+            posterPath: showTitles.get(row.tmdb_show_id)?.posterPath ?? null,
+            timestamp: row.watched_at,
+            seasonNumber: row.season_number,
+            episodeNumber: row.episode_number,
+            episodeTitle: row.episode_title,
+          });
+        }
+      }
+    }
+
+    // Sort by timestamp descending and limit results
+    return allActivities
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
   },
 
   // Get show add activity - only completed shows (not "started watching")
@@ -403,7 +423,7 @@ export const activityService = {
       id: `add_${row.id}`,
       type: 'show_add' as ActivityType,
       userId: row.user_id,
-      user: profileFromRow(row.profiles as ProfileRow),
+      user: profileFromRow((Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as ProfileRow),
       tmdbId: row.tmdb_id,
       showTitle: row.title,
       posterPath: row.poster_path,
@@ -413,16 +433,18 @@ export const activityService = {
     }));
   },
 
-  // Get movie watch activity - uses watch history table to show all watches including rewatches
+  // Get movie watch activity - merges watch history table (rewatches) with legacy table
   async getMovieWatchActivity(
     followingIds: string[],
     limit: number,
     before?: string
   ): Promise<ActivityItem[]> {
-    // Try to use the new watch history table first (for rewatch tracking)
-    let historyData: any[] = [];
-    let historyError: any = null;
+    // Fetch from both tables and merge to ensure we show:
+    // 1. Old watches from before migration (legacy user_shows with status=watched)
+    // 2. New watches including rewatches (history table)
+    const allActivities: ActivityItem[] = [];
 
+    // Fetch from new watch history table (all watches including rewatches)
     try {
       let historyQuery = supabase
         .from('user_movie_watch_history')
@@ -446,34 +468,32 @@ export const activityService = {
         historyQuery = historyQuery.lt('watched_at', before);
       }
 
-      const result = await historyQuery;
-      historyData = result.data ?? [];
-      historyError = result.error;
-    } catch (e) {
-      historyError = e;
+      const { data: historyData, error: historyError } = await historyQuery;
+
+      if (!historyError && historyData && historyData.length > 0) {
+        const movieIds = [...new Set(historyData.map((row: any) => row.tmdb_movie_id))];
+        const movieTitles = await this.getShowTitles(movieIds, followingIds);
+
+        for (const row of historyData) {
+          allActivities.push({
+            id: `movie_history_${row.id}`,
+            type: 'movie_watch' as ActivityType,
+            userId: row.user_id,
+            user: profileFromRow((Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as ProfileRow),
+            tmdbId: row.tmdb_movie_id,
+            showTitle: movieTitles.get(row.tmdb_movie_id)?.title ?? 'Unknown Movie',
+            posterPath: movieTitles.get(row.tmdb_movie_id)?.posterPath ?? null,
+            timestamp: row.watched_at,
+            movieStatus: 'watched' as MovieStatus,
+            mediaType: 'movie' as MediaType,
+          });
+        }
+      }
+    } catch {
+      // History table may not exist yet, continue with legacy
     }
 
-    // If watch history has data, use it (shows all watches including rewatches)
-    if (!historyError && historyData.length > 0) {
-      // Get movie titles from user_shows
-      const movieIds = [...new Set(historyData.map((row: any) => row.tmdb_movie_id))];
-      const movieTitles = await this.getShowTitles(movieIds, followingIds);
-
-      return historyData.map((row: any) => ({
-        id: `movie_watch_${row.id}`,
-        type: 'movie_watch' as ActivityType,
-        userId: row.user_id,
-        user: profileFromRow(row.profiles as ProfileRow),
-        tmdbId: row.tmdb_movie_id,
-        showTitle: movieTitles.get(row.tmdb_movie_id)?.title ?? 'Unknown Movie',
-        posterPath: movieTitles.get(row.tmdb_movie_id)?.posterPath ?? null,
-        timestamp: row.watched_at,
-        movieStatus: 'watched' as MovieStatus,
-        mediaType: 'movie' as MediaType,
-      }));
-    }
-
-    // Fall back to legacy user_shows status-based tracking
+    // Also fetch from legacy user_shows status-based tracking
     let query = supabase
       .from('user_shows')
       .select(
@@ -501,21 +521,40 @@ export const activityService = {
       query = query.lt('updated_at', before);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
+    const { data: legacyData, error: legacyError } = await query;
 
-    return (data ?? []).map((row: any) => ({
-      id: `movie_${row.id}`,
-      type: 'movie_watch' as ActivityType,
-      userId: row.user_id,
-      user: profileFromRow(row.profiles as ProfileRow),
-      tmdbId: row.tmdb_id,
-      showTitle: row.title,
-      posterPath: row.poster_path,
-      timestamp: row.updated_at,
-      movieStatus: row.status as MovieStatus,
-      mediaType: 'movie' as MediaType,
-    }));
+    if (!legacyError && legacyData && legacyData.length > 0) {
+      // Only add legacy entries that don't duplicate history entries
+      // (same user, movie within 1 minute timestamp)
+      for (const row of legacyData) {
+        const isDuplicate = allActivities.some(
+          (a) =>
+            a.userId === row.user_id &&
+            a.tmdbId === row.tmdb_id &&
+            Math.abs(new Date(a.timestamp).getTime() - new Date(row.updated_at).getTime()) < 60000
+        );
+
+        if (!isDuplicate) {
+          allActivities.push({
+            id: `movie_legacy_${row.id}`,
+            type: 'movie_watch' as ActivityType,
+            userId: row.user_id,
+            user: profileFromRow((Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as ProfileRow),
+            tmdbId: row.tmdb_id,
+            showTitle: row.title,
+            posterPath: row.poster_path,
+            timestamp: row.updated_at,
+            movieStatus: row.status as MovieStatus,
+            mediaType: 'movie' as MediaType,
+          });
+        }
+      }
+    }
+
+    // Sort by timestamp descending and limit results
+    return allActivities
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
   },
 
   // Get rating activity (includes show, season, episode, and movie ratings)
@@ -561,7 +600,7 @@ export const activityService = {
       id: `rating_${row.id}`,
       type: 'rating' as ActivityType,
       userId: row.user_id,
-      user: profileFromRow(row.profiles as ProfileRow),
+      user: profileFromRow((Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as ProfileRow),
       tmdbId: row.tmdb_id,
       showTitle: showTitles.get(row.tmdb_id)?.title ?? (row.rating_type === 'movie' ? 'Unknown Movie' : 'Unknown Show'),
       posterPath: showTitles.get(row.tmdb_id)?.posterPath ?? null,

@@ -1,26 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TrackedShow, WatchedEpisode, ShowStatus, WatchHistorySummary } from '../types';
 import { storageService } from '../services/storage';
-import { useSync } from './useSync';
+import { useSyncOptional } from '../contexts/SyncContext';
 
 export function useTrackedShows() {
   const [shows, setShows] = useState<TrackedShow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync integration - wrapped in try/catch in case SyncProvider is not available
-  let sync: (() => Promise<void>) | undefined;
-  let isOnline = true;
-  let syncStatus: string | undefined;
-
-  try {
-    const syncContext = useSync();
-    sync = syncContext.sync;
-    isOnline = syncContext.isOnline;
-    syncStatus = syncContext.status;
-  } catch {
-    // SyncProvider not available, sync features disabled
-  }
+  // Sync integration - returns null if SyncProvider is not available
+  const syncContext = useSyncOptional();
+  const sync = syncContext?.triggerSync;
+  const isOnline = syncContext?.isOnline ?? true;
+  const syncStatus = syncContext?.syncState;
 
   const prevSyncStatus = useRef(syncStatus);
 
@@ -107,17 +99,10 @@ export function useWatchedEpisodes(showTmdbId: number) {
   const [watchCounts, setWatchCounts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
 
-  // Sync integration - wrapped in try/catch in case SyncProvider is not available
-  let sync: (() => Promise<void>) | undefined;
-  let isOnline = true;
-
-  try {
-    const syncContext = useSync();
-    sync = syncContext.sync;
-    isOnline = syncContext.isOnline;
-  } catch {
-    // SyncProvider not available, sync features disabled
-  }
+  // Sync integration - returns null if SyncProvider is not available
+  const syncContext = useSyncOptional();
+  const sync = syncContext?.triggerSync;
+  const isOnline = syncContext?.isOnline ?? true;
 
   const loadEpisodes = useCallback(async () => {
     try {

@@ -376,6 +376,7 @@ class StorageService {
 
     await this.db!.runAsync('DELETE FROM tracked_shows WHERE tmdb_id = ?', [tmdbId]);
     await this.db!.runAsync('DELETE FROM watched_episodes WHERE show_tmdb_id = ?', [tmdbId]);
+    await this.db!.runAsync('DELETE FROM episode_watch_history WHERE show_tmdb_id = ?', [tmdbId]);
   }
 
   async isShowTracked(tmdbId: number): Promise<boolean> {
@@ -1056,6 +1057,7 @@ class StorageService {
     await this.addToSyncQueue('tracked_shows', `movie-${tmdbId}`, 'delete', { tmdbId, mediaType: 'movie' });
 
     await this.db!.runAsync("DELETE FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'", [tmdbId]);
+    await this.db!.runAsync('DELETE FROM movie_watch_history WHERE movie_tmdb_id = ?', [tmdbId]);
   }
 
   async isMovieTracked(tmdbId: number): Promise<boolean> {

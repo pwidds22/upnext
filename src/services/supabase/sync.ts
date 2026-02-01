@@ -3,6 +3,7 @@ import { showsCloudService } from './shows';
 import { episodesCloudService } from './episodes';
 import { episodeReactionsCloudService } from './episodeReactions';
 import { dismissedShowsCloudService } from './dismissedShows';
+import { episodeWatchHistoryService, movieWatchHistoryService } from './watchHistory';
 import { storageService } from '../storage';
 import type {
   SyncResult,
@@ -12,6 +13,8 @@ import type {
   WatchedEpisode,
   EpisodeReaction,
   DismissedShow,
+  EpisodeWatchHistory,
+  MovieWatchHistory,
   UserShowRow,
   UserWatchedEpisodeRow,
 } from '../../types';
@@ -418,6 +421,32 @@ export const syncService = {
         case 'delete': {
           const { tmdbId } = payload;
           await withRetry(() => dismissedShowsCloudService.softDeleteDismissed(userId, tmdbId));
+          break;
+        }
+      }
+    } else if (item.tableName === 'episode_watch_history') {
+      switch (item.operation) {
+        case 'create': {
+          const watch = payload as EpisodeWatchHistory;
+          await withRetry(() => episodeWatchHistoryService.insertWatch(userId, watch));
+          break;
+        }
+        case 'delete': {
+          const { localId } = payload;
+          await withRetry(() => episodeWatchHistoryService.softDeleteWatchByLocalId(userId, localId));
+          break;
+        }
+      }
+    } else if (item.tableName === 'movie_watch_history') {
+      switch (item.operation) {
+        case 'create': {
+          const watch = payload as MovieWatchHistory;
+          await withRetry(() => movieWatchHistoryService.insertWatch(userId, watch));
+          break;
+        }
+        case 'delete': {
+          const { localId } = payload;
+          await withRetry(() => movieWatchHistoryService.softDeleteWatchByLocalId(userId, localId));
           break;
         }
       }

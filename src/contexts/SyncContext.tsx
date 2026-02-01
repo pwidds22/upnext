@@ -173,3 +173,9 @@ export function useSyncContext() {
   }
   return context;
 }
+
+// Optional version that returns null when outside SyncProvider
+// Use this when sync is optional (e.g., hooks that may be used outside the main app)
+export function useSyncOptional() {
+  return useContext(SyncContext);
+}
