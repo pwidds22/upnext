@@ -312,8 +312,9 @@ export const activityService = {
           });
         }
       }
-    } catch {
+    } catch (e) {
       // History table may not exist yet, continue with legacy
+      console.warn('Watch history query failed, using legacy:', e);
     }
 
     // Also fetch from legacy watched_episodes table
@@ -489,8 +490,9 @@ export const activityService = {
           });
         }
       }
-    } catch {
+    } catch (e) {
       // History table may not exist yet, continue with legacy
+      console.warn('Watch history query failed, using legacy:', e);
     }
 
     // Also fetch from legacy user_shows status-based tracking

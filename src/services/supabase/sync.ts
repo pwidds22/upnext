@@ -432,8 +432,8 @@ export const syncService = {
           break;
         }
         case 'delete': {
-          const { localId } = payload;
-          await withRetry(() => episodeWatchHistoryService.softDeleteWatchByLocalId(userId, localId));
+          const { id } = payload;
+          await withRetry(() => episodeWatchHistoryService.softDeleteWatchByLocalId(userId, id));
           break;
         }
       }
@@ -445,8 +445,8 @@ export const syncService = {
           break;
         }
         case 'delete': {
-          const { localId } = payload;
-          await withRetry(() => movieWatchHistoryService.softDeleteWatchByLocalId(userId, localId));
+          const { id } = payload;
+          await withRetry(() => movieWatchHistoryService.softDeleteWatchByLocalId(userId, id));
           break;
         }
       }
