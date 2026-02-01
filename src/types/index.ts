@@ -454,3 +454,61 @@ export interface FriendsWatchingShow {
   friends: UserProfile[];
   friendCount: number;
 }
+
+// Watch History Types (for rewatch tracking)
+
+// Episode watch history entry (each watch is a separate record)
+export interface EpisodeWatchHistory {
+  id: string; // Unique ID for this watch instance
+  showTmdbId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  watchedAt: string; // ISO date string
+  episodeTitle?: string;
+  // Sync fields
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+}
+
+// Movie watch history entry (each watch is a separate record)
+export interface MovieWatchHistory {
+  id: string; // Unique ID for this watch instance
+  movieTmdbId: number;
+  watchedAt: string; // ISO date string
+  // Sync fields
+  syncStatus?: SyncStatus;
+  remoteId?: string;
+}
+
+// Supabase row type for episode watch history
+export interface UserEpisodeWatchHistoryRow {
+  id: string;
+  user_id: string;
+  tmdb_show_id: number;
+  season_number: number;
+  episode_number: number;
+  watched_at: string;
+  episode_title: string | null;
+  local_id: string | null;
+  synced_at: string;
+  deleted_at: string | null;
+}
+
+// Supabase row type for movie watch history
+export interface UserMovieWatchHistoryRow {
+  id: string;
+  user_id: string;
+  tmdb_movie_id: number;
+  watched_at: string;
+  local_id: string | null;
+  synced_at: string;
+  deleted_at: string | null;
+}
+
+// Watch history summary for UI display
+export interface WatchHistorySummary {
+  totalWatches: number;
+  firstWatchedAt: string | null;
+  lastWatchedAt: string | null;
+  watches: Array<{ id: string; watchedAt: string }>;
+}

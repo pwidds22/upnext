@@ -23,6 +23,7 @@ import { useEpisodeReactions } from '../hooks/useEpisodeReactions';
 import { useAuth } from '../contexts/AuthContext';
 import ShowPoster from '../components/ShowPoster';
 import EpisodeRow from '../components/EpisodeRow';
+import WatchHistorySheet from '../components/WatchHistorySheet';
 import StarRating, { formatRating } from '../components/StarRating';
 import { COLORS, STATUS_CONFIG, getLogoUrl, hasAiredPacific } from '../utils/constants';
 
@@ -61,8 +62,26 @@ export default function ShowDetailScreen() {
   // Show details for About section
   const [showDetails, setShowDetails] = useState<TMDBShow | null>(null);
 
-  const { isWatched, toggleWatched, watchedCount, watchedCountForSeason, markSeasonWatched, markSeasonUnwatched } =
-    useWatchedEpisodes(show.tmdbId);
+  const {
+    isWatched,
+    getWatchCount,
+    toggleWatched,
+    addWatch,
+    removeLatestWatch,
+    getWatchHistory,
+    deleteWatch,
+    watchedCount,
+    watchedCountForSeason,
+    markSeasonWatched,
+    markSeasonUnwatched,
+  } = useWatchedEpisodes(show.tmdbId);
+
+  // Watch history sheet state
+  const [historySheetEpisode, setHistorySheetEpisode] = useState<{
+    season: number;
+    episode: number;
+    title: string;
+  } | null>(null);
 
   const { getReaction, toggleReaction } = useEpisodeReactions(show.tmdbId);
 
@@ -649,6 +668,7 @@ export default function ShowDetailScreen() {
                           key={episode.id}
                           episode={episode}
                           isWatched={isWatched(season.season_number, episode.episode_number)}
+                          watchCount={getWatchCount(season.season_number, episode.episode_number)}
                           onToggle={() =>
                             handleToggleEpisode(
                               season.season_number,
@@ -656,6 +676,24 @@ export default function ShowDetailScreen() {
                               episode.name,
                               episode.still_path
                             )
+                          }
+                          onAddWatch={() =>
+                            addWatch(
+                              season.season_number,
+                              episode.episode_number,
+                              episode.name,
+                              episode.still_path ?? undefined
+                            )
+                          }
+                          onRemoveWatch={() =>
+                            removeLatestWatch(season.season_number, episode.episode_number)
+                          }
+                          onViewHistory={() =>
+                            setHistorySheetEpisode({
+                              season: season.season_number,
+                              episode: episode.episode_number,
+                              title: episode.name,
+                            })
                           }
                           reaction={getReaction(season.season_number, episode.episode_number)}
                           onReactionChange={(reaction) =>
@@ -724,6 +762,32 @@ export default function ShowDetailScreen() {
             <Text style={styles.deleteText}>Remove from Library</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* Watch History Sheet */}
+      {historySheetEpisode && (
+        <WatchHistorySheet
+          visible={!!historySheetEpisode}
+          onClose={() => setHistorySheetEpisode(null)}
+          title={historySheetEpisode.title}
+          subtitle={`S${historySheetEpisode.season} E${historySheetEpisode.episode}`}
+          getWatchHistory={() =>
+            getWatchHistory(historySheetEpisode.season, historySheetEpisode.episode)
+          }
+          onAddWatch={async () => {
+            await addWatch(
+              historySheetEpisode.season,
+              historySheetEpisode.episode,
+              historySheetEpisode.title
+            );
+          }}
+          onRemoveWatch={() =>
+            removeLatestWatch(historySheetEpisode.season, historySheetEpisode.episode)
+          }
+          onDeleteWatch={(watchId) =>
+            deleteWatch(watchId, historySheetEpisode.season, historySheetEpisode.episode)
+          }
+        />
       )}
     </ScrollView>
   );

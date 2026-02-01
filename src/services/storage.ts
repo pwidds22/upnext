@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { TrackedShow, TrackedMovie, TrackedMedia, WatchedEpisode, ShowStatus, MovieStatus, SyncStatus, SyncOperation, SyncQueueItem, EpisodeReaction, EpisodeReactionType, MediaType } from '../types';
+import { TrackedShow, TrackedMovie, TrackedMedia, WatchedEpisode, ShowStatus, MovieStatus, SyncStatus, SyncOperation, SyncQueueItem, EpisodeReaction, EpisodeReactionType, MediaType, EpisodeWatchHistory, MovieWatchHistory, WatchHistorySummary } from '../types';
 
 const DB_NAME = 'showbuddy.db';
 const DEFAULT_SYNC_STATUS: SyncStatus = 'pending';
@@ -129,6 +129,36 @@ class StorageService {
       );
 
       CREATE INDEX IF NOT EXISTS idx_dismissed_movie_tmdb ON dismissed_movies(tmdb_id);
+    `);
+
+    // Create episode watch history table (for rewatch tracking)
+    // Unlike watched_episodes, this table allows multiple entries per episode
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS episode_watch_history (
+        id TEXT PRIMARY KEY,
+        show_tmdb_id INTEGER NOT NULL,
+        season_number INTEGER NOT NULL,
+        episode_number INTEGER NOT NULL,
+        watched_at TEXT NOT NULL,
+        episode_title TEXT,
+        sync_status TEXT DEFAULT 'pending',
+        remote_id TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_episode_watch_history ON episode_watch_history(show_tmdb_id, season_number, episode_number);
+    `);
+
+    // Create movie watch history table (for rewatch tracking)
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS movie_watch_history (
+        id TEXT PRIMARY KEY,
+        movie_tmdb_id INTEGER NOT NULL,
+        watched_at TEXT NOT NULL,
+        sync_status TEXT DEFAULT 'pending',
+        remote_id TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_movie_watch_history ON movie_watch_history(movie_tmdb_id);
     `);
 
     // Migration: add movie support columns to tracked_shows
@@ -1098,6 +1128,329 @@ class StorageService {
     });
   }
 
+  // ==================== EPISODE WATCH HISTORY ====================
+
+  // Add a watch to episode history (called when marking episode as watched)
+  async addEpisodeWatchHistory(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number,
+    watchedAt: string,
+    episodeTitle?: string
+  ): Promise<string> {
+    if (!this.db) await this.init();
+
+    // Generate unique ID with timestamp to allow multiple watches
+    const id = `${showTmdbId}-${seasonNumber}-${episodeNumber}-${Date.now()}`;
+
+    await this.db!.runAsync(
+      `INSERT INTO episode_watch_history
+       (id, show_tmdb_id, season_number, episode_number, watched_at, episode_title, sync_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, showTmdbId, seasonNumber, episodeNumber, watchedAt, episodeTitle ?? null, DEFAULT_SYNC_STATUS]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('episode_watch_history', id, 'create', {
+      id,
+      showTmdbId,
+      seasonNumber,
+      episodeNumber,
+      watchedAt,
+      episodeTitle,
+    });
+
+    return id;
+  }
+
+  // Get all watches for a specific episode
+  async getEpisodeWatchHistory(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<EpisodeWatchHistory[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      watched_at: string;
+      episode_title: string | null;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+    }>(
+      `SELECT * FROM episode_watch_history
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?
+       ORDER BY watched_at DESC`,
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      showTmdbId: row.show_tmdb_id,
+      seasonNumber: row.season_number,
+      episodeNumber: row.episode_number,
+      watchedAt: row.watched_at,
+      episodeTitle: row.episode_title ?? undefined,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+    }));
+  }
+
+  // Get watch count for a specific episode
+  async getEpisodeWatchCount(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<number> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM episode_watch_history
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?`,
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+
+    return row?.count ?? 0;
+  }
+
+  // Get watch counts for all episodes of a show (for efficient batch loading)
+  async getEpisodeWatchCountsForShow(showTmdbId: number): Promise<Map<string, number>> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      season_number: number;
+      episode_number: number;
+      count: number;
+    }>(
+      `SELECT season_number, episode_number, COUNT(*) as count
+       FROM episode_watch_history
+       WHERE show_tmdb_id = ?
+       GROUP BY season_number, episode_number`,
+      [showTmdbId]
+    );
+
+    const countMap = new Map<string, number>();
+    for (const row of rows) {
+      const key = `${row.season_number}-${row.episode_number}`;
+      countMap.set(key, row.count);
+    }
+    return countMap;
+  }
+
+  // Get watch history summary for an episode
+  async getEpisodeWatchHistorySummary(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<WatchHistorySummary> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{ id: string; watched_at: string }>(
+      `SELECT id, watched_at FROM episode_watch_history
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?
+       ORDER BY watched_at ASC`,
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+
+    return {
+      totalWatches: rows.length,
+      firstWatchedAt: rows.length > 0 ? rows[0].watched_at : null,
+      lastWatchedAt: rows.length > 0 ? rows[rows.length - 1].watched_at : null,
+      watches: rows.map((r) => ({ id: r.id, watchedAt: r.watched_at })),
+    };
+  }
+
+  // Delete a specific watch from episode history
+  async deleteEpisodeWatch(watchId: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('episode_watch_history', watchId, 'delete', { id: watchId });
+
+    await this.db!.runAsync('DELETE FROM episode_watch_history WHERE id = ?', [watchId]);
+  }
+
+  // Delete the most recent watch for an episode (for undo/unwatch)
+  async deleteLatestEpisodeWatch(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<string | null> {
+    if (!this.db) await this.init();
+
+    // Get the most recent watch
+    const latest = await this.db!.getFirstAsync<{ id: string }>(
+      `SELECT id FROM episode_watch_history
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?
+       ORDER BY watched_at DESC LIMIT 1`,
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+
+    if (latest) {
+      await this.deleteEpisodeWatch(latest.id);
+      return latest.id;
+    }
+    return null;
+  }
+
+  // Delete all watch history for an episode
+  async deleteAllEpisodeWatchHistory(
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Get all watches to queue for sync deletion
+    const watches = await this.getEpisodeWatchHistory(showTmdbId, seasonNumber, episodeNumber);
+    for (const watch of watches) {
+      await this.addToSyncQueue('episode_watch_history', watch.id, 'delete', { id: watch.id });
+    }
+
+    await this.db!.runAsync(
+      `DELETE FROM episode_watch_history
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?`,
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+  }
+
+  // Delete all watch history for a show (when removing show)
+  async deleteShowWatchHistory(showTmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Get all watches to queue for sync deletion
+    const rows = await this.db!.getAllAsync<{ id: string }>(
+      'SELECT id FROM episode_watch_history WHERE show_tmdb_id = ?',
+      [showTmdbId]
+    );
+    for (const row of rows) {
+      await this.addToSyncQueue('episode_watch_history', row.id, 'delete', { id: row.id });
+    }
+
+    await this.db!.runAsync('DELETE FROM episode_watch_history WHERE show_tmdb_id = ?', [showTmdbId]);
+  }
+
+  // ==================== MOVIE WATCH HISTORY ====================
+
+  // Add a watch to movie history
+  async addMovieWatchHistory(movieTmdbId: number, watchedAt: string): Promise<string> {
+    if (!this.db) await this.init();
+
+    // Generate unique ID with timestamp to allow multiple watches
+    const id = `movie-${movieTmdbId}-${Date.now()}`;
+
+    await this.db!.runAsync(
+      `INSERT INTO movie_watch_history
+       (id, movie_tmdb_id, watched_at, sync_status)
+       VALUES (?, ?, ?, ?)`,
+      [id, movieTmdbId, watchedAt, DEFAULT_SYNC_STATUS]
+    );
+
+    // Queue for sync
+    await this.addToSyncQueue('movie_watch_history', id, 'create', {
+      id,
+      movieTmdbId,
+      watchedAt,
+    });
+
+    return id;
+  }
+
+  // Get all watches for a specific movie
+  async getMovieWatchHistory(movieTmdbId: number): Promise<MovieWatchHistory[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      movie_tmdb_id: number;
+      watched_at: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+    }>(
+      'SELECT * FROM movie_watch_history WHERE movie_tmdb_id = ? ORDER BY watched_at DESC',
+      [movieTmdbId]
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      movieTmdbId: row.movie_tmdb_id,
+      watchedAt: row.watched_at,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+    }));
+  }
+
+  // Get watch count for a specific movie
+  async getMovieWatchCount(movieTmdbId: number): Promise<number> {
+    if (!this.db) await this.init();
+
+    const row = await this.db!.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM movie_watch_history WHERE movie_tmdb_id = ?',
+      [movieTmdbId]
+    );
+
+    return row?.count ?? 0;
+  }
+
+  // Get watch history summary for a movie
+  async getMovieWatchHistorySummary(movieTmdbId: number): Promise<WatchHistorySummary> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{ id: string; watched_at: string }>(
+      'SELECT id, watched_at FROM movie_watch_history WHERE movie_tmdb_id = ? ORDER BY watched_at ASC',
+      [movieTmdbId]
+    );
+
+    return {
+      totalWatches: rows.length,
+      firstWatchedAt: rows.length > 0 ? rows[0].watched_at : null,
+      lastWatchedAt: rows.length > 0 ? rows[rows.length - 1].watched_at : null,
+      watches: rows.map((r) => ({ id: r.id, watchedAt: r.watched_at })),
+    };
+  }
+
+  // Delete a specific watch from movie history
+  async deleteMovieWatch(watchId: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Queue for sync before deleting locally
+    await this.addToSyncQueue('movie_watch_history', watchId, 'delete', { id: watchId });
+
+    await this.db!.runAsync('DELETE FROM movie_watch_history WHERE id = ?', [watchId]);
+  }
+
+  // Delete the most recent watch for a movie
+  async deleteLatestMovieWatch(movieTmdbId: number): Promise<string | null> {
+    if (!this.db) await this.init();
+
+    const latest = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM movie_watch_history WHERE movie_tmdb_id = ? ORDER BY watched_at DESC LIMIT 1',
+      [movieTmdbId]
+    );
+
+    if (latest) {
+      await this.deleteMovieWatch(latest.id);
+      return latest.id;
+    }
+    return null;
+  }
+
+  // Delete all watch history for a movie
+  async deleteAllMovieWatchHistory(movieTmdbId: number): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Get all watches to queue for sync deletion
+    const watches = await this.getMovieWatchHistory(movieTmdbId);
+    for (const watch of watches) {
+      await this.addToSyncQueue('movie_watch_history', watch.id, 'delete', { id: watch.id });
+    }
+
+    await this.db!.runAsync('DELETE FROM movie_watch_history WHERE movie_tmdb_id = ?', [movieTmdbId]);
+  }
+
   // Clear all local data (used on sign out to prevent data bleeding between accounts)
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();
@@ -1106,9 +1459,12 @@ class StorageService {
     await this.db!.execAsync(`
       DELETE FROM episode_reactions;
       DELETE FROM dismissed_shows;
+      DELETE FROM dismissed_movies;
       DELETE FROM sync_queue;
       DELETE FROM watched_episodes;
       DELETE FROM tracked_shows;
+      DELETE FROM episode_watch_history;
+      DELETE FROM movie_watch_history;
     `);
   }
 }

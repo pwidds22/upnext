@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TrackedShow, WatchedEpisode, ShowStatus } from '../types';
+import { TrackedShow, WatchedEpisode, ShowStatus, WatchHistorySummary } from '../types';
 import { storageService } from '../services/storage';
 import { useSync } from './useSync';
 
@@ -104,6 +104,7 @@ export function useTrackedShows() {
 
 export function useWatchedEpisodes(showTmdbId: number) {
   const [episodes, setEpisodes] = useState<WatchedEpisode[]>([]);
+  const [watchCounts, setWatchCounts] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
 
   // Sync integration - wrapped in try/catch in case SyncProvider is not available
@@ -123,6 +124,9 @@ export function useWatchedEpisodes(showTmdbId: number) {
       setLoading(true);
       const watched = await storageService.getWatchedEpisodes(showTmdbId);
       setEpisodes(watched);
+      // Load watch counts from history table
+      const counts = await storageService.getEpisodeWatchCountsForShow(showTmdbId);
+      setWatchCounts(counts);
     } catch (e) {
       console.error('Failed to load watched episodes:', e);
     } finally {
@@ -146,31 +150,150 @@ export function useWatchedEpisodes(showTmdbId: number) {
     [episodes]
   );
 
+  // Get watch count for an episode (from watch history)
+  const getWatchCount = useCallback(
+    (season: number, episode: number) => {
+      const key = `${season}-${episode}`;
+      return watchCounts.get(key) ?? 0;
+    },
+    [watchCounts]
+  );
+
+  // Add a new watch (for first watch or rewatch)
+  const addWatch = useCallback(
+    async (season: number, episode: number, episodeTitle?: string, stillPath?: string) => {
+      const watchedAt = new Date().toISOString();
+
+      // Add to watch history (always creates new entry)
+      await storageService.addEpisodeWatchHistory(showTmdbId, season, episode, watchedAt, episodeTitle);
+
+      // Update watched_episodes table (for backward compatibility / current state)
+      const newEpisode: Omit<WatchedEpisode, 'id'> = {
+        showTmdbId,
+        seasonNumber: season,
+        episodeNumber: episode,
+        watchedAt,
+        episodeTitle,
+        stillPath,
+      };
+      await storageService.markEpisodeWatched(newEpisode);
+
+      // Update local state
+      setEpisodes((prev) => {
+        const existing = prev.find((e) => e.seasonNumber === season && e.episodeNumber === episode);
+        if (existing) {
+          // Update the watchedAt timestamp
+          return prev.map((e) =>
+            e.seasonNumber === season && e.episodeNumber === episode
+              ? { ...e, watchedAt }
+              : e
+          );
+        }
+        return [...prev, { ...newEpisode, id: `${showTmdbId}-${season}-${episode}` }];
+      });
+
+      // Update watch count
+      const key = `${season}-${episode}`;
+      setWatchCounts((prev) => {
+        const newCounts = new Map(prev);
+        newCounts.set(key, (prev.get(key) ?? 0) + 1);
+        return newCounts;
+      });
+
+      triggerSyncIfOnline();
+    },
+    [showTmdbId, triggerSyncIfOnline]
+  );
+
+  // Remove the most recent watch (undo/unwatch)
+  const removeLatestWatch = useCallback(
+    async (season: number, episode: number) => {
+      // Delete from watch history
+      await storageService.deleteLatestEpisodeWatch(showTmdbId, season, episode);
+
+      // Get remaining count
+      const remainingCount = await storageService.getEpisodeWatchCount(showTmdbId, season, episode);
+
+      if (remainingCount === 0) {
+        // No more watches - remove from watched_episodes table
+        await storageService.markEpisodeUnwatched(showTmdbId, season, episode);
+        setEpisodes((prev) =>
+          prev.filter((e) => !(e.seasonNumber === season && e.episodeNumber === episode))
+        );
+      }
+
+      // Update watch count
+      const key = `${season}-${episode}`;
+      setWatchCounts((prev) => {
+        const newCounts = new Map(prev);
+        if (remainingCount === 0) {
+          newCounts.delete(key);
+        } else {
+          newCounts.set(key, remainingCount);
+        }
+        return newCounts;
+      });
+
+      triggerSyncIfOnline();
+    },
+    [showTmdbId, triggerSyncIfOnline]
+  );
+
+  // Get watch history for an episode
+  const getWatchHistory = useCallback(
+    async (season: number, episode: number): Promise<WatchHistorySummary> => {
+      return storageService.getEpisodeWatchHistorySummary(showTmdbId, season, episode);
+    },
+    [showTmdbId]
+  );
+
+  // Delete a specific watch from history by ID
+  const deleteWatch = useCallback(
+    async (watchId: string, season: number, episode: number) => {
+      await storageService.deleteEpisodeWatch(watchId);
+
+      // Get remaining count
+      const remainingCount = await storageService.getEpisodeWatchCount(showTmdbId, season, episode);
+
+      if (remainingCount === 0) {
+        // No more watches - remove from watched_episodes table
+        await storageService.markEpisodeUnwatched(showTmdbId, season, episode);
+        setEpisodes((prev) =>
+          prev.filter((e) => !(e.seasonNumber === season && e.episodeNumber === episode))
+        );
+      }
+
+      // Update watch count
+      const key = `${season}-${episode}`;
+      setWatchCounts((prev) => {
+        const newCounts = new Map(prev);
+        if (remainingCount === 0) {
+          newCounts.delete(key);
+        } else {
+          newCounts.set(key, remainingCount);
+        }
+        return newCounts;
+      });
+
+      triggerSyncIfOnline();
+    },
+    [showTmdbId, triggerSyncIfOnline]
+  );
+
+  // Legacy toggleWatched - now uses addWatch for first watch
   const toggleWatched = useCallback(
     async (season: number, episode: number, episodeTitle?: string, stillPath?: string) => {
       const watched = isWatched(season, episode);
 
       if (watched) {
-        await storageService.markEpisodeUnwatched(showTmdbId, season, episode);
-        setEpisodes((prev) =>
-          prev.filter((e) => !(e.seasonNumber === season && e.episodeNumber === episode))
-        );
+        // Remove the latest watch
+        await removeLatestWatch(season, episode);
       } else {
-        const newEpisode: Omit<WatchedEpisode, 'id'> = {
-          showTmdbId,
-          seasonNumber: season,
-          episodeNumber: episode,
-          watchedAt: new Date().toISOString(),
-          episodeTitle,
-          stillPath,
-        };
-        await storageService.markEpisodeWatched(newEpisode);
-        setEpisodes((prev) => [...prev, { ...newEpisode, id: `${showTmdbId}-${season}-${episode}` }]);
+        // Add first watch
+        await addWatch(season, episode, episodeTitle, stillPath);
       }
-
-      triggerSyncIfOnline();
     },
-    [showTmdbId, isWatched, triggerSyncIfOnline]
+    [isWatched, addWatch, removeLatestWatch]
   );
 
   const markSeasonWatched = useCallback(
@@ -178,6 +301,20 @@ export function useWatchedEpisodes(showTmdbId: number) {
       seasonNumber: number,
       episodeList: Array<{ episodeNumber: number; name: string | null; stillPath: string | null }>
     ) => {
+      const watchedAt = new Date().toISOString();
+
+      // Add to watch history for each episode
+      for (const ep of episodeList) {
+        await storageService.addEpisodeWatchHistory(
+          showTmdbId,
+          seasonNumber,
+          ep.episodeNumber,
+          watchedAt,
+          ep.name ?? undefined
+        );
+      }
+
+      // Also mark in watched_episodes table
       await storageService.markSeasonWatched(showTmdbId, seasonNumber, episodeList);
       await loadEpisodes();
       triggerSyncIfOnline();
@@ -187,11 +324,27 @@ export function useWatchedEpisodes(showTmdbId: number) {
 
   const markSeasonUnwatched = useCallback(
     async (seasonNumber: number) => {
+      // Delete watch history for all episodes in the season
+      const seasonEpisodes = episodes.filter((e) => e.seasonNumber === seasonNumber);
+      for (const ep of seasonEpisodes) {
+        await storageService.deleteAllEpisodeWatchHistory(showTmdbId, seasonNumber, ep.episodeNumber);
+      }
+
       await storageService.markSeasonUnwatched(showTmdbId, seasonNumber);
       setEpisodes((prev) => prev.filter((e) => e.seasonNumber !== seasonNumber));
+
+      // Update watch counts
+      setWatchCounts((prev) => {
+        const newCounts = new Map(prev);
+        for (const ep of seasonEpisodes) {
+          newCounts.delete(`${seasonNumber}-${ep.episodeNumber}`);
+        }
+        return newCounts;
+      });
+
       triggerSyncIfOnline();
     },
-    [showTmdbId, triggerSyncIfOnline]
+    [showTmdbId, episodes, triggerSyncIfOnline]
   );
 
   const watchedCount = episodes.length;
@@ -206,7 +359,12 @@ export function useWatchedEpisodes(showTmdbId: number) {
     loading,
     refresh: loadEpisodes,
     isWatched,
+    getWatchCount,
     toggleWatched,
+    addWatch,
+    removeLatestWatch,
+    getWatchHistory,
+    deleteWatch,
     markSeasonWatched,
     markSeasonUnwatched,
     watchedCount,

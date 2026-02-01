@@ -18,8 +18,10 @@ import { storageService } from '../services/storage';
 import { ratingsService } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
 import { useAuth } from '../contexts/AuthContext';
+import { useMovieWatchHistory } from '../hooks/useMovieWatchHistory';
 import ShowPoster from '../components/ShowPoster';
 import StarRating, { formatRating } from '../components/StarRating';
+import WatchHistorySheet from '../components/WatchHistorySheet';
 import { COLORS, getYearFromDate } from '../utils/constants';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -47,6 +49,16 @@ export default function MovieDetailScreen() {
   const [tmdbRating, setTmdbRating] = useState<number | null>(null);
   const [friendRatings, setFriendRatings] = useState<FriendRating[]>([]);
   const [ratingLoading, setRatingLoading] = useState(false);
+
+  // Watch history
+  const {
+    watchCount,
+    addWatch,
+    removeLatestWatch,
+    getWatchHistory,
+    deleteWatch,
+  } = useMovieWatchHistory(movie.tmdbId);
+  const [showWatchHistory, setShowWatchHistory] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -119,12 +131,24 @@ export default function MovieDetailScreen() {
 
   const handleStatusChange = useCallback(
     async (newStatus: MovieStatus) => {
+      const wasWatched = currentStatus === 'watched';
       await storageService.updateMovieStatus(movie.tmdbId, newStatus);
       setCurrentStatus(newStatus);
+
+      // If changing TO watched for the first time, add initial watch to history
+      if (newStatus === 'watched' && !wasWatched && watchCount === 0) {
+        await addWatch();
+      }
+
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [movie.tmdbId]
+    [movie.tmdbId, currentStatus, watchCount, addWatch]
   );
+
+  const handleWatchAgain = useCallback(async () => {
+    await addWatch();
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [addWatch]);
 
   const handleDelete = useCallback(() => {
     Alert.alert('Remove Movie', `Remove "${movie.title}" from your library?`, [
@@ -260,6 +284,32 @@ export default function MovieDetailScreen() {
         </View>
       </View>
 
+      {/* Watch History Section - only show for watched movies */}
+      {currentStatus === 'watched' && (
+        <View style={styles.watchHistorySection}>
+          <View style={styles.watchHistoryHeader}>
+            <View style={styles.watchCountContainer}>
+              <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+              <Text style={styles.watchCountText}>
+                {watchCount} {watchCount === 1 ? 'watch' : 'watches'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.viewHistoryButton}
+              onPress={() => setShowWatchHistory(true)}
+            >
+              <Text style={styles.viewHistoryText}>View History</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.watchAgainButton} onPress={handleWatchAgain}>
+            <Ionicons name="add-circle" size={20} color={COLORS.primary} />
+            <Text style={styles.watchAgainText}>Watch Again</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Streaming Providers */}
       {providers?.flatrate && providers.flatrate.length > 0 && (
         <View style={styles.providersSection}>
@@ -326,6 +376,17 @@ export default function MovieDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Watch History Sheet */}
+      <WatchHistorySheet
+        visible={showWatchHistory}
+        onClose={() => setShowWatchHistory(false)}
+        title={movie.title}
+        getWatchHistory={getWatchHistory}
+        onAddWatch={addWatch}
+        onRemoveWatch={removeLatestWatch}
+        onDeleteWatch={deleteWatch}
+      />
     </ScrollView>
   );
 }
@@ -522,5 +583,52 @@ const styles = StyleSheet.create({
   deleteText: {
     fontSize: 16,
     color: COLORS.error,
+  },
+  // Watch History Section
+  watchHistorySection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+    marginBottom: 16,
+    gap: 12,
+  },
+  watchHistoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  watchCountContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  watchCountText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  viewHistoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewHistoryText: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: '500',
+  },
+  watchAgainButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: `${COLORS.primary}15`,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  watchAgainText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
 });

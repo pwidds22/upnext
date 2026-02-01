@@ -252,12 +252,71 @@ export const activityService = {
     return result;
   },
 
-  // Get episode watch activity
+  // Get episode watch activity - uses watch history table to show all watches including rewatches
   async getEpisodeWatchActivity(
     followingIds: string[],
     limit: number,
     before?: string
   ): Promise<ActivityItem[]> {
+    // Try to use the new watch history table first (for rewatch tracking)
+    // Fall back to the old watched_episodes table if history table doesn't exist or is empty
+    let historyData: any[] = [];
+    let historyError: any = null;
+
+    try {
+      let historyQuery = supabase
+        .from('user_episode_watch_history')
+        .select(
+          `
+          id,
+          user_id,
+          tmdb_show_id,
+          season_number,
+          episode_number,
+          episode_title,
+          watched_at,
+          profiles!user_episode_watch_history_user_id_fkey (
+            id, username, display_name, avatar_url, bio, is_searchable
+          )
+        `
+        )
+        .in('user_id', followingIds)
+        .is('deleted_at', null)
+        .order('watched_at', { ascending: false })
+        .limit(limit);
+
+      if (before) {
+        historyQuery = historyQuery.lt('watched_at', before);
+      }
+
+      const result = await historyQuery;
+      historyData = result.data ?? [];
+      historyError = result.error;
+    } catch (e) {
+      historyError = e;
+    }
+
+    // If watch history has data, use it (shows all watches including rewatches)
+    if (!historyError && historyData.length > 0) {
+      const tmdbIds = [...new Set(historyData.map((row: any) => row.tmdb_show_id))];
+      const showTitles = await this.getShowTitles(tmdbIds, followingIds);
+
+      return historyData.map((row: any) => ({
+        id: `watch_${row.id}`,
+        type: 'episode_watch' as ActivityType,
+        userId: row.user_id,
+        user: profileFromRow(row.profiles as ProfileRow),
+        tmdbId: row.tmdb_show_id,
+        showTitle: showTitles.get(row.tmdb_show_id)?.title ?? 'Unknown Show',
+        posterPath: showTitles.get(row.tmdb_show_id)?.posterPath ?? null,
+        timestamp: row.watched_at,
+        seasonNumber: row.season_number,
+        episodeNumber: row.episode_number,
+        episodeTitle: row.episode_title,
+      }));
+    }
+
+    // Fall back to legacy watched_episodes table
     let query = supabase
       .from('user_watched_episodes')
       .select(
@@ -354,12 +413,67 @@ export const activityService = {
     }));
   },
 
-  // Get movie watch activity (movies marked as "watched")
+  // Get movie watch activity - uses watch history table to show all watches including rewatches
   async getMovieWatchActivity(
     followingIds: string[],
     limit: number,
     before?: string
   ): Promise<ActivityItem[]> {
+    // Try to use the new watch history table first (for rewatch tracking)
+    let historyData: any[] = [];
+    let historyError: any = null;
+
+    try {
+      let historyQuery = supabase
+        .from('user_movie_watch_history')
+        .select(
+          `
+          id,
+          user_id,
+          tmdb_movie_id,
+          watched_at,
+          profiles!user_movie_watch_history_user_id_fkey (
+            id, username, display_name, avatar_url, bio, is_searchable
+          )
+        `
+        )
+        .in('user_id', followingIds)
+        .is('deleted_at', null)
+        .order('watched_at', { ascending: false })
+        .limit(limit);
+
+      if (before) {
+        historyQuery = historyQuery.lt('watched_at', before);
+      }
+
+      const result = await historyQuery;
+      historyData = result.data ?? [];
+      historyError = result.error;
+    } catch (e) {
+      historyError = e;
+    }
+
+    // If watch history has data, use it (shows all watches including rewatches)
+    if (!historyError && historyData.length > 0) {
+      // Get movie titles from user_shows
+      const movieIds = [...new Set(historyData.map((row: any) => row.tmdb_movie_id))];
+      const movieTitles = await this.getShowTitles(movieIds, followingIds);
+
+      return historyData.map((row: any) => ({
+        id: `movie_watch_${row.id}`,
+        type: 'movie_watch' as ActivityType,
+        userId: row.user_id,
+        user: profileFromRow(row.profiles as ProfileRow),
+        tmdbId: row.tmdb_movie_id,
+        showTitle: movieTitles.get(row.tmdb_movie_id)?.title ?? 'Unknown Movie',
+        posterPath: movieTitles.get(row.tmdb_movie_id)?.posterPath ?? null,
+        timestamp: row.watched_at,
+        movieStatus: 'watched' as MovieStatus,
+        mediaType: 'movie' as MediaType,
+      }));
+    }
+
+    // Fall back to legacy user_shows status-based tracking
     let query = supabase
       .from('user_shows')
       .select(

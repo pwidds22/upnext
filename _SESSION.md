@@ -1,19 +1,45 @@
 # UpNext - Session State
-Updated: 2026-01-29 | Branch: master
+Updated: 2026-02-01 | Branch: master
 
-## Status: Pre-Rewatch Research Phase
+## Status: Rewatch Tracking Complete & Deployed
 
 ### Completed This Session
-- **Session review** - Reviewed project state, uncommitted changes, roadmap
-- **Deep research prep** - Created prompt for Claude deep research to investigate:
-  - Why users want rewatch tracking and how it should work
-  - Most requested features from TV Time, Trakt, etc. refugees
-  - Deal breakers and pain points from Reddit communities
+- **Supabase migration applied** - `014_add_watch_history_tables.sql` deployed via MCP
+  - `user_episode_watch_history` table created with RLS
+  - `user_movie_watch_history` table created with RLS
+  - All indexes and friend activity policies in place
 
-### In Progress
-- **Rewatch tracking research** - Awaiting deep research results from user
-  - User will provide findings in next session
-  - Need to understand user expectations before implementation
+### Completed Previous Session
+- **Deep research analysis** - Analyzed user research on rewatch tracking needs
+- **Rewatch tracking implementation** - Full episode + movie rewatch support:
+  - New `episode_watch_history` and `movie_watch_history` SQLite tables
+  - New Supabase migration (`014_add_watch_history_tables.sql`)
+  - Watch history service for Supabase sync
+  - Updated `useWatchedEpisodes` hook with `addWatch`, `removeLatestWatch`, `getWatchHistory`
+  - New `useMovieWatchHistory` hook
+  - New `WatchHistorySheet` component (modal showing watch history)
+  - Updated `EpisodeRow` with watch count badge and quick action menu
+  - Updated `MovieDetailScreen` with watch history section
+  - Activity feed updated to show rewatches from history tables
+
+### Key UX Decisions (Based on Research)
+- **No accidental taps**: Tapping watched episode shows quick action menu (Watch Again / Remove / History)
+- **Watch count badges**: Episodes/movies with 2+ watches show count badge
+- **Full history**: Users can view all watch dates and delete individual watches
+- **Backward compatible**: Falls back to old tables if history tables empty
+
+### Files Changed
+- `src/types/index.ts` - Added watch history types
+- `src/services/storage.ts` - Added watch history tables and methods
+- `src/services/supabase/watchHistory.ts` - New file for sync
+- `src/services/supabase/activity.ts` - Updated to use history tables
+- `src/hooks/useShowData.ts` - Added rewatch functions
+- `src/hooks/useMovieWatchHistory.ts` - New hook
+- `src/components/WatchHistorySheet.tsx` - New component
+- `src/components/EpisodeRow.tsx` - Added watch count badge and action menu
+- `src/screens/ShowDetailScreen.tsx` - Integrated rewatch UI
+- `src/screens/MovieDetailScreen.tsx` - Added watch history section
+- `supabase/migrations/014_add_watch_history_tables.sql` - New migration
 
 ### Previous Session Completed
 - **Movie tracking** - Full implementation complete
@@ -32,6 +58,7 @@ Updated: 2026-01-29 | Branch: master
 - **Recommendations** - Trending + personalized with dismiss feature
 - **Profile** - Edit username, display name, bio
 - **Movies** - Full tracking with search, status, ratings
+- **Rewatch Tracking** - Full watch history for episodes and movies
 
 ## Pre-Launch Roadmap
 
@@ -39,7 +66,7 @@ Updated: 2026-01-29 | Branch: master
 | # | Feature | Complexity | Status |
 |---|---------|------------|--------|
 | 1 | ~~Movie tracking~~ | Medium-High | DONE |
-| 2 | **Rewatch tracking** | Medium | Not started |
+| 2 | ~~Rewatch tracking~~ | Medium | DONE |
 | 3 | **Share profile** | Low | Not started |
 | 4 | **Data export** | Low | Not started |
 
@@ -55,33 +82,12 @@ Updated: 2026-01-29 | Branch: master
 | 7 | Native X posting | Twitter API OAuth required |
 
 ## Next Steps
-1. **Receive deep research results** - User running Claude deep research on rewatch tracking + feature requests
-2. **Analyze findings** - Understand what users actually want from rewatch tracking
-3. **Design rewatch implementation** - Based on research, not assumptions
-4. **Implement rewatch tracking** - After research validates approach
+1. **Test rewatch flow end-to-end** - Verify UI works correctly on device
+2. **Share profile** - Next feature on roadmap
+3. **Data export** - JSON/CSV export for user data portability
 
-## Technical Notes for Next Features
-
-### Rewatch Tracking (pending research)
-- Current: `upsertEpisode` with `onConflict` overwrites existing watch
-- Need: Remove unique constraint, change to INSERT for rewatches
-- Add UI to show watch history per episode
-- Update ID generation to include timestamp
-- **Waiting for:** Deep research on user expectations
-
-### Share Profile
-- Generate public URL: `upnext.app/user/{username}`
-- Profile page already shows data, just need public route
-- Web version or deep link handling
-
-## Launch Strategy
-- **First 500 users:** Lifetime premium free
-- **Track by:** Signup date in Supabase `profiles.created_at`
-- **Marketing:** Reddit (r/television, r/TVSuggestions, r/streaming)
-- **Message:** "Fast, free TV & movie tracker. First 500 users get premium forever."
-
-## Database Migrations (13 applied)
-`create_profiles`, `create_user_shows`, `create_watched_episodes`, `create_user_ratings`, `create_updated_at_triggers`, `fix_function_search_paths`, `create_episode_reactions`, `create_user_follows`, `fix_profile_username_from_email`, `create_user_dismissed_shows`, `add_activity_feed_policies`, `add_show_privacy`, `add_get_user_email_function`
+## Database Migrations (14 to apply)
+`create_profiles`, `create_user_shows`, `create_watched_episodes`, `create_user_ratings`, `create_updated_at_triggers`, `fix_function_search_paths`, `create_episode_reactions`, `create_user_follows`, `fix_profile_username_from_email`, `create_user_dismissed_shows`, `add_activity_feed_policies`, `add_show_privacy`, `add_get_user_email_function`, **`add_watch_history_tables`** (NEW)
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
