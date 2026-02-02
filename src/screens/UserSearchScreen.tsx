@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSearch } from '../hooks/useFollows';
-import { followsService } from '../services/supabase/follows';
+import { useFollowToggle } from '../hooks/useFollowToggle';
 import UserRow from '../components/UserRow';
 import { COLORS, SEARCH_DEBOUNCE_MS } from '../utils/constants';
 import type { RootStackParamList, UserWithFollowStatus } from '../types';
@@ -26,7 +25,13 @@ export default function UserSearchScreen() {
   const { user } = useAuth();
   const { results, loading, error, search, clear } = useUserSearch();
   const [query, setQuery] = useState('');
-  const [followLoadingIds, setFollowLoadingIds] = useState<Set<string>>(new Set());
+  const queryRef = useRef(query);
+  queryRef.current = query;
+
+  const { handleFollowToggle, followLoadingIds } = useFollowToggle({
+    currentUserId: user?.id,
+    onSuccess: () => search(queryRef.current),
+  });
 
   // Debounced search
   useEffect(() => {
@@ -41,35 +46,6 @@ export default function UserSearchScreen() {
 
     return () => clearTimeout(timer);
   }, [query, search, clear]);
-
-  const handleFollowToggle = useCallback(
-    async (targetUser: UserWithFollowStatus) => {
-      if (!user) return;
-
-      setFollowLoadingIds((prev) => new Set([...prev, targetUser.id]));
-
-      try {
-        if (targetUser.isFollowing) {
-          await followsService.unfollow(user.id, targetUser.id);
-        } else {
-          await followsService.follow(user.id, targetUser.id);
-        }
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        // Refresh search results to update follow status
-        search(query);
-      } catch (e) {
-        console.error('Failed to toggle follow:', e);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } finally {
-        setFollowLoadingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(targetUser.id);
-          return next;
-        });
-      }
-    },
-    [user, query, search]
-  );
 
   const handleUserPress = useCallback(
     (userId: string) => {

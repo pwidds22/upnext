@@ -460,8 +460,20 @@ class StorageService {
 
     const id = `${episode.showTmdbId}-${episode.seasonNumber}-${episode.episodeNumber}`;
 
+    // Check if episode is already marked as watched
+    const existing = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM watched_episodes WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?',
+      [episode.showTmdbId, episode.seasonNumber, episode.episodeNumber]
+    );
+
+    if (existing) {
+      // Episode already watched, skip (idempotent)
+      return;
+    }
+
+    // Insert new watched episode entry
     await this.db!.runAsync(
-      `INSERT OR REPLACE INTO watched_episodes
+      `INSERT INTO watched_episodes
        (id, show_tmdb_id, season_number, episode_number, watched_at, episode_title, still_path, sync_status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -555,11 +567,26 @@ class StorageService {
   ): Promise<void> {
     if (!this.db) await this.init();
 
-    await this.db!.runAsync(
-      `INSERT OR REPLACE INTO sync_queue (table_name, record_id, operation, payload, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      [tableName, recordId, operation, JSON.stringify(payload), new Date().toISOString()]
+    // Check if this sync operation already exists
+    const existing = await this.db!.getFirstAsync<{ id: number }>(
+      'SELECT id FROM sync_queue WHERE table_name = ? AND record_id = ? AND operation = ?',
+      [tableName, recordId, operation]
     );
+
+    if (existing) {
+      // Update existing sync queue entry (preserve created_at and attempts)
+      await this.db!.runAsync(
+        'UPDATE sync_queue SET payload = ? WHERE id = ?',
+        [JSON.stringify(payload), existing.id]
+      );
+    } else {
+      // Insert new sync queue entry
+      await this.db!.runAsync(
+        `INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tableName, recordId, operation, JSON.stringify(payload), new Date().toISOString()]
+      );
+    }
   }
 
   async getSyncQueue(): Promise<SyncQueueItem[]> {
@@ -852,11 +879,23 @@ class StorageService {
   async dismissShow(tmdbId: number): Promise<void> {
     if (!this.db) await this.init();
 
+    // Check if show is already dismissed
+    const existing = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM dismissed_shows WHERE tmdb_id = ?',
+      [tmdbId]
+    );
+
+    if (existing) {
+      // Already dismissed, skip
+      return;
+    }
+
     const id = `dismissed-${tmdbId}`;
     const now = new Date().toISOString();
 
+    // Insert new dismissed show
     await this.db!.runAsync(
-      `INSERT OR REPLACE INTO dismissed_shows
+      `INSERT INTO dismissed_shows
        (id, tmdb_id, dismissed_at, sync_status)
        VALUES (?, ?, ?, ?)`,
       [id, tmdbId, now, DEFAULT_SYNC_STATUS]
@@ -907,11 +946,23 @@ class StorageService {
   async dismissMovie(tmdbId: number): Promise<void> {
     if (!this.db) await this.init();
 
+    // Check if movie is already dismissed
+    const existing = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM dismissed_movies WHERE tmdb_id = ?',
+      [tmdbId]
+    );
+
+    if (existing) {
+      // Already dismissed, skip
+      return;
+    }
+
     const id = `dismissed-movie-${tmdbId}`;
     const now = new Date().toISOString();
 
+    // Insert new dismissed movie
     await this.db!.runAsync(
-      `INSERT OR REPLACE INTO dismissed_movies
+      `INSERT INTO dismissed_movies
        (id, tmdb_id, dismissed_at, sync_status)
        VALUES (?, ?, ?, ?)`,
       [id, tmdbId, now, DEFAULT_SYNC_STATUS]

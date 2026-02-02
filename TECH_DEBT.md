@@ -20,21 +20,21 @@ Last scanned: 2026-02-02
 ## High Priority (Fix Soon)
 
 ### Service Layer Issues
-- [ ] **INSERT OR REPLACE Usage** - `storage.ts:464,559,845,900` - 4 uses instead of check-then-insert
+- [x] **INSERT OR REPLACE Usage** - FIXED: All 4 uses converted to check-then-insert pattern
 
 ### Screen Anti-Patterns
-- [ ] **Direct Service Calls** - `SignInScreen.tsx:47-62` - Calls `followsService` directly, should use hook
-- [ ] **Direct Service Calls** - `SignUpScreen.tsx:66,125` - Calls `followsService.isUsernameAvailable()` directly
+- [x] **Direct Service Calls** - FIXED: Created `useProfileLookup` hook for SignInScreen
+- [x] **Direct Service Calls** - FIXED: Created `useUsernameCheck` hook for SignUpScreen
 
 ### Code Duplication
-- [ ] **Username Validation** - Duplicated in SignUpScreen.tsx, ProfileScreen.tsx (2x) - extract to utils
-- [ ] **Follow Toggle Logic** - Duplicated in FollowersScreen, FollowingScreen, UserSearchScreen - create `useFollowToggle()` hook
-- [ ] **ShowCard/MovieCard** - 85% identical - create single `MediaCard` component
-- [ ] **Recommendation Hooks** - `useRecommendations.ts` and `useMovieRecommendations.ts` are nearly identical 150-line hooks
+- [x] **Username Validation** - FIXED: Extracted to `src/utils/validation.ts`
+- [x] **Follow Toggle Logic** - FIXED: Created `useFollowToggle` hook, updated 3 screens
+- [x] **ShowCard/MovieCard** - FIXED: Created `MediaCard` component, simplified both cards
+- [x] **Recommendation Hooks** - FIXED: Created `useMediaRecommendations` generic hook
 
 ### Safety Issues
-- [ ] **Unsafe Non-Null Assertion** - `ActivityItem.tsx:77` - `activity.rating!` without validation
-- [ ] **Unsafe String Access** - `UserRow.tsx:27` - `displayName[0]` without length check
+- [x] **Unsafe Non-Null Assertion** - FIXED: Changed to `activity.rating ?? 0`
+- [x] **Unsafe String Access** - FIXED: Changed to `displayName.charAt(0) || 'U'`
 
 ---
 
@@ -50,7 +50,7 @@ Last scanned: 2026-02-02
 
 ### Component Structure
 - [ ] **Large Component** - `ProfileScreen.tsx` is 1073 lines - extract EditProfileModal to separate file
-- [ ] **Hardcoded Colors** - `MovieCard.tsx:29`, `ShowCard.tsx:29` - should use COLORS constants
+- [x] **Hardcoded Colors** - FIXED: ShowCard/MovieCard now use MediaCard which uses COLORS constants
 
 ### Hook Issues
 - [ ] **Missing Cleanup** - `ProfileScreen.tsx:135-137`, `SignUpScreen.tsx:85-86` - debounce timeout cleanup inside conditional
@@ -89,11 +89,16 @@ When fixing these, add these patterns to CLAUDE.md:
 
 ## Session Notes
 
-### 2026-02-02 (Continued)
-- Fixed all 3 critical issues:
-  - `useEpisodeReactions.ts` - removed conditional hook call, now uses `useSyncOptional`
-  - `useEpisodeReactions.ts` - fixed stale closure by deriving values from hook result
-  - `storage.ts` - refactored `setReaction()` to check-then-insert pattern
+### 2026-02-02 (Full Tech Debt Pass)
+- Fixed all 3 critical issues + all 9 high-priority issues:
+  - **Critical fixes:** useEpisodeReactions hooks, storage.ts setReaction
+  - **INSERT OR REPLACE:** Fixed 4 more locations in storage.ts
+  - **Service hooks:** Created useProfileLookup, useUsernameCheck
+  - **Validation:** Extracted to src/utils/validation.ts
+  - **Follow toggle:** Created useFollowToggle hook, updated 3 screens
+  - **MediaCard:** Unified ShowCard/MovieCard
+  - **Recommendations:** Created useMediaRecommendations generic hook
+  - **Safety:** Fixed unsafe assertions in ActivityItem, UserRow
 
 ### 2026-02-02
 - Initial scan completed

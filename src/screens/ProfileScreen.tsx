@@ -24,31 +24,13 @@ import { storageService } from '../services/storage';
 import { useFollowCounts } from '../hooks/useFollows';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { COLORS } from '../utils/constants';
+import { validateUsername, cleanUsername, USERNAME_MIN_LENGTH } from '../utils/validation';
 import { RootStackParamList, TrackedShow, UserProfile } from '../types';
 import StarRating, { formatRating } from '../components/StarRating';
 import ShowPoster from '../components/ShowPoster';
 import ProfileVisibilitySheet from '../components/ProfileVisibilitySheet';
 import SignInScreen from './auth/SignInScreen';
 import SignUpScreen from './auth/SignUpScreen';
-
-// Username validation: 3-20 chars, alphanumeric and underscores only
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
-
-function validateUsername(username: string): string | null {
-  if (!username.trim()) {
-    return 'Username is required';
-  }
-  if (username.length < 3) {
-    return 'Username must be at least 3 characters';
-  }
-  if (username.length > 20) {
-    return 'Username must be 20 characters or less';
-  }
-  if (!USERNAME_REGEX.test(username)) {
-    return 'Username can only contain letters, numbers, and underscores';
-  }
-  return null;
-}
 
 // Edit Profile Modal Component
 interface EditProfileModalProps {
@@ -120,7 +102,7 @@ function EditProfileModal({
   const handleUsernameChange = useCallback(
     (value: string) => {
       // Only allow valid characters while typing
-      const cleaned = value.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+      const cleaned = cleanUsername(value);
       setUsername(cleaned);
 
       // Check if unchanged from original
@@ -132,7 +114,7 @@ function EditProfileModal({
       setUsernameStatus('idle');
 
       // Debounce the availability check
-      if (cleaned.length >= 3) {
+      if (cleaned.length >= USERNAME_MIN_LENGTH) {
         const timer = setTimeout(() => checkAvailability(cleaned), 500);
         return () => clearTimeout(timer);
       }

@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
-import { followsService } from '../../services/supabase/follows';
+import { useProfileLookup } from '../../hooks/useProfileLookup';
 import { COLORS } from '../../utils/constants';
 
 interface Props {
@@ -23,6 +23,7 @@ interface Props {
 
 export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
   const { signIn } = useAuth();
+  const { lookupByUsername } = useProfileLookup();
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,22 +45,15 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
 
       // If input doesn't contain @, treat as username and look up email
       if (!input.includes('@')) {
-        const profile = await followsService.getProfileByUsername(input);
-        if (!profile) {
+        const result = await lookupByUsername(input);
+        if (!result) {
+          // Error already set by hook
           setError('Username not found');
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           setLoading(false);
           return;
         }
-        // Get email from auth.users via the profile id
-        const userEmail = await followsService.getEmailByUserId(profile.id);
-        if (!userEmail) {
-          setError('Could not find account for this username');
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          setLoading(false);
-          return;
-        }
-        email = userEmail;
+        email = result.email;
       }
 
       const { error: signInError } = await signIn(email, password);

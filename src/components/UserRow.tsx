@@ -24,7 +24,7 @@ export default function UserRow({
   followLoading = false,
 }: UserRowProps) {
   const displayName = user.displayName || user.username || 'User';
-  const initial = displayName[0].toUpperCase();
+  const initial = (displayName.charAt(0) || 'U').toUpperCase();
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress}>

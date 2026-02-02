@@ -74,7 +74,7 @@ function getActivityDescription(activity: ActivityItemType): string {
     case 'movie_watch':
       return 'watched';
     case 'rating':
-      const stars = (activity.rating! / 2).toFixed(1);
+      const stars = ((activity.rating ?? 0) / 2).toFixed(1);
       if (activity.ratingType === 'season' && activity.seasonNumber) {
         return `rated Season ${activity.seasonNumber} ${stars} stars`;
       } else if (activity.ratingType === 'episode' && activity.seasonNumber && activity.episodeNumber) {

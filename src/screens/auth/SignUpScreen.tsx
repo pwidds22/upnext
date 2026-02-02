@@ -13,41 +13,23 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
-import { followsService } from '../../services/supabase/follows';
+import { useUsernameCheck } from '../../hooks/useUsernameCheck';
 import { COLORS } from '../../utils/constants';
+import { validateUsername, cleanUsername, USERNAME_MIN_LENGTH } from '../../utils/validation';
 
 interface Props {
   onNavigateToSignIn: () => void;
   onSkip: () => void;
 }
 
-// Username validation: 3-20 chars, alphanumeric and underscores only
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/;
-
-function validateUsername(username: string): string | null {
-  if (!username.trim()) {
-    return 'Username is required';
-  }
-  if (username.length < 3) {
-    return 'Username must be at least 3 characters';
-  }
-  if (username.length > 20) {
-    return 'Username must be 20 characters or less';
-  }
-  if (!USERNAME_REGEX.test(username)) {
-    return 'Username can only contain letters, numbers, and underscores';
-  }
-  return null;
-}
-
 export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
   const { signUp } = useAuth();
+  const { checkAvailability, checking: checkingUsername } = useUsernameCheck();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [checkingUsername, setCheckingUsername] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'available' | 'taken'>('idle');
   const [success, setSuccess] = useState(false);
@@ -61,27 +43,19 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
       return;
     }
 
-    setCheckingUsername(true);
-    try {
-      const available = await followsService.isUsernameAvailable(value);
-      setUsernameStatus(available ? 'available' : 'taken');
-    } catch (e) {
-      console.error('Failed to check username:', e);
-      setUsernameStatus('idle');
-    } finally {
-      setCheckingUsername(false);
-    }
-  }, []);
+    const available = await checkAvailability(value);
+    setUsernameStatus(available ? 'available' : 'taken');
+  }, [checkAvailability]);
 
   const handleUsernameChange = useCallback(
     (value: string) => {
       // Only allow valid characters while typing
-      const cleaned = value.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+      const cleaned = cleanUsername(value);
       setUsername(cleaned);
       setUsernameStatus('idle');
 
       // Debounce the availability check
-      if (cleaned.length >= 3) {
+      if (cleaned.length >= USERNAME_MIN_LENGTH) {
         const timer = setTimeout(() => checkUsername(cleaned), 500);
         return () => clearTimeout(timer);
       }
@@ -122,7 +96,7 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
 
     try {
       // Check username availability one more time
-      const available = await followsService.isUsernameAvailable(username);
+      const available = await checkAvailability(username);
       if (!available) {
         setError('Username is already taken');
         setUsernameStatus('taken');

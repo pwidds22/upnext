@@ -1,13 +1,30 @@
 # UpNext - Session State
 Updated: 2026-02-02 | Branch: master
 
-## Status: Critical Tech Debt Fixed
+## Status: All High-Priority Tech Debt Fixed
 
 ### Completed This Session
-- **Fixed 3 Critical Tech Debt Issues:**
+- **Fixed 3 Critical + 9 High-Priority Tech Debt Issues:**
+
+  **Critical:**
   - `useEpisodeReactions.ts` - Removed conditional hook call (useSync inside try/catch)
   - `useEpisodeReactions.ts` - Fixed stale closure (sync/isOnline now from hook result)
   - `storage.ts` - Refactored setReaction() from ON CONFLICT to check-then-insert
+
+  **Service Layer:**
+  - `storage.ts` - Fixed 4 more INSERT OR REPLACE usages (check-then-insert)
+  - Created `useProfileLookup` hook for SignInScreen
+  - Created `useUsernameCheck` hook for SignUpScreen
+
+  **Code Duplication:**
+  - Extracted username validation to `src/utils/validation.ts`
+  - Created `useFollowToggle` hook (FollowersScreen, FollowingScreen, UserSearchScreen)
+  - Created `MediaCard` component (unified ShowCard + MovieCard)
+  - Created `useMediaRecommendations` generic hook
+
+  **Safety:**
+  - `ActivityItem.tsx` - Fixed unsafe `activity.rating!` assertion
+  - `UserRow.tsx` - Fixed unsafe `displayName[0]` access
 
 ### Previous Session Work
 - **Share Profile feature implemented** - Full implementation as per spec:
@@ -27,9 +44,27 @@ Updated: 2026-02-02 | Branch: master
   - Handle empty/whitespace usernames in deep link parsing
 
 ### Key Files Changed (This Session)
-- `src/hooks/useSync.ts` - Now uses `useSyncOptional`, returns undefined if no provider
+- `src/services/storage.ts` - 5 methods refactored to check-then-insert pattern
+- `src/hooks/useSync.ts` - Uses `useSyncOptional`, returns undefined if no provider
 - `src/hooks/useEpisodeReactions.ts` - Removed try/catch, uses optional chaining
-- `src/services/storage.ts` - Refactored setReaction() to check-then-insert
+- `src/hooks/useFollowToggle.ts` - NEW: Follow/unfollow logic with haptics
+- `src/hooks/useUsernameCheck.ts` - NEW: Username availability checking
+- `src/hooks/useProfileLookup.ts` - NEW: Profile lookup by username
+- `src/hooks/useMediaRecommendations.ts` - NEW: Generic recommendations hook
+- `src/hooks/useRecommendations.ts` - Simplified, uses generic hook
+- `src/hooks/useMovieRecommendations.ts` - Simplified, uses generic hook
+- `src/components/MediaCard.tsx` - NEW: Unified card component
+- `src/components/ShowCard.tsx` - Simplified wrapper around MediaCard
+- `src/components/MovieCard.tsx` - Simplified wrapper around MediaCard
+- `src/components/ActivityItem.tsx` - Fixed unsafe assertion
+- `src/components/UserRow.tsx` - Fixed unsafe string access
+- `src/utils/validation.ts` - NEW: Username validation utilities
+- `src/screens/auth/SignInScreen.tsx` - Uses useProfileLookup hook
+- `src/screens/auth/SignUpScreen.tsx` - Uses useUsernameCheck hook, validation utils
+- `src/screens/ProfileScreen.tsx` - Uses validation utils
+- `src/screens/FollowersScreen.tsx` - Uses useFollowToggle hook
+- `src/screens/FollowingScreen.tsx` - Uses useFollowToggle hook
+- `src/screens/UserSearchScreen.tsx` - Uses useFollowToggle hook
 
 ### Key Files Changed (Previous Session)
 - `supabase/migrations/015_add_profile_visibility.sql` - Applied via MCP
