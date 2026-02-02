@@ -1,43 +1,40 @@
 # UpNext - Session State
-Updated: 2026-02-01 | Branch: master
+Updated: 2026-02-02 | Branch: master
 
-## Status: Rewatch Tracking Complete
+## Status: Share Profile Feature Implemented
 
 ### Completed This Session
-- **Fixed delete sync issues** from code review (`src/services/storage.ts`):
-  - Added `deleteWatchedEpisodesForShow()` - queues each episode for sync before delete
-  - Updated `deleteShow()` to call `deleteReactionsForShow()` - fixes orphaned reactions
-  - Reordered `deleteShow()` and `deleteMovie()`: delete children before parent
-  - Passed 2 rounds of Claude Web code review
-
-### Previous Session Work
-- **Supabase migration applied** - `014_add_watch_history_tables.sql` deployed via MCP
-  - `user_episode_watch_history` table created with RLS
-  - `user_movie_watch_history` table created with RLS
-  - All indexes and friend activity policies in place
-- **Code review fixes applied** (3 commits):
-  - Fixed payload field mismatch (`localId` → `id`) in sync.ts
-  - deleteShow/deleteMovie now use sync-aware methods
-  - Added `useSyncOptional()` for safe context access
-  - Activity feed merges legacy + history sources
-  - Added console.warn for debugging fallbacks
-
-### Commits This Session
-1. `33f7a83` - Add rewatch tracking for episodes and movies
-2. `ae40295` - Fix rewatch tracking issues from code review
-3. `a21a9cb` - Fix critical sync bug and improve delete handling
-4. `ed9a80b` - Fix delete sync issues: queue children before deleting parent
+- **Share Profile feature implemented** - Full implementation as per spec:
+  - Added `visibility_shows`, `visibility_activity`, `visibility_stats` columns to profiles table
+  - Created `ProfileVisibilitySheet` component for privacy settings
+  - Created `ProfileStats` component for showing total shows/movies/episodes
+  - Created `useProfileVisibility` hook
+  - Added share button and privacy button to ProfileScreen
+  - Added deep linking support with `upnext://profile/username` URL scheme
+  - Updated UserProfileScreen for visibility-aware rendering and username lookup
 
 ### Key Files Changed
-- `src/services/storage.ts` - Watch history tables, delete methods
-- `src/services/supabase/sync.ts` - Watch history sync handlers
-- `src/services/supabase/activity.ts` - Merged legacy + history sources
-- `src/services/supabase/watchHistory.ts` - New sync service
-- `src/contexts/SyncContext.tsx` - Added useSyncOptional()
-- `src/hooks/useShowData.ts` - Rewatch functions
-- `src/hooks/useMovieWatchHistory.ts` - New hook
-- `src/components/WatchHistorySheet.tsx` - New modal
-- `src/components/EpisodeRow.tsx` - Watch count badge + action menu
+- `supabase/migrations/015_add_profile_visibility.sql` - Applied via MCP
+- `src/types/index.ts` - Added ProfileVisibility, ProfileStats types
+- `src/services/supabase/follows.ts` - Added visibility methods, getUserStats, updated queries
+- `src/components/ProfileVisibilitySheet.tsx` - New privacy settings sheet
+- `src/components/ProfileStats.tsx` - New stats display component
+- `src/hooks/useProfileVisibility.ts` - New hook for visibility management
+- `src/navigation/linking.ts` - New deep link configuration
+- `src/navigation/AppNavigator.tsx` - Integrated deep linking
+- `src/screens/ProfileScreen.tsx` - Added share + privacy buttons
+- `src/screens/UserProfileScreen.tsx` - Visibility-aware rendering, username lookup
+- `app.json` - Added `scheme: "upnext"`
+
+### New Dependencies Added
+- `expo-linking` - For deep link URL handling
+
+### Previous Session Work
+- Rewatch tracking complete and reviewed
+- Delete sync issues fixed
+
+### Commits This Session
+- (pending) Share profile feature implementation
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -48,6 +45,7 @@ Updated: 2026-02-01 | Branch: master
 - **Profile** - Edit username, display name, bio
 - **Movies** - Full tracking with search, status, ratings
 - **Rewatch Tracking** - Full watch history for episodes and movies
+- **Share Profile** - Deep links, privacy controls, profile stats
 
 ## Pre-Launch Roadmap
 
@@ -56,7 +54,7 @@ Updated: 2026-02-01 | Branch: master
 |---|---------|------------|--------|
 | 1 | ~~Movie tracking~~ | Medium-High | DONE |
 | 2 | ~~Rewatch tracking~~ | Medium | DONE |
-| 3 | **Share profile** | Low | Not started |
+| 3 | ~~Share profile~~ | Low | DONE |
 | 4 | **Data export** | Low | Not started |
 
 ### Fast Follow (v1.1)
@@ -66,9 +64,9 @@ Updated: 2026-02-01 | Branch: master
 | 6 | **Watch stats** | Medium |
 
 ## Next Steps
-1. **Test rewatch flow end-to-end** - Verify UI works correctly on device
-2. **Share profile** - Next feature on roadmap
-3. **Data export** - Let users download their data
+1. **Test share profile on device** - Verify deep links and visibility controls work
+2. **Data export** - Last feature before launch
+3. Consider adding /review for Claude Web review
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81

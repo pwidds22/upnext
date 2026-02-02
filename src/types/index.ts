@@ -244,7 +244,7 @@ export type RootStackParamList = {
   Auth: undefined;
   Profile: undefined;
   UserSearch: undefined;
-  UserProfile: { userId: string };
+  UserProfile: { userId: string } | { username: string };
   Followers: { userId: string; username?: string };
   Following: { userId: string; username?: string };
 };
@@ -360,6 +360,20 @@ export interface UserFollowRow {
   created_at: string;
 }
 
+// Profile visibility settings (for share profile feature)
+export interface ProfileVisibility {
+  shows: boolean;
+  activity: boolean;
+  stats: boolean;
+}
+
+// Profile stats for display
+export interface ProfileStats {
+  totalShows: number;
+  totalMovies: number;
+  totalEpisodes: number;
+}
+
 // Profile row type (matches database)
 export interface ProfileRow {
   id: string;
@@ -368,6 +382,9 @@ export interface ProfileRow {
   avatar_url: string | null;
   bio: string | null;
   is_searchable: boolean;
+  visibility_shows: boolean;
+  visibility_activity: boolean;
+  visibility_stats: boolean;
 }
 
 // App-level user profile type
@@ -377,6 +394,7 @@ export interface UserProfile {
   displayName: string | null;
   avatarUrl: string | null;
   bio?: string | null;
+  visibility?: ProfileVisibility;
 }
 
 // User with follow status for lists

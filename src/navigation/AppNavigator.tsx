@@ -2,12 +2,13 @@ import React, { useState, useCallback } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RootStackParamList, MainTabParamList, AuthStackParamList } from '../types';
 import { COLORS } from '../utils/constants';
 import { useAuth } from '../contexts/AuthContext';
+import { linking } from './linking';
 
 // Screens
 import UpNextScreen from '../screens/UpNextScreen';
@@ -140,9 +141,18 @@ function MainTabs({ navigation }: { navigation: any }) {
   );
 }
 
+// Loading fallback for deep links
+function LinkingFallback() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+      <ActivityIndicator size="large" color={COLORS.primary} />
+    </View>
+  );
+}
+
 export default function AppNavigator() {
   return (
-    <NavigationContainer theme={DarkTheme}>
+    <NavigationContainer theme={DarkTheme} linking={linking} fallback={<LinkingFallback />}>
       <Stack.Navigator
         screenOptions={{
           headerStyle: {

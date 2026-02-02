@@ -7,6 +7,8 @@ import type {
   FollowCounts,
   FriendRating,
   ShowStatus,
+  ProfileVisibility,
+  ProfileStats,
 } from '../../types';
 
 // Public show summary for viewing other users' profiles
@@ -27,6 +29,11 @@ function profileFromRow(row: ProfileRow): UserProfile {
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     bio: row.bio,
+    visibility: {
+      shows: row.visibility_shows ?? true,
+      activity: row.visibility_activity ?? true,
+      stats: row.visibility_stats ?? true,
+    },
   };
 }
 
@@ -43,11 +50,11 @@ export const followsService = {
     return !data; // Available if no profile found
   },
 
-  // Get profile by username (for signin with username)
+  // Get profile by username (for signin with username and deep links)
   async getProfileByUsername(username: string): Promise<UserProfile | null> {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, avatar_url, bio, is_searchable')
+      .select('id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats')
       .eq('username', username.toLowerCase())
       .maybeSingle();
 
@@ -153,7 +160,7 @@ export const followsService = {
         `
         follower_id,
         profiles!user_follows_follower_id_fkey (
-          id, username, display_name, avatar_url, bio, is_searchable
+          id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats
         )
       `
       )
@@ -184,7 +191,7 @@ export const followsService = {
         `
         following_id,
         profiles!user_follows_following_id_fkey (
-          id, username, display_name, avatar_url, bio, is_searchable
+          id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats
         )
       `
       )
@@ -246,7 +253,7 @@ export const followsService = {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, avatar_url, bio, is_searchable')
+      .select('id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats')
       .or(`username.ilike.${searchPattern},display_name.ilike.${searchPattern}`)
       .eq('is_searchable', true)
       .neq('id', currentUserId) // Exclude self
@@ -265,7 +272,7 @@ export const followsService = {
   ): Promise<UserWithFollowStatus | null> {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, avatar_url, bio, is_searchable')
+      .select('id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats')
       .eq('id', userId)
       .maybeSingle();
 
@@ -304,7 +311,7 @@ export const followsService = {
         `
         user_id,
         profiles!user_shows_user_id_fkey (
-          id, username, display_name, avatar_url, bio, is_searchable
+          id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats
         )
       `
       )
@@ -335,7 +342,7 @@ export const followsService = {
         rating,
         user_id,
         profiles!user_ratings_user_id_fkey (
-          id, username, display_name, avatar_url, bio, is_searchable
+          id, username, display_name, avatar_url, bio, is_searchable, visibility_shows, visibility_activity, visibility_stats
         )
       `
       )
@@ -402,5 +409,54 @@ export const followsService = {
       review: row.review ?? undefined,
       updatedAt: row.updated_at,
     }));
+  },
+
+  // Update profile visibility settings
+  async updateVisibility(
+    userId: string,
+    visibility: ProfileVisibility
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        visibility_shows: visibility.shows,
+        visibility_activity: visibility.activity,
+        visibility_stats: visibility.stats,
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+  },
+
+  // Get user stats (total shows, movies, episodes watched)
+  async getUserStats(userId: string): Promise<ProfileStats> {
+    const [showsResult, moviesResult, episodesResult] = await Promise.all([
+      // Count TV shows
+      supabase
+        .from('user_shows')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('media_type', 'tv')
+        .is('deleted_at', null),
+      // Count movies
+      supabase
+        .from('user_shows')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('media_type', 'movie')
+        .is('deleted_at', null),
+      // Count watched episodes
+      supabase
+        .from('user_watched_episodes')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .is('deleted_at', null),
+    ]);
+
+    return {
+      totalShows: showsResult.count ?? 0,
+      totalMovies: moviesResult.count ?? 0,
+      totalEpisodes: episodesResult.count ?? 0,
+    };
   },
 };

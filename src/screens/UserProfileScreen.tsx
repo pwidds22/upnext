@@ -21,8 +21,9 @@ import { useFollowStatus, useFollowCounts } from '../hooks/useFollows';
 import FollowButton from '../components/FollowButton';
 import ShowPoster from '../components/ShowPoster';
 import StarRating from '../components/StarRating';
+import ProfileStats from '../components/ProfileStats';
 import { COLORS } from '../utils/constants';
-import type { RootStackParamList, UserWithFollowStatus, TrackedShow } from '../types';
+import type { RootStackParamList, UserWithFollowStatus, TrackedShow, ProfileStats as ProfileStatsType } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRouteProp = RouteProp<RootStackParamList, 'UserProfile'>;
@@ -43,8 +44,12 @@ interface RatingWithShowInfo {
 export default function UserProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScreenRouteProp>();
-  const { userId } = route.params;
   const { user: currentUser } = useAuth();
+
+  // Support both userId and username params (for deep links)
+  const params = route.params as { userId?: string; username?: string };
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(params.userId || null);
+  const [notFound, setNotFound] = useState(false);
 
   const [profile, setProfile] = useState<UserWithFollowStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,33 +58,74 @@ export default function UserProfileScreen() {
   const [showsLoading, setShowsLoading] = useState(false);
   const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
+  const [stats, setStats] = useState<ProfileStatsType | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
-  const { isFollowing, loading: followLoading, toggleFollow } = useFollowStatus(userId);
-  const { followers, following, loading: countsLoading, refresh: refreshCounts } = useFollowCounts(userId);
+  const { isFollowing, loading: followLoading, toggleFollow } = useFollowStatus(resolvedUserId || '');
+  const { followers, following, loading: countsLoading, refresh: refreshCounts } = useFollowCounts(resolvedUserId || '');
 
-  const isCurrentUser = currentUser?.id === userId;
+  const isCurrentUser = currentUser?.id === resolvedUserId;
+
+  // Resolve username to userId if needed (for deep links)
+  useEffect(() => {
+    async function resolveUsername() {
+      if (params.userId) {
+        setResolvedUserId(params.userId);
+        return;
+      }
+
+      if (params.username) {
+        try {
+          const userProfile = await followsService.getProfileByUsername(params.username);
+          if (userProfile) {
+            setResolvedUserId(userProfile.id);
+          } else {
+            setNotFound(true);
+            setLoading(false);
+          }
+        } catch (e) {
+          console.error('Failed to resolve username:', e);
+          setNotFound(true);
+          setLoading(false);
+        }
+      }
+    }
+    resolveUsername();
+  }, [params.userId, params.username]);
 
   // Load user profile
   useEffect(() => {
+    if (!resolvedUserId) return;
+
     async function loadProfile() {
       try {
-        const data = await followsService.getUserProfile(userId, currentUser?.id);
-        setProfile(data);
+        const data = await followsService.getUserProfile(resolvedUserId!, currentUser?.id);
+        if (data) {
+          setProfile(data);
+        } else {
+          setNotFound(true);
+        }
       } catch (e) {
         console.error('Failed to load profile:', e);
+        setNotFound(true);
       } finally {
         setLoading(false);
       }
     }
     loadProfile();
-  }, [userId, currentUser?.id]);
+  }, [resolvedUserId, currentUser?.id]);
 
-  // Load user's public shows
+  // Load user's public shows (only if visibility allows)
   useEffect(() => {
+    if (!resolvedUserId || (profile && profile.visibility?.shows === false)) {
+      setShowsLoading(false);
+      return;
+    }
+
     async function loadShows() {
       setShowsLoading(true);
       try {
-        const shows = await followsService.getUserPublicShows(userId);
+        const shows = await followsService.getUserPublicShows(resolvedUserId!);
         setPublicShows(shows);
       } catch (e) {
         console.error('Failed to load public shows:', e);
@@ -88,14 +134,16 @@ export default function UserProfileScreen() {
       }
     }
     loadShows();
-  }, [userId]);
+  }, [resolvedUserId, profile?.visibility?.shows]);
 
   // Load user's public ratings
   useEffect(() => {
+    if (!resolvedUserId) return;
+
     async function loadRatings() {
       setRatingsLoading(true);
       try {
-        const allRatings = await followsService.getUserPublicRatings(userId);
+        const allRatings = await followsService.getUserPublicRatings(resolvedUserId!);
 
         // Enrich with show info from local storage
         const enrichedRatings: RatingWithShowInfo[] = await Promise.all(
@@ -122,7 +170,28 @@ export default function UserProfileScreen() {
       }
     }
     loadRatings();
-  }, [userId]);
+  }, [resolvedUserId]);
+
+  // Load user stats (only if visibility allows)
+  useEffect(() => {
+    if (!resolvedUserId || (profile && profile.visibility?.stats === false)) {
+      setStatsLoading(false);
+      return;
+    }
+
+    async function loadStats() {
+      setStatsLoading(true);
+      try {
+        const userStats = await followsService.getUserStats(resolvedUserId!);
+        setStats(userStats);
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      } finally {
+        setStatsLoading(false);
+      }
+    }
+    loadStats();
+  }, [resolvedUserId, profile?.visibility?.stats]);
 
   const handleFollowToggle = useCallback(async () => {
     await toggleFollow();
@@ -177,14 +246,40 @@ export default function UserProfileScreen() {
     );
   }
 
-  if (!profile) {
+  // Require authentication to view profiles (per spec: "registered users only")
+  if (!currentUser) {
     return (
       <View style={styles.loadingContainer}>
-        <Ionicons name="person-outline" size={48} color={COLORS.textSecondary} />
-        <Text style={styles.notFoundText}>User not found</Text>
+        <Ionicons name="lock-closed-outline" size={48} color={COLORS.textSecondary} />
+        <Text style={styles.notFoundText}>Sign in to view profiles</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
+
+  if (notFound || !profile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="person-outline" size={48} color={COLORS.textSecondary} />
+        <Text style={styles.notFoundText}>Profile not found</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Determine what's visible based on profile visibility settings
+  const showShowsSection = profile.visibility?.shows !== false;
+  const showStatsSection = profile.visibility?.stats !== false;
 
   const displayName = profile.displayName || profile.username || 'User';
   const initial = displayName[0].toUpperCase();
@@ -214,7 +309,7 @@ export default function UserProfileScreen() {
             style={styles.statItem}
             onPress={() =>
               navigation.navigate('Followers', {
-                userId,
+                userId: resolvedUserId!,
                 username: profile.username ?? undefined,
               })
             }
@@ -229,7 +324,7 @@ export default function UserProfileScreen() {
             style={styles.statItem}
             onPress={() =>
               navigation.navigate('Following', {
-                userId,
+                userId: resolvedUserId!,
                 username: profile.username ?? undefined,
               })
             }
@@ -258,6 +353,19 @@ export default function UserProfileScreen() {
         )}
       </View>
 
+      {/* Profile Stats */}
+      {showStatsSection && (
+        <ProfileStats stats={stats} loading={statsLoading} />
+      )}
+
+      {/* Tabs - only show if shows section is visible */}
+      {!showShowsSection ? (
+        <View style={styles.hiddenSection}>
+          <Ionicons name="eye-off-outline" size={24} color={COLORS.textTertiary} />
+          <Text style={styles.hiddenText}>Content is hidden by user</Text>
+        </View>
+      ) : (
+        <>
       {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
@@ -365,6 +473,8 @@ export default function UserProfileScreen() {
           )}
         </View>
       )}
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -384,6 +494,31 @@ const styles = StyleSheet.create({
   notFoundText: {
     color: COLORS.textSecondary,
     fontSize: 16,
+  },
+  backButton: {
+    marginTop: 16,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  hiddenSection: {
+    alignItems: 'center',
+    padding: 32,
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    gap: 12,
+  },
+  hiddenText: {
+    color: COLORS.textTertiary,
+    fontSize: 14,
   },
   header: {
     alignItems: 'center',

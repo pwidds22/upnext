@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -21,10 +22,12 @@ import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
 import { storageService } from '../services/storage';
 import { useFollowCounts } from '../hooks/useFollows';
+import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { COLORS } from '../utils/constants';
 import { RootStackParamList, TrackedShow, UserProfile } from '../types';
 import StarRating, { formatRating } from '../components/StarRating';
 import ShowPoster from '../components/ShowPoster';
+import ProfileVisibilitySheet from '../components/ProfileVisibilitySheet';
 import SignInScreen from './auth/SignInScreen';
 import SignUpScreen from './auth/SignUpScreen';
 
@@ -316,6 +319,10 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [visibilitySheetVisible, setVisibilitySheetVisible] = useState(false);
+
+  // Profile visibility settings
+  const { visibility, updateVisibility } = useProfileVisibility();
 
   // Follow counts for signed-in user
   const { followers, following, loading: followCountsLoading } = useFollowCounts(
@@ -416,6 +423,25 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleShare = async () => {
+    if (!profile?.username) {
+      Alert.alert(
+        'Set Username',
+        'Please set a username in Edit Profile before sharing your profile.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `Check out my TV tracking profile on UpNext! upnext://profile/${profile.username}`,
+      });
+    } catch (e) {
+      console.error('Failed to share profile:', e);
+    }
+  };
+
   // Show auth screen if user is not signed in and wants to sign in
   if (authScreen === 'signIn') {
     return (
@@ -461,6 +487,25 @@ export default function ProfileScreen() {
           <View style={styles.syncBadge}>
             <Ionicons name="cloud-done" size={14} color={COLORS.primary} />
             <Text style={styles.syncBadgeText}>Synced</Text>
+          </View>
+
+          {/* Profile Actions */}
+          <View style={styles.profileActions}>
+            <TouchableOpacity
+              style={styles.profileActionButton}
+              onPress={handleShare}
+            >
+              <Ionicons name="share-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.profileActionText}>Share</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.profileActionButton}
+              onPress={() => setVisibilitySheetVisible(true)}
+            >
+              <Ionicons name="eye-outline" size={20} color={COLORS.primary} />
+              <Text style={styles.profileActionText}>Privacy</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Follow Stats */}
@@ -602,6 +647,13 @@ export default function ProfileScreen() {
             refreshProfile();
           }}
         />
+
+        <ProfileVisibilitySheet
+          visible={visibilitySheetVisible}
+          onClose={() => setVisibilitySheetVisible(false)}
+          visibility={visibility}
+          onSave={updateVisibility}
+        />
       </ScrollView>
     );
   }
@@ -710,6 +762,25 @@ const styles = StyleSheet.create({
   syncBadgeText: {
     color: COLORS.primary,
     fontSize: 13,
+    fontWeight: '500',
+  },
+  profileActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  profileActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: `${COLORS.primary}15`,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  profileActionText: {
+    color: COLORS.primary,
+    fontSize: 14,
     fontWeight: '500',
   },
   statsRow: {
