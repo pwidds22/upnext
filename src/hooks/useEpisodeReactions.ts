@@ -7,17 +7,10 @@ export function useEpisodeReactions(showTmdbId: number) {
   const [reactions, setReactions] = useState<Map<string, EpisodeReactionType>>(new Map());
   const [loading, setLoading] = useState(true);
 
-  // Sync integration - wrapped in try/catch in case SyncProvider is not available
-  let sync: (() => Promise<void>) | undefined;
-  let isOnline = true;
-
-  try {
-    const syncContext = useSync();
-    sync = syncContext.sync;
-    isOnline = syncContext.isOnline;
-  } catch {
-    // SyncProvider not available, sync features disabled
-  }
+  // Sync integration - useSync returns undefined if SyncProvider is not available
+  const syncContext = useSync();
+  const sync = syncContext?.sync;
+  const isOnline = syncContext?.isOnline ?? true;
 
   const loadReactions = useCallback(async () => {
     try {

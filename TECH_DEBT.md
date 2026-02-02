@@ -11,9 +11,9 @@ Last scanned: 2026-02-02
 
 ## Critical (Fix Before Launch)
 
-- [ ] **Conditional Hook Call** - `useEpisodeReactions.ts:14-20` - `useSync()` called inside try/catch violates React hooks rules
-- [ ] **Stale Closure** - `useEpisodeReactions.ts:41-45` - `sync` and `isOnline` assigned at module scope, won't update
-- [ ] **ON CONFLICT Anti-Pattern** - `storage.ts:757-761` - Uses `ON CONFLICT` for episode reactions - should use check-then-insert
+- [x] **Conditional Hook Call** - `useEpisodeReactions.ts:14-20` - FIXED: Now uses `useSyncOptional` unconditionally
+- [x] **Stale Closure** - `useEpisodeReactions.ts:41-45` - FIXED: `sync` and `isOnline` now derived from hook result
+- [x] **ON CONFLICT Anti-Pattern** - `storage.ts:757-761` - FIXED: Now uses check-then-insert pattern
 
 ---
 
@@ -88,6 +88,12 @@ When fixing these, add these patterns to CLAUDE.md:
 ---
 
 ## Session Notes
+
+### 2026-02-02 (Continued)
+- Fixed all 3 critical issues:
+  - `useEpisodeReactions.ts` - removed conditional hook call, now uses `useSyncOptional`
+  - `useEpisodeReactions.ts` - fixed stale closure by deriving values from hook result
+  - `storage.ts` - refactored `setReaction()` to check-then-insert pattern
 
 ### 2026-02-02
 - Initial scan completed

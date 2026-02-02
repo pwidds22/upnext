@@ -1,9 +1,15 @@
 # UpNext - Session State
 Updated: 2026-02-02 | Branch: master
 
-## Status: Share Profile Complete with Review Fixes
+## Status: Critical Tech Debt Fixed
 
 ### Completed This Session
+- **Fixed 3 Critical Tech Debt Issues:**
+  - `useEpisodeReactions.ts` - Removed conditional hook call (useSync inside try/catch)
+  - `useEpisodeReactions.ts` - Fixed stale closure (sync/isOnline now from hook result)
+  - `storage.ts` - Refactored setReaction() from ON CONFLICT to check-then-insert
+
+### Previous Session Work
 - **Share Profile feature implemented** - Full implementation as per spec:
   - Added `visibility_shows`, `visibility_activity`, `visibility_stats` columns to profiles table
   - Created `ProfileVisibilitySheet` component for privacy settings
@@ -20,7 +26,12 @@ Updated: 2026-02-02 | Branch: master
   - Added user feedback Alert when share fails
   - Handle empty/whitespace usernames in deep link parsing
 
-### Key Files Changed
+### Key Files Changed (This Session)
+- `src/hooks/useSync.ts` - Now uses `useSyncOptional`, returns undefined if no provider
+- `src/hooks/useEpisodeReactions.ts` - Removed try/catch, uses optional chaining
+- `src/services/storage.ts` - Refactored setReaction() to check-then-insert
+
+### Key Files Changed (Previous Session)
 - `supabase/migrations/015_add_profile_visibility.sql` - Applied via MCP
 - `src/types/index.ts` - Added ProfileVisibility, ProfileStats types
 - `src/services/supabase/follows.ts` - Added visibility methods, getUserStats, updated queries
@@ -74,7 +85,7 @@ Updated: 2026-02-02 | Branch: master
 ## Next Steps
 1. **Test share profile on device** - Verify deep links and visibility controls work
 2. **Data export** - Last feature before launch
-3. **Tech debt** - See `TECH_DEBT.md` for prioritized list (3 critical, 9 high priority)
+3. **High priority tech debt** - See `TECH_DEBT.md` (critical issues fixed, 9 high priority remain)
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81

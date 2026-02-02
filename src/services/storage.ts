@@ -753,37 +753,51 @@ class StorageService {
     const id = `${showTmdbId}-${seasonNumber}-${episodeNumber}-reaction`;
     const now = new Date().toISOString();
 
-    await this.db!.runAsync(
-      `INSERT INTO episode_reactions
-       (id, show_tmdb_id, season_number, episode_number, reaction, created_at, updated_at, sync_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(show_tmdb_id, season_number, episode_number)
-       DO UPDATE SET reaction = ?, updated_at = ?, sync_status = ?`,
-      [
+    // Check if reaction already exists
+    const existing = await this.db!.getFirstAsync<{ id: string }>(
+      `SELECT id FROM episode_reactions
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?`,
+      [showTmdbId, seasonNumber, episodeNumber]
+    );
+
+    if (existing) {
+      // UPDATE existing reaction
+      await this.db!.runAsync(
+        `UPDATE episode_reactions
+         SET reaction = ?, updated_at = ?, sync_status = ?
+         WHERE id = ?`,
+        [reaction, now, DEFAULT_SYNC_STATUS, existing.id]
+      );
+
+      // Queue for sync as update
+      await this.addToSyncQueue('episode_reactions', existing.id, 'update', {
+        id: existing.id,
+        showTmdbId,
+        seasonNumber,
+        episodeNumber,
+        reaction,
+        updatedAt: now,
+      });
+    } else {
+      // INSERT new reaction
+      await this.db!.runAsync(
+        `INSERT INTO episode_reactions
+         (id, show_tmdb_id, season_number, episode_number, reaction, created_at, updated_at, sync_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, showTmdbId, seasonNumber, episodeNumber, reaction, now, now, DEFAULT_SYNC_STATUS]
+      );
+
+      // Queue for sync as create
+      await this.addToSyncQueue('episode_reactions', id, 'create', {
         id,
         showTmdbId,
         seasonNumber,
         episodeNumber,
         reaction,
-        now,
-        now,
-        DEFAULT_SYNC_STATUS,
-        reaction,
-        now,
-        DEFAULT_SYNC_STATUS,
-      ]
-    );
-
-    // Queue for sync
-    await this.addToSyncQueue('episode_reactions', id, 'create', {
-      id,
-      showTmdbId,
-      seasonNumber,
-      episodeNumber,
-      reaction,
-      createdAt: now,
-      updatedAt: now,
-    });
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
   }
 
   async removeReaction(

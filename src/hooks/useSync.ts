@@ -1,7 +1,16 @@
-import { useSyncContext } from '../contexts/SyncContext';
+import { useSyncOptional } from '../contexts/SyncContext';
 
+/**
+ * Hook for accessing sync state and actions.
+ * Returns undefined if SyncProvider is not available.
+ */
 export function useSync() {
-  const context = useSyncContext();
+  const context = useSyncOptional();
+
+  // Return undefined if no SyncProvider - caller must handle this
+  if (!context) {
+    return undefined;
+  }
 
   return {
     // State
