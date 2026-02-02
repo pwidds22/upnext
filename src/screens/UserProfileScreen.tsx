@@ -115,9 +115,14 @@ export default function UserProfileScreen() {
     loadProfile();
   }, [resolvedUserId, currentUser?.id]);
 
-  // Load user's public shows (only if visibility allows)
+  // Load user's public shows (only if visibility allows or viewing own profile)
   useEffect(() => {
-    if (!resolvedUserId || (profile && profile.visibility?.shows === false)) {
+    // Wait for profile to load before checking visibility
+    if (!resolvedUserId || !profile) {
+      return;
+    }
+    // Skip if visibility is off (unless viewing own profile)
+    if (profile.visibility?.shows === false && !isCurrentUser) {
       setShowsLoading(false);
       return;
     }
@@ -134,11 +139,19 @@ export default function UserProfileScreen() {
       }
     }
     loadShows();
-  }, [resolvedUserId, profile?.visibility?.shows]);
+  }, [resolvedUserId, profile, isCurrentUser]);
 
-  // Load user's public ratings
+  // Load user's public ratings (only if shows visibility allows or viewing own profile)
   useEffect(() => {
-    if (!resolvedUserId) return;
+    // Wait for profile to load before checking visibility
+    if (!resolvedUserId || !profile) {
+      return;
+    }
+    // Skip if shows visibility is off (unless viewing own profile) - ratings are part of shows section
+    if (profile.visibility?.shows === false && !isCurrentUser) {
+      setRatingsLoading(false);
+      return;
+    }
 
     async function loadRatings() {
       setRatingsLoading(true);
@@ -170,11 +183,16 @@ export default function UserProfileScreen() {
       }
     }
     loadRatings();
-  }, [resolvedUserId]);
+  }, [resolvedUserId, profile, isCurrentUser]);
 
-  // Load user stats (only if visibility allows)
+  // Load user stats (only if visibility allows or viewing own profile)
   useEffect(() => {
-    if (!resolvedUserId || (profile && profile.visibility?.stats === false)) {
+    // Wait for profile to load before checking visibility
+    if (!resolvedUserId || !profile) {
+      return;
+    }
+    // Skip if stats visibility is off (unless viewing own profile)
+    if (profile.visibility?.stats === false && !isCurrentUser) {
       setStatsLoading(false);
       return;
     }
@@ -191,7 +209,7 @@ export default function UserProfileScreen() {
       }
     }
     loadStats();
-  }, [resolvedUserId, profile?.visibility?.stats]);
+  }, [resolvedUserId, profile, isCurrentUser]);
 
   const handleFollowToggle = useCallback(async () => {
     await toggleFollow();
@@ -278,8 +296,9 @@ export default function UserProfileScreen() {
   }
 
   // Determine what's visible based on profile visibility settings
-  const showShowsSection = profile.visibility?.shows !== false;
-  const showStatsSection = profile.visibility?.stats !== false;
+  // Always show full content for own profile, regardless of visibility settings
+  const showShowsSection = isCurrentUser || profile.visibility?.shows !== false;
+  const showStatsSection = isCurrentUser || profile.visibility?.stats !== false;
 
   const displayName = profile.displayName || profile.username || 'User';
   const initial = displayName[0].toUpperCase();

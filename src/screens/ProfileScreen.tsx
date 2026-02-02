@@ -439,6 +439,11 @@ export default function ProfileScreen() {
       });
     } catch (e) {
       console.error('Failed to share profile:', e);
+      Alert.alert(
+        'Share Failed',
+        'Unable to share your profile. Please try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 

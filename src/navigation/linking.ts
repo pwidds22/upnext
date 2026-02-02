@@ -19,7 +19,11 @@ export const linking: LinkingOptions<RootStackParamList> = {
     // Check for profile/username pattern
     const profileMatch = path.match(/^profile\/([^\/\?]+)/);
     if (profileMatch) {
-      const username = decodeURIComponent(profileMatch[1]);
+      const username = decodeURIComponent(profileMatch[1]).trim();
+      // Ignore empty or whitespace-only usernames
+      if (!username) {
+        return getStateFromPath(path, options);
+      }
       return {
         routes: [
           { name: 'Main' },
