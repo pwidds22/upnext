@@ -131,6 +131,58 @@ This project uses two Claudes working together:
 - After fixing a tricky bug (sanity check)
 - Before merging to main (final review)
 
+## Power User Workflow Tips
+
+### Slash Commands Quick Reference
+| Command | When to Use |
+|---------|-------------|
+| `/interview [feature]` | BEFORE coding - creates detailed spec via Q&A |
+| `/plan` | After spec, to design implementation approach |
+| `/fix [bug]` | Paste error/bug, Claude fixes autonomously |
+| `/challenge` | After changes - Claude grills you on your code |
+| `/elegant [file]` | After mediocre fix - refine to best solution |
+| `/techdebt` | End of session - find duplicates and cleanup |
+| `/review` | Hand off to Claude Web for external review |
+
+### Recommended Workflow
+1. **Spec first**: `/interview share-profile` → Creates `specs/share-profile.md`
+2. **Plan**: Review spec, run `/plan` to design approach
+3. **Implement**: Code the feature
+4. **Challenge**: `/challenge` to stress-test your changes
+5. **Refine**: If needed, `/elegant` to improve the solution
+6. **Review**: `/review` for Claude Web external review
+7. **Cleanup**: `/techdebt` at end of session
+
+### Subagents - When to Use Them
+Append "use subagents" or "use 5 subagents" to requests when:
+- Exploring unfamiliar parts of the codebase
+- Searching for patterns across many files
+- Running multiple independent checks in parallel
+- The task benefits from parallel processing
+
+Example prompts:
+- "Find all places where we handle sync errors, use subagents"
+- "Check all screens for missing loading states, use 3 subagents"
+- "Explore how the rating system works, use subagents"
+
+### Prompting Patterns
+**Challenge Claude:**
+- "Grill me on these changes and don't approve until I pass your test"
+- "Prove to me this works - diff behavior between main and this branch"
+
+**Refine Solutions:**
+- "Knowing everything you know now, scrap this and implement the elegant solution"
+
+**Detailed Specs:**
+- The more specific you are, the better the output
+- Use `/interview` to create specs before handing off work
+
+### Terminal Setup Tips
+- **Voice dictation**: Press `fn` twice on macOS - you speak 3x faster than you type
+- **Status line**: Run `/statusline` to always show context usage + git branch
+- **Multiple terminals**: One tab per task/worktree, color-code them
+- **Ghostty**: Recommended terminal for best Unicode and color support
+
 ## Known Issues
 - API key hardcoded in `src/utils/constants.ts` (fix before production)
 - No automated tests yet (add before launch)
