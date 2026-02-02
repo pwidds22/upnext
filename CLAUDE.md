@@ -110,7 +110,9 @@ try {
 ## Session Workflow
 - Read `_SESSION.md` for current state and in-progress work
 - Read `_HANDOFF.md` for full project context
+- Check `TECH_DEBT.md` for known issues to fix when convenient
 - Update `_SESSION.md` with file paths when making changes
+- Run `/techdebt` at end of sessions to update debt tracker
 - Use semantic commit messages
 
 ## Multi-Claude Feedback Loop

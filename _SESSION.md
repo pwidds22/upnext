@@ -1,7 +1,7 @@
 # UpNext - Session State
 Updated: 2026-02-02 | Branch: master
 
-## Status: Share Profile Feature Implemented
+## Status: Share Profile Complete with Review Fixes
 
 ### Completed This Session
 - **Share Profile feature implemented** - Full implementation as per spec:
@@ -12,6 +12,13 @@ Updated: 2026-02-02 | Branch: master
   - Added share button and privacy button to ProfileScreen
   - Added deep linking support with `upnext://profile/username` URL scheme
   - Updated UserProfileScreen for visibility-aware rendering and username lookup
+
+- **Claude Web review feedback fixed:**
+  - Fixed race condition: wait for profile to load before checking visibility
+  - Fixed own profile via deep link: always show full content regardless of visibility settings
+  - Added visibility check to ratings loading (respects shows visibility)
+  - Added user feedback Alert when share fails
+  - Handle empty/whitespace usernames in deep link parsing
 
 ### Key Files Changed
 - `supabase/migrations/015_add_profile_visibility.sql` - Applied via MCP
@@ -34,7 +41,8 @@ Updated: 2026-02-02 | Branch: master
 - Delete sync issues fixed
 
 ### Commits This Session
-- (pending) Share profile feature implementation
+- `0cf5be1` Add share profile feature with deep links and privacy controls
+- `7101683` Fix share profile review feedback: visibility and error handling
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -66,7 +74,7 @@ Updated: 2026-02-02 | Branch: master
 ## Next Steps
 1. **Test share profile on device** - Verify deep links and visibility controls work
 2. **Data export** - Last feature before launch
-3. Consider adding /review for Claude Web review
+3. **Tech debt** - See `TECH_DEBT.md` for prioritized list (3 critical, 9 high priority)
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
@@ -75,3 +83,4 @@ Updated: 2026-02-02 | Branch: master
 
 ## Known Issues
 - API key hardcoded (move to env vars before production)
+- See `TECH_DEBT.md` for full technical debt tracking
