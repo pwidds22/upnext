@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'available' | 'taken'>('idle');
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check username availability with debounce
   const checkUsername = useCallback(async (value: string) => {
@@ -54,10 +55,14 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
       setUsername(cleaned);
       setUsernameStatus('idle');
 
+      // Clear previous debounce timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
       // Debounce the availability check
       if (cleaned.length >= USERNAME_MIN_LENGTH) {
-        const timer = setTimeout(() => checkUsername(cleaned), 500);
-        return () => clearTimeout(timer);
+        debounceTimerRef.current = setTimeout(() => checkUsername(cleaned), 500);
       }
     },
     [checkUsername]

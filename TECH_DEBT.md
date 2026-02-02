@@ -53,7 +53,7 @@ Last scanned: 2026-02-02
 - [x] **Hardcoded Colors** - FIXED: ShowCard/MovieCard now use MediaCard which uses COLORS constants
 
 ### Hook Issues
-- [ ] **Missing Cleanup** - `ProfileScreen.tsx:135-137`, `SignUpScreen.tsx:85-86` - debounce timeout cleanup inside conditional
+- [x] **Missing Cleanup** - FIXED: Added debounceTimerRef in ProfileScreen and SignUpScreen
 - [ ] **Missing Dependency** - `useActivityFeed.ts:60` - `loadMore` depends on `activities` state
 
 ### Cleanup

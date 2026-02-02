@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -57,6 +57,7 @@ function EditProfileModal({
     'idle' | 'available' | 'taken' | 'unchanged'
   >('idle');
   const [error, setError] = useState<string | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize form when modal opens
   useEffect(() => {
@@ -113,10 +114,14 @@ function EditProfileModal({
 
       setUsernameStatus('idle');
 
+      // Clear previous debounce timer
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
       // Debounce the availability check
       if (cleaned.length >= USERNAME_MIN_LENGTH) {
-        const timer = setTimeout(() => checkAvailability(cleaned), 500);
-        return () => clearTimeout(timer);
+        debounceTimerRef.current = setTimeout(() => checkAvailability(cleaned), 500);
       }
     },
     [currentProfile?.username, checkAvailability]
