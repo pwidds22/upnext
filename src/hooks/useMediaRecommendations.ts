@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 // Simple in-memory cache with TTL
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -38,13 +38,36 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
   const cacheRef = useRef<Record<string, CacheEntry<TMedia>>>({});
   const cache = cacheRef.current;
 
-  const [trending, setTrending] = useState<TMedia[]>([]);
-  const [forYou, setForYou] = useState<TMedia[]>([]);
-  const [topRated, setTopRated] = useState<TMedia[]>([]);
+  // Store raw (unfiltered) data - filtering handled by useMemo
+  const [rawTrending, setRawTrending] = useState<TMedia[]>([]);
+  const [rawForYou, setRawForYou] = useState<TMedia[]>([]);
+  const [rawTopRated, setRawTopRated] = useState<TMedia[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
-  const isDismissingRef = useRef(false);
+
+  // Derive filtered data reactively when exclusion sets change
+  const { trending, forYou, topRated } = useMemo(() => {
+    const usedIds = new Set<number>([...trackedIds, ...dismissedIds]);
+
+    const filteredTrending = rawTrending
+      .filter((item) => !usedIds.has(item.id))
+      .slice(0, MAX_ITEMS);
+
+    filteredTrending.forEach((item) => usedIds.add(item.id));
+
+    const filteredForYou = rawForYou
+      .filter((item) => !usedIds.has(item.id))
+      .slice(0, MAX_ITEMS);
+
+    filteredForYou.forEach((item) => usedIds.add(item.id));
+
+    const filteredTopRated = rawTopRated
+      .filter((item) => !usedIds.has(item.id))
+      .slice(0, MAX_ITEMS);
+
+    return { trending: filteredTrending, forYou: filteredForYou, topRated: filteredTopRated };
+  }, [rawTrending, rawForYou, rawTopRated, trackedIds, dismissedIds]);
 
   const isCacheValid = useCallback((key: string): boolean => {
     const entry = cache[key];
@@ -61,7 +84,7 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
     loadDismissed();
   }, [config]);
 
-  const loadRecommendations = useCallback(async (excludeIds: Set<number>, dismissed: Set<number>) => {
+  const loadRecommendations = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -88,7 +111,7 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
         cachedTopRated ?? config.fetchTopRated(),
       ]);
 
-      // Update cache with raw data (before filtering)
+      // Update cache with raw data
       if (!cachedTrending) {
         cache[trendingKey] = { data: trendingData, timestamp: Date.now() };
       }
@@ -99,33 +122,10 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
         cache[topRatedKey] = { data: topRatedData, timestamp: Date.now() };
       }
 
-      // Create a set to track IDs we've already used (for deduplication)
-      const usedIds = new Set<number>([...excludeIds, ...dismissed]);
-
-      // Filter trending first (highest priority)
-      const filteredTrending = trendingData
-        .filter((item) => !usedIds.has(item.id))
-        .slice(0, MAX_ITEMS);
-
-      // Add trending IDs to usedIds
-      filteredTrending.forEach((item) => usedIds.add(item.id));
-
-      // Filter forYou, excluding trending items
-      const filteredForYou = forYouData
-        .filter((item) => !usedIds.has(item.id))
-        .slice(0, MAX_ITEMS);
-
-      // Add forYou IDs to usedIds
-      filteredForYou.forEach((item) => usedIds.add(item.id));
-
-      // Filter topRated, excluding trending and forYou items
-      const filteredTopRated = topRatedData
-        .filter((item) => !usedIds.has(item.id))
-        .slice(0, MAX_ITEMS);
-
-      setTrending(filteredTrending);
-      setForYou(filteredForYou);
-      setTopRated(filteredTopRated);
+      // Set raw data - filtering handled by useMemo
+      setRawTrending(trendingData);
+      setRawForYou(forYouData);
+      setRawTopRated(topRatedData);
     } catch (e) {
       console.error(`Failed to load ${config.cacheKeyPrefix} recommendations:`, e);
       setError(e instanceof Error ? e.message : 'Failed to load recommendations');
@@ -135,25 +135,18 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
   }, [config, cache, isCacheValid]);
 
   // Dismiss an item from recommendations
+  // Only update dismissedIds - useMemo will re-filter from raw data,
+  // causing the 11th item to appear (backfill effect)
   const dismiss = useCallback(async (tmdbId: number) => {
-    // Mark that we're dismissing to prevent unnecessary reload
-    isDismissingRef.current = true;
     await config.dismissItem(tmdbId);
     setDismissedIds((prev) => new Set([...prev, tmdbId]));
-    // Remove from current lists immediately for responsive UI
-    setTrending((prev) => prev.filter((item) => item.id !== tmdbId));
-    setForYou((prev) => prev.filter((item) => item.id !== tmdbId));
-    setTopRated((prev) => prev.filter((item) => item.id !== tmdbId));
-    // Reset flag after state updates
-    setTimeout(() => { isDismissingRef.current = false; }, 0);
   }, [config]);
 
-  // Load recommendations when trackedIds or dismissedIds changes
-  // Skip reload if we just dismissed (UI already updated, avoids scroll-to-top)
+  // Load recommendations on mount
+  // Note: trackedIds filtering is handled reactively by useMemo
   useEffect(() => {
-    if (isDismissingRef.current) return;
-    loadRecommendations(trackedIds, dismissedIds);
-  }, [trackedIds, dismissedIds, loadRecommendations]);
+    loadRecommendations();
+  }, [loadRecommendations]);
 
   return {
     trending,
@@ -161,7 +154,7 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
     topRated,
     loading,
     error,
-    refresh: () => loadRecommendations(trackedIds, dismissedIds),
+    refresh: loadRecommendations,
     dismiss,
   };
 }

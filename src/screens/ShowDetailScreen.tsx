@@ -96,11 +96,20 @@ export default function ShowDetailScreen() {
     pendingAutoMarkRef.current = false;
   }, [show.tmdbId]);
 
-  // Auto-mark effect - runs when status is 'completed' AND seasons are loaded
+  // Auto-mark effect - runs when:
+  // 1. Status was changed to 'completed' (pendingAutoMarkRef is true), OR
+  // 2. Show was added as 'completed' (status is completed AND no episodes watched yet)
   useEffect(() => {
     const performAutoMark = async () => {
+      // Check if we should auto-mark:
+      // - pendingAutoMarkRef: status was just changed to completed
+      // - OR: show is completed with 0 watched episodes (newly added as completed)
+      const shouldAutoMark =
+        pendingAutoMarkRef.current ||
+        (currentStatus === 'completed' && watchedCount === 0);
+
       if (
-        pendingAutoMarkRef.current &&
+        shouldAutoMark &&
         seasons.length > 0 &&
         !hasAutoMarkedRef.current
       ) {
@@ -132,7 +141,7 @@ export default function ShowDetailScreen() {
     };
 
     performAutoMark();
-  }, [seasons, markSeasonWatched]);
+  }, [seasons, markSeasonWatched, currentStatus, watchedCount]);
 
   // Calculate which season to expand by default (newest with unwatched aired episodes)
   const getDefaultExpandedSeason = useCallback((): number => {

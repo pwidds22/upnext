@@ -297,31 +297,46 @@ class StorageService {
   async addShow(show: TrackedShow): Promise<void> {
     if (!this.db) await this.init();
 
+    // Helper to perform the update
+    const doUpdate = async () => {
+      await this.db!.runAsync(
+        `UPDATE tracked_shows SET
+           title = ?, poster_path = ?, status = ?, total_seasons = ?, total_episodes = ?,
+           aired_episodes = ?, streaming_services = ?, sync_status = ?, media_type = 'tv'
+         WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)`,
+        [
+          show.title,
+          show.posterPath,
+          show.status,
+          show.totalSeasons,
+          show.totalEpisodes,
+          show.airedEpisodes ?? null,
+          JSON.stringify(show.streamingServices),
+          DEFAULT_SYNC_STATUS,
+          show.tmdbId,
+        ]
+      );
+    };
+
     // Use transaction for atomic check-then-insert/update to prevent race conditions
     await this.db!.withTransactionAsync(async () => {
-      const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
-        "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)",
+      // Check for ANY existing row with this tmdb_id (regardless of media_type)
+      // This prevents PRIMARY KEY constraint violation when movie has same ID
+      const existing = await this.db!.getFirstAsync<{ tmdb_id: number; media_type: string | null }>(
+        "SELECT tmdb_id, media_type FROM tracked_shows WHERE tmdb_id = ?",
         [show.tmdbId]
       );
 
       if (existing) {
-        await this.db!.runAsync(
-          `UPDATE tracked_shows SET
-             title = ?, poster_path = ?, status = ?, total_seasons = ?, total_episodes = ?,
-             aired_episodes = ?, streaming_services = ?, sync_status = ?, media_type = 'tv'
-           WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)`,
-          [
-            show.title,
-            show.posterPath,
-            show.status,
-            show.totalSeasons,
-            show.totalEpisodes,
-            show.airedEpisodes ?? null,
-            JSON.stringify(show.streamingServices),
-            DEFAULT_SYNC_STATUS,
-            show.tmdbId,
-          ]
-        );
+        if (existing.media_type === 'tv' || existing.media_type === null) {
+          // Update existing TV show
+          await doUpdate();
+        } else {
+          // A movie with this TMDB ID already exists - can't add TV show with same ID
+          // This is rare (TMDB IDs don't usually overlap) but possible
+          console.warn(`Cannot add TV show ${show.tmdbId}: a movie with this TMDB ID already exists`);
+          return; // Skip silently rather than error
+        }
       } else {
         await this.db!.runAsync(
           `INSERT INTO tracked_shows
@@ -1082,30 +1097,45 @@ class StorageService {
   async addMovie(movie: TrackedMovie): Promise<void> {
     if (!this.db) await this.init();
 
+    // Helper to perform the update
+    const doUpdate = async () => {
+      await this.db!.runAsync(
+        `UPDATE tracked_shows SET
+           title = ?, poster_path = ?, status = ?, streaming_services = ?,
+           release_date = ?, runtime = ?, sync_status = ?
+         WHERE tmdb_id = ? AND media_type = 'movie'`,
+        [
+          movie.title,
+          movie.posterPath,
+          movie.status,
+          JSON.stringify(movie.streamingServices),
+          movie.releaseDate,
+          movie.runtime,
+          DEFAULT_SYNC_STATUS,
+          movie.tmdbId,
+        ]
+      );
+    };
+
     // Use transaction for atomic check-then-insert/update to prevent race conditions
     await this.db!.withTransactionAsync(async () => {
-      const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
-        "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'",
+      // Check for ANY existing row with this tmdb_id (regardless of media_type)
+      // This prevents PRIMARY KEY constraint violation when TV show has same ID
+      const existing = await this.db!.getFirstAsync<{ tmdb_id: number; media_type: string | null }>(
+        "SELECT tmdb_id, media_type FROM tracked_shows WHERE tmdb_id = ?",
         [movie.tmdbId]
       );
 
       if (existing) {
-        await this.db!.runAsync(
-          `UPDATE tracked_shows SET
-             title = ?, poster_path = ?, status = ?, streaming_services = ?,
-             release_date = ?, runtime = ?, sync_status = ?
-           WHERE tmdb_id = ? AND media_type = 'movie'`,
-          [
-            movie.title,
-            movie.posterPath,
-            movie.status,
-            JSON.stringify(movie.streamingServices),
-            movie.releaseDate,
-            movie.runtime,
-            DEFAULT_SYNC_STATUS,
-            movie.tmdbId,
-          ]
-        );
+        if (existing.media_type === 'movie') {
+          // Update existing movie
+          await doUpdate();
+        } else {
+          // A TV show with this TMDB ID already exists - can't add movie with same ID
+          // This is rare (TMDB IDs don't usually overlap) but possible
+          console.warn(`Cannot add movie ${movie.tmdbId}: a TV show with this TMDB ID already exists`);
+          return; // Skip silently rather than error
+        }
       } else {
         await this.db!.runAsync(
           `INSERT INTO tracked_shows

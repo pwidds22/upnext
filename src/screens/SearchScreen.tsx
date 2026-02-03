@@ -26,7 +26,7 @@ import { useRecommendations } from '../hooks/useRecommendations';
 import { useMovieRecommendations } from '../hooks/useMovieRecommendations';
 import { useFriendsWatching } from '../hooks/useFriendsWatching';
 import { useSearch } from '../hooks/useSearch';
-import { COLORS, getYearFromDate } from '../utils/constants';
+import { COLORS, getYearFromDate, hasAiredPacific } from '../utils/constants';
 
 export default function SearchScreen() {
   // Search state via hook
@@ -100,6 +100,33 @@ export default function SearchScreen() {
 
       await storageService.addShow(trackedShow);
       setTrackedShowIds((prev) => new Set([...prev, show.id]));
+
+      // Auto-mark all aired episodes when adding as 'completed'
+      const numSeasons = details.number_of_seasons ?? 0;
+      if (status === 'completed' && numSeasons > 0) {
+        try {
+          const seasons = await tmdbService.getAllSeasons(show.id, numSeasons);
+          for (const season of seasons) {
+            if (season.episodes) {
+              const airedEpisodes = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
+              if (airedEpisodes.length > 0) {
+                await storageService.markSeasonWatched(
+                  show.id,
+                  season.season_number,
+                  airedEpisodes.map((ep) => ({
+                    episodeNumber: ep.episode_number,
+                    name: ep.name,
+                    stillPath: ep.still_path,
+                  }))
+                );
+              }
+            }
+          }
+        } catch (markError) {
+          console.error('Failed to auto-mark episodes:', markError);
+          // Don't fail the whole add operation if marking fails
+        }
+      }
 
       // Save rating if provided and user is logged in
       if (rating > 0 && user) {
