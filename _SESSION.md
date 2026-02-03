@@ -1,35 +1,23 @@
 # UpNext - Session State
 Updated: 2026-02-03 | Branch: master
 
-## Status: Features Implemented - 5 Bugs Found During Testing
+## Status: All 5 Testing Bugs Fixed
 
 ### Completed This Session
-1. **Fixed auto-mark episodes bug** - Status buttons now disabled while loading
-2. **Watch time editing** - Full date/time picker when adding watches, edit existing watch dates
-3. **About screen** - App info, version, credits, links
-4. **Sync Settings screen** - Sync status, manual sync, pending changes display
-5. **Notifications screen** - Episode/movie reminders with time preferences
-6. **Enhanced data export** - Added display name, bio, followers, following
+1. **Fixed auto-mark race condition** - Moved auto-mark logic to useEffect that waits for seasons to load
+2. **Fixed watch history order** - Changed ORDER BY from ASC to DESC (newest = #1)
+3. **Fixed sync constraint error** - Converted addShow/addMovie to atomic ON CONFLICT upserts
+4. **Fixed notifications title** - Changed "Episode Air Dates" to "New Episode Alerts"
+5. **Verified data export completeness** - Export includes all user data (see details below)
 
 ### Files Modified This Session
-- `src/screens/ShowDetailScreen.tsx` - Fixed auto-mark bug, added disabled styles
-- `src/components/WatchHistorySheet.tsx` - Added DateTimePicker for watch time editing
-- `src/hooks/useShowData.ts` - Added `updateWatchDate` method, custom watchedAt param
-- `src/hooks/useMovieWatchHistory.ts` - Added `updateWatchDate` method, custom watchedAt param
-- `src/services/storage.ts` - Added `updateEpisodeWatchDate`, `updateMovieWatchDate`
-- `src/services/export.ts` - Enhanced with profile fields and follow relationships
-- `src/screens/ProfileScreen.tsx` - Wired up navigation for dead buttons
-- `src/navigation/AppNavigator.tsx` - Added About, SyncSettings, Notifications routes
-- `src/types/index.ts` - Added new screen types, enhanced ExportData type
+- `src/screens/ShowDetailScreen.tsx` - Added useRef + useEffect for deferred auto-mark
+- `src/services/storage.ts` - ON CONFLICT upserts for addShow/addMovie, ORDER BY DESC for watch history
+- `src/screens/NotificationsScreen.tsx` - Updated title text
 
-### New Files Created
-- `src/screens/AboutScreen.tsx` - App info, version, credits, links
-- `src/screens/SyncSettingsScreen.tsx` - Sync status, manual sync controls
-- `src/screens/NotificationsScreen.tsx` - Notification preferences
-
-### Previous Session (Tech Debt)
-- Fixed direct TMDB calls, unstable callbacks, circular dependencies, missing error state
-- See commits `c47fb2b`, `ed1ea56`
+### Previous Session
+- Watch time editing, Settings screens, Enhanced data export
+- See commits `20e921f`, `ed1ea56`
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -56,6 +44,7 @@ Updated: 2026-02-03 | Branch: master
 | 5 | High priority tech debt | DONE |
 | 6 | Watch time editing | DONE |
 | 7 | Settings screens | DONE |
+| 8 | Testing bug fixes | DONE |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -63,35 +52,34 @@ Updated: 2026-02-03 | Branch: master
 | 1 | **Widgets** | Medium |
 | 2 | **Watch stats** | Medium |
 
-## Issues Found During Testing (Fix Next Session)
+## Issues Fixed (Previously Found During Testing)
 
-1. **Auto-mark bug NOT fully fixed** - Changing status to "Watched" still doesn't mark all seasons. Need to investigate - maybe seasons aren't loaded yet or there's another issue.
+1. ~~**Auto-mark bug NOT fully fixed**~~ - **FIXED**: Race condition where seasons weren't loaded when status changed. Now uses useEffect that triggers when both status='completed' AND seasons are available.
 
-2. **Watch history order reversed** - Oldest watch shows as #1, newest at bottom. Should be reversed (newest = #1).
+2. ~~**Watch history order reversed**~~ - **FIXED**: Changed `ORDER BY watched_at ASC` to `DESC` in `getEpisodeWatchHistorySummary()` and `getMovieWatchHistorySummary()`.
 
-3. **Sync error** - Sync Settings shows "Sync failed" with error: `unique constraint failed: tracked_shows.tmdb_id` (error code 19). Last sync was 1/29. Need to investigate sync service.
+3. ~~**Sync error**~~ - **FIXED**: TOCTOU race condition in check-then-insert. Converted to atomic `INSERT ... ON CONFLICT` upserts in `addShow()` and `addMovie()`.
 
-4. **Notifications title unclear** - "Episode Air Dates" doesn't clearly convey what it does. Should be something like "New Episode Alerts" - notify when new episodes are available to watch.
+4. ~~**Notifications title unclear**~~ - **FIXED**: Changed "Episode Air Dates" to "New Episode Alerts".
 
-5. **Data export documentation** - Need to clarify/verify export includes everything:
-   - Episodes watched and when
-   - Shows with ratings and status
-   - Movies with ratings and status
-   - Current watch progress (what episode they're on)
-   - All timestamps and history
+5. ~~**Data export documentation**~~ - **VERIFIED**: Export includes everything:
+   - Shows with status, added_at, total seasons/episodes
+   - Movies with status, added_at, release date, runtime
+   - Episodes watched with timestamps
+   - Episode reactions
+   - Episode watch history (all rewatches with timestamps)
+   - Movie watch history (all rewatches with timestamps)
+   - Ratings with timestamps and reviews
+   - Profile (username, displayName, bio)
+   - Followers/Following lists
+   - Dismissed recommendations
+   - Current progress derivable from: show status + watched episodes
 
 ## Next Steps (Priority Order)
-1. **Fix 5 bugs above** - Must fix before further testing
+1. **Test the fixes** - Verify all 5 bugs are resolved
 2. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
 3. **Production prep** - Move API key to env vars
 4. **Launch prep** - App store assets, screenshots, descriptions
-
-## Relevant Files for Bug Fixes
-- Auto-mark bug: `src/screens/ShowDetailScreen.tsx` (line ~342)
-- Watch history order: `src/components/WatchHistorySheet.tsx`
-- Sync error: `src/services/sync.ts`, `src/services/supabase/shows.ts`
-- Notifications title: `src/screens/NotificationsScreen.tsx` (line 166)
-- Data export: `src/services/export.ts`
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81

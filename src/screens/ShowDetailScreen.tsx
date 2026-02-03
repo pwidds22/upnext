@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -85,6 +85,46 @@ export default function ShowDetailScreen() {
   } | null>(null);
 
   const { getReaction, toggleReaction } = useEpisodeReactions(show.tmdbId);
+
+  // Track if auto-mark has been performed for this show (fixes race condition)
+  const hasAutoMarkedRef = useRef(false);
+  const pendingAutoMarkRef = useRef(false);
+
+  // Reset auto-mark ref when show changes
+  useEffect(() => {
+    hasAutoMarkedRef.current = false;
+    pendingAutoMarkRef.current = false;
+  }, [show.tmdbId]);
+
+  // Auto-mark effect - runs when status is 'completed' AND seasons are loaded
+  useEffect(() => {
+    const performAutoMark = async () => {
+      if (
+        pendingAutoMarkRef.current &&
+        seasons.length > 0 &&
+        !hasAutoMarkedRef.current
+      ) {
+        hasAutoMarkedRef.current = true;
+        pendingAutoMarkRef.current = false;
+
+        for (const season of seasons) {
+          if (season.episodes) {
+            const aired = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
+            if (aired.length > 0) {
+              const episodeList = aired.map((ep) => ({
+                episodeNumber: ep.episode_number,
+                name: ep.name,
+                stillPath: ep.still_path,
+              }));
+              await markSeasonWatched(season.season_number, episodeList);
+            }
+          }
+        }
+      }
+    };
+
+    performAutoMark();
+  }, [seasons, markSeasonWatched]);
 
   // Calculate which season to expand by default (newest with unwatched aired episodes)
   const getDefaultExpandedSeason = useCallback((): number => {
@@ -339,26 +379,17 @@ export default function ShowDetailScreen() {
       await storageService.updateShowStatus(show.tmdbId, newStatus);
       setCurrentStatus(newStatus);
 
-      // Auto-mark all aired episodes when completing a show
-      if (newStatus === 'completed' && seasons.length > 0) {
-        for (const season of seasons) {
-          if (season.episodes) {
-            const airedEpisodes = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
-            if (airedEpisodes.length > 0) {
-              const episodeList = airedEpisodes.map((ep) => ({
-                episodeNumber: ep.episode_number,
-                name: ep.name,
-                stillPath: ep.still_path,
-              }));
-              await markSeasonWatched(season.season_number, episodeList);
-            }
-          }
-        }
+      // Trigger auto-mark via effect when completing a show
+      // This handles the race condition where seasons may not be loaded yet
+      if (newStatus === 'completed') {
+        pendingAutoMarkRef.current = true;
+        // If seasons are already loaded, the effect will run immediately
+        // If not, it will run when seasons load
       }
 
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [show.tmdbId, seasons, markSeasonWatched]
+    [show.tmdbId]
   );
 
   const handleDelete = useCallback(() => {

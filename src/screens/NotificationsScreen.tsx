@@ -163,7 +163,7 @@ export default function NotificationsScreen() {
             <Ionicons name="tv-outline" size={22} color={COLORS.text} />
           </View>
           <View style={styles.settingTextContainer}>
-            <Text style={styles.settingTitle}>Episode Air Dates</Text>
+            <Text style={styles.settingTitle}>New Episode Alerts</Text>
             <Text style={styles.settingSubtitle}>
               Get notified when new episodes of your shows air
             </Text>

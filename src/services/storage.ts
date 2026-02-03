@@ -297,51 +297,34 @@ class StorageService {
   async addShow(show: TrackedShow): Promise<void> {
     if (!this.db) await this.init();
 
-    // Check if a TV show with this tmdb_id already exists
-    const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
-      "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'tv'",
-      [show.tmdbId]
+    // Use atomic upsert to prevent race conditions during sync
+    // ON CONFLICT updates metadata but preserves existing data if already tracked
+    await this.db!.runAsync(
+      `INSERT INTO tracked_shows
+       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status, media_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tv')
+       ON CONFLICT(tmdb_id, media_type) DO UPDATE SET
+         title = excluded.title,
+         poster_path = excluded.poster_path,
+         status = excluded.status,
+         total_seasons = excluded.total_seasons,
+         total_episodes = excluded.total_episodes,
+         aired_episodes = excluded.aired_episodes,
+         streaming_services = excluded.streaming_services,
+         sync_status = excluded.sync_status`,
+      [
+        show.tmdbId,
+        show.title,
+        show.posterPath,
+        show.status,
+        show.addedAt,
+        show.totalSeasons,
+        show.totalEpisodes,
+        show.airedEpisodes ?? null,
+        JSON.stringify(show.streamingServices),
+        DEFAULT_SYNC_STATUS,
+      ]
     );
-
-    if (existing) {
-      // Update existing show
-      await this.db!.runAsync(
-        `UPDATE tracked_shows SET
-           title = ?, poster_path = ?, status = ?, total_seasons = ?, total_episodes = ?,
-           aired_episodes = ?, streaming_services = ?, sync_status = ?
-         WHERE tmdb_id = ? AND media_type = 'tv'`,
-        [
-          show.title,
-          show.posterPath,
-          show.status,
-          show.totalSeasons,
-          show.totalEpisodes,
-          show.airedEpisodes ?? null,
-          JSON.stringify(show.streamingServices),
-          DEFAULT_SYNC_STATUS,
-          show.tmdbId,
-        ]
-      );
-    } else {
-      // Insert new show
-      await this.db!.runAsync(
-        `INSERT INTO tracked_shows
-         (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status, media_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tv')`,
-        [
-          show.tmdbId,
-          show.title,
-          show.posterPath,
-          show.status,
-          show.addedAt,
-          show.totalSeasons,
-          show.totalEpisodes,
-          show.airedEpisodes ?? null,
-          JSON.stringify(show.streamingServices),
-          DEFAULT_SYNC_STATUS,
-        ]
-      );
-    }
 
     // Queue for sync
     await this.addToSyncQueue('tracked_shows', show.tmdbId.toString(), 'create', { ...show, mediaType: 'tv' });
@@ -1082,49 +1065,31 @@ class StorageService {
   async addMovie(movie: TrackedMovie): Promise<void> {
     if (!this.db) await this.init();
 
-    // Check if a movie with this tmdb_id already exists
-    const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
-      "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'",
-      [movie.tmdbId]
+    // Use atomic upsert to prevent race conditions during sync
+    await this.db!.runAsync(
+      `INSERT INTO tracked_shows
+       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, streaming_services, sync_status, media_type, release_date, runtime)
+       VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 'movie', ?, ?)
+       ON CONFLICT(tmdb_id, media_type) DO UPDATE SET
+         title = excluded.title,
+         poster_path = excluded.poster_path,
+         status = excluded.status,
+         streaming_services = excluded.streaming_services,
+         release_date = excluded.release_date,
+         runtime = excluded.runtime,
+         sync_status = excluded.sync_status`,
+      [
+        movie.tmdbId,
+        movie.title,
+        movie.posterPath,
+        movie.status,
+        movie.addedAt,
+        JSON.stringify(movie.streamingServices),
+        DEFAULT_SYNC_STATUS,
+        movie.releaseDate,
+        movie.runtime,
+      ]
     );
-
-    if (existing) {
-      // Update existing movie
-      await this.db!.runAsync(
-        `UPDATE tracked_shows SET
-           title = ?, poster_path = ?, status = ?, streaming_services = ?,
-           release_date = ?, runtime = ?, sync_status = ?
-         WHERE tmdb_id = ? AND media_type = 'movie'`,
-        [
-          movie.title,
-          movie.posterPath,
-          movie.status,
-          JSON.stringify(movie.streamingServices),
-          movie.releaseDate,
-          movie.runtime,
-          DEFAULT_SYNC_STATUS,
-          movie.tmdbId,
-        ]
-      );
-    } else {
-      // Insert new movie
-      await this.db!.runAsync(
-        `INSERT INTO tracked_shows
-         (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, streaming_services, sync_status, media_type, release_date, runtime)
-         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 'movie', ?, ?)`,
-        [
-          movie.tmdbId,
-          movie.title,
-          movie.posterPath,
-          movie.status,
-          movie.addedAt,
-          JSON.stringify(movie.streamingServices),
-          DEFAULT_SYNC_STATUS,
-          movie.releaseDate,
-          movie.runtime,
-        ]
-      );
-    }
 
     // Queue for sync
     await this.addToSyncQueue('tracked_shows', `movie-${movie.tmdbId}`, 'create', movie);
@@ -1348,7 +1313,7 @@ class StorageService {
     const rows = await this.db!.getAllAsync<{ id: string; watched_at: string }>(
       `SELECT id, watched_at FROM episode_watch_history
        WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?
-       ORDER BY watched_at ASC`,
+       ORDER BY watched_at DESC`,
       [showTmdbId, seasonNumber, episodeNumber]
     );
 
@@ -1533,7 +1498,7 @@ class StorageService {
     if (!this.db) await this.init();
 
     const rows = await this.db!.getAllAsync<{ id: string; watched_at: string }>(
-      'SELECT id, watched_at FROM movie_watch_history WHERE movie_tmdb_id = ? ORDER BY watched_at ASC',
+      'SELECT id, watched_at FROM movie_watch_history WHERE movie_tmdb_id = ? ORDER BY watched_at DESC',
       [movieTmdbId]
     );
 
