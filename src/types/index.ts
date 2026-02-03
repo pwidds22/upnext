@@ -534,18 +534,6 @@ export interface WatchHistorySummary {
 // Data Export Types
 export type ExportFormat = 'json';
 
-export interface ExportStats {
-  showsCount: number;
-  moviesCount: number;
-  watchedEpisodesCount: number;
-  episodeReactionsCount: number;
-  episodeWatchHistoryCount: number;
-  movieWatchHistoryCount: number;
-  dismissedShowsCount: number;
-  dismissedMoviesCount: number;
-  ratingsCount: number;
-}
-
 export interface ExportRating {
   tmdbId: number;
   ratingType: RatingType;

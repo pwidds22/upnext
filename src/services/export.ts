@@ -1,8 +1,9 @@
 import { Paths, File } from 'expo-file-system';
+import Constants from 'expo-constants';
 import { storageService } from './storage';
 import { ratingsService } from './supabase/ratings';
 import { followsService } from './supabase/follows';
-import { ExportData, ExportStats, ExportRating } from '../types';
+import { ExportData, ExportRating } from '../types';
 
 export const exportService = {
   /**
@@ -64,7 +65,7 @@ export const exportService = {
 
     return {
       exportedAt: new Date().toISOString(),
-      appVersion: '1.0.0',
+      appVersion: Constants.expoConfig?.version ?? '1.0.0',
       formatVersion: '1.0',
       user: userId ? { id: userId, username } : undefined,
       shows,
@@ -80,30 +81,13 @@ export const exportService = {
   },
 
   /**
-   * Get export stats for preview
-   */
-  async getExportStats(userId?: string): Promise<ExportStats> {
-    const data = await this.collectExportData(userId);
-    return {
-      showsCount: data.shows.length,
-      moviesCount: data.movies.length,
-      watchedEpisodesCount: data.watchedEpisodes.length,
-      episodeReactionsCount: data.episodeReactions.length,
-      episodeWatchHistoryCount: data.episodeWatchHistory.length,
-      movieWatchHistoryCount: data.movieWatchHistory.length,
-      dismissedShowsCount: data.dismissedShows.length,
-      dismissedMoviesCount: data.dismissedMovies.length,
-      ratingsCount: data.ratings?.length ?? 0,
-    };
-  },
-
-  /**
    * Export data to a JSON file
    * @returns The file path of the exported file
    */
   async exportToFile(data: ExportData): Promise<string> {
     const json = JSON.stringify(data, null, 2);
-    const fileName = `upnext-export-${Date.now()}.json`;
+    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const fileName = `upnext-export-${date}.json`;
 
     // Create file in document directory using new expo-file-system API
     const file = new File(Paths.document, fileName);

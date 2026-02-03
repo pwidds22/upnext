@@ -454,8 +454,11 @@ export default function ProfileScreen() {
           text: 'Export',
           onPress: async () => {
             try {
-              await exportData();
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              const result = await exportData();
+              // Only show success haptic if user actually shared (not cancelled)
+              if (result === 'shared') {
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
             } catch (e) {
               Alert.alert(
                 'Export Failed',
