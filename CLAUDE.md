@@ -72,7 +72,8 @@ try {
 ## Anti-Patterns (DO NOT DO THESE)
 
 ### Database
-- **DON'T** use `ON CONFLICT` for upserts - use check-then-insert pattern instead
+- **DON'T** use `INSERT OR REPLACE` - it deletes and re-inserts, losing data like `added_at` timestamps
+- **DO** use `INSERT ... ON CONFLICT(...) DO UPDATE SET` for concurrent operations (sync, background tasks) to avoid TOCTOU race conditions
 - **DON'T** mix camelCase in SQL columns - always use `snake_case`
 - **DON'T** forget to add new tables to both SQLite AND Supabase migrations
 

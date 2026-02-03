@@ -107,18 +107,26 @@ export default function ShowDetailScreen() {
         hasAutoMarkedRef.current = true;
         pendingAutoMarkRef.current = false;
 
-        for (const season of seasons) {
-          if (season.episodes) {
-            const aired = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
-            if (aired.length > 0) {
-              const episodeList = aired.map((ep) => ({
-                episodeNumber: ep.episode_number,
-                name: ep.name,
-                stillPath: ep.still_path,
-              }));
-              await markSeasonWatched(season.season_number, episodeList);
+        try {
+          for (const season of seasons) {
+            if (season.episodes) {
+              const aired = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
+              if (aired.length > 0) {
+                const episodeList = aired.map((ep) => ({
+                  episodeNumber: ep.episode_number,
+                  name: ep.name,
+                  stillPath: ep.still_path,
+                }));
+                await markSeasonWatched(season.season_number, episodeList);
+              }
             }
           }
+        } catch (error) {
+          console.error('Failed to auto-mark episodes:', error);
+          Alert.alert(
+            'Auto-mark Failed',
+            'Some episodes could not be marked as watched. You can mark them manually.'
+          );
         }
       }
     };
