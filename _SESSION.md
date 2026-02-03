@@ -1,23 +1,38 @@
 # UpNext - Session State
 Updated: 2026-02-03 | Branch: main
 
-## Status: All 5 Testing Bugs Fixed
+## Status: 4 CRITICAL BUGS - Fix Next Session
 
-### Completed This Session
-1. **Fixed auto-mark race condition** - Moved auto-mark logic to useEffect that waits for seasons to load
-2. **Fixed watch history order** - Changed ORDER BY from ASC to DESC (newest = #1)
-3. **Fixed sync constraint error** - Converted addShow/addMovie to atomic ON CONFLICT upserts
-4. **Fixed notifications title** - Changed "Episode Air Dates" to "New Episode Alerts"
-5. **Verified data export completeness** - Export includes all user data (see details below)
+### Bugs Found During Testing (NOT FIXED YET)
+
+1. **Recommendations show library items** - Trending, For You, and Top Rated sections show shows/movies that are already in user's library. The `trackedIds` filter isn't working.
+   - Files: `src/hooks/useMediaRecommendations.ts`, `src/hooks/useRecommendations.ts`
+   - Check: Is `trackedIds` being passed correctly? Is the filter logic working?
+
+2. **Dismiss still scrolls to top** - Clicking X on any movie/show in Search page still causes page refresh and scrolls to top. The `isDismissingRef` fix didn't work.
+   - Files: `src/hooks/useMediaRecommendations.ts`
+   - Try: Maybe the effect still runs despite the ref check, or there's another cause of the scroll
+
+3. **Sync still failing** - Error: `unique constraint failed: tracked_shows.tmdb_id` (error code 19, finalizeAsync failed)
+   - Files: `src/services/storage.ts`
+   - Root cause: The PRIMARY KEY is `tmdb_id` alone (not composite with `media_type`). Transaction-based upsert should work but maybe there's a different code path triggering the error.
+   - Check: Are there other INSERT statements not using the transaction pattern?
+
+4. **Auto-mark not working on add** - When adding a show as "Watched", episodes show 0/X and no seasons marked. The useEffect approach isn't triggering when adding a NEW show.
+   - Files: `src/screens/ShowDetailScreen.tsx`
+   - Root cause: Auto-mark useEffect only runs on ShowDetailScreen, but status is set BEFORE navigating there. Need to mark episodes at add time, not just on status change.
 
 ### Files Modified This Session
-- `src/screens/ShowDetailScreen.tsx` - Added useRef + useEffect for deferred auto-mark
-- `src/services/storage.ts` - ON CONFLICT upserts for addShow/addMovie, ORDER BY DESC for watch history
-- `src/screens/NotificationsScreen.tsx` - Updated title text
+- `src/screens/ShowDetailScreen.tsx` - Added useRef + useEffect for auto-mark (not working for new adds)
+- `src/services/storage.ts` - Transaction-based upsert (still failing), ORDER BY DESC (works)
+- `src/screens/NotificationsScreen.tsx` - Title text (works)
+- `src/hooks/useMediaRecommendations.ts` - isDismissingRef (not working)
+- `CLAUDE.md` - Updated anti-patterns
 
-### Previous Session
-- Watch time editing, Settings screens, Enhanced data export
-- See commits `20e921f`, `ed1ea56`
+### What Was Attempted
+1. Changed `ON CONFLICT` to transaction-based upsert → still fails (different issue)
+2. Added `isDismissingRef` to skip reload on dismiss → still scrolls (ref not preventing it)
+3. Added useEffect for auto-mark when status='completed' → works for status CHANGE, not initial ADD
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -34,17 +49,13 @@ Updated: 2026-02-03 | Branch: main
 
 ## Pre-Launch Roadmap
 
-### Before Launch (All Done!)
-| # | Feature | Status |
-|---|---------|--------|
-| 1 | Movie tracking | DONE |
-| 2 | Rewatch tracking | DONE |
-| 3 | Share profile | DONE |
-| 4 | Data export | DONE |
-| 5 | High priority tech debt | DONE |
-| 6 | Watch time editing | DONE |
-| 7 | Settings screens | DONE |
-| 8 | Testing bug fixes | DONE |
+### Before Launch
+| # | Task | Status |
+|---|------|--------|
+| 1 | Fix 4 critical bugs above | BLOCKED |
+| 2 | Medium priority tech debt | PENDING |
+| 3 | Production prep (API key to env) | PENDING |
+| 4 | Launch prep (app store assets) | PENDING |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -52,39 +63,27 @@ Updated: 2026-02-03 | Branch: main
 | 1 | **Widgets** | Medium |
 | 2 | **Watch stats** | Medium |
 
-## Issues Fixed (Previously Found During Testing)
+## Next Session Action Items
 
-1. ~~**Auto-mark bug NOT fully fixed**~~ - **FIXED**: Race condition where seasons weren't loaded when status changed. Now uses useEffect that triggers when both status='completed' AND seasons are available.
-
-2. ~~**Watch history order reversed**~~ - **FIXED**: Changed `ORDER BY watched_at ASC` to `DESC` in `getEpisodeWatchHistorySummary()` and `getMovieWatchHistorySummary()`.
-
-3. ~~**Sync error**~~ - **FIXED**: TOCTOU race condition in check-then-insert. Converted to atomic `INSERT ... ON CONFLICT` upserts in `addShow()` and `addMovie()`.
-
-4. ~~**Notifications title unclear**~~ - **FIXED**: Changed "Episode Air Dates" to "New Episode Alerts".
-
-5. ~~**Data export documentation**~~ - **VERIFIED**: Export includes everything:
-   - Shows with status, added_at, total seasons/episodes
-   - Movies with status, added_at, release date, runtime
-   - Episodes watched with timestamps
-   - Episode reactions
-   - Episode watch history (all rewatches with timestamps)
-   - Movie watch history (all rewatches with timestamps)
-   - Ratings with timestamps and reviews
-   - Profile (username, displayName, bio)
-   - Followers/Following lists
-   - Dismissed recommendations
-   - Current progress derivable from: show status + watched episodes
-
-## Next Steps (Priority Order)
-1. **Test the fixes** - Verify all 5 bugs are resolved
-2. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
-3. **Production prep** - Move API key to env vars
-4. **Launch prep** - App store assets, screenshots, descriptions
+1. **Debug recommendations filter** - Add console.log to see if trackedIds is populated and if filter runs
+2. **Debug dismiss scroll** - Check if effect runs despite ref, or if scroll comes from elsewhere
+3. **Debug sync constraint** - Search for ALL INSERT statements for tracked_shows, ensure all use transaction
+4. **Fix auto-mark on add** - Mark episodes when show is added with status='completed', not just on status change
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly
+
+## Commits This Session
+```
+de163a5 Update CLAUDE.md: ON CONFLICT requires table constraint, not index
+3a9c378 Fix ON CONFLICT error and dismiss scroll-to-top
+e541c51 Fix review feedback: auto-mark edge case and timestamp swap
+0164dcb Update session notes to reflect main branch
+faf18ea Add error handling to auto-mark, update ON CONFLICT guidance
+6548040 Fix 5 testing bugs: sync race, auto-mark, watch history order
+```
 
 ## Known Issues
 - API key hardcoded (move to env vars before production)
