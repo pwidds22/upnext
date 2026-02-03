@@ -1,48 +1,35 @@
 # UpNext - Session State
 Updated: 2026-02-03 | Branch: master
 
-## Status: Data Export Feature Complete - All Review Issues Fixed
+## Status: High Priority Tech Debt Fixed - Ready for Testing
 
 ### Completed This Session
-- **Fixed all data export review findings** from Claude Web code review
-- **Two rounds of review** - Initial fixes + file cleanup bug fix
+- **Fixed all 4 high priority tech debt items** - Claude Web review verified
 
-### Data Export Review Fixes (All Complete)
+### Tech Debt Fixes (All Complete + Reviewed)
 
-**Critical/High Priority (Fixed):**
-- `useDataExport.ts` - Share sheet cancellation no longer shows false "Export Failed" error
-- `useDataExport.ts` - Removed dead `error` state code
-- `useDataExport.ts` - Added `Sharing.isAvailableAsync()` check before sharing
-- `useDataExport.ts` - Added file cleanup after sharing (using legacy `FileSystem.deleteAsync()`)
-- `ProfileScreen.tsx` - Updated to handle `'shared' | 'cancelled'` return type
-- `ProfileScreen.tsx` - Added error logging for consistency
-
-**Medium Priority (Fixed):**
-- `export.ts` - Dynamic app version using `Constants.expoConfig?.version`
-- `export.ts` - Removed unused `getExportStats()` function
-- `export.ts` - Human-readable filename format (`upnext-export-YYYY-MM-DD.json`)
-- `types/index.ts` - Removed unused `ExportStats` type
-
-**Dependencies Added:**
-- `expo-constants` - For dynamic app version
+| Issue | File | Fix |
+|-------|------|-----|
+| Direct TMDB calls | `src/hooks/useSearch.ts` (NEW) | Extracted search into hook |
+| | `src/screens/SearchScreen.tsx` | Now uses `useSearch` hook |
+| Unstable callback | `src/hooks/useFollows.ts:12-16,36` | Added `isFollowingRef` pattern |
+| Circular dependency | `src/hooks/useActivityFeed.ts:16-20,47` | Added `activitiesRef` pattern |
+| Missing error state | `src/hooks/useMovieWatchHistory.ts:9,19,24,92` | Added `error` state |
 
 ### Files Modified This Session
-- `src/hooks/useDataExport.ts` - Cancellation detection, availability check, file cleanup
-- `src/services/export.ts` - Dynamic version, removed dead code, better filename
-- `src/screens/ProfileScreen.tsx` - Handle cancellation, error logging
-- `src/types/index.ts` - Removed ExportStats type
-- `package.json` / `package-lock.json` - Added expo-constants
+- `src/hooks/useSearch.ts` - **NEW** - Search logic extracted from SearchScreen
+- `src/hooks/useFollows.ts` - Added ref pattern for stable `toggleFollow`
+- `src/hooks/useActivityFeed.ts` - Added ref pattern to fix circular `loadMore`
+- `src/hooks/useMovieWatchHistory.ts` - Added error state
+- `src/screens/SearchScreen.tsx` - Uses `useSearch` hook, removed direct TMDB calls
 
 ### Commits This Session
-- `98d22eb` Fix file cleanup bug using legacy FileSystem API
-- `5f7f7d1` Fix data export review findings from Claude Web
+- `c47fb2b` Fix 4 high priority tech debt items
 
-### Remaining High Priority Tech Debt (4 items)
-From latest `/techdebt` scan:
-- [ ] **Direct TMDB Calls** - `SearchScreen.tsx:96-100` - Should use a hook
-- [ ] **Missing useCallback Dependency** - `useFollows.ts:42` - `toggleFollow` depends on `isFollowing`
-- [ ] **Circular useEffect Dependency** - `useActivityFeed.ts:60` - `loadMore` includes `activities`
-- [ ] **Missing Error State** - `useMovieWatchHistory.ts` - No error state unlike similar hooks
+### Minor Issues (Low Priority - Not Blocking)
+From Claude Web review:
+- `useMovieWatchHistory.ts` - Mutation methods lack try/catch (pre-existing pattern)
+- `useSearch.ts` - Could add AbortController for race conditions (enhancement)
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -54,7 +41,7 @@ From latest `/techdebt` scan:
 - **Movies** - Full tracking with search, status, ratings
 - **Rewatch Tracking** - Full watch history for episodes and movies
 - **Share Profile** - Deep links, privacy controls, profile stats
-- **Data Export** - JSON export of all user data via native share sheet (REVIEW COMPLETE)
+- **Data Export** - JSON export of all user data via native share sheet
 
 ## Pre-Launch Roadmap
 
@@ -65,17 +52,18 @@ From latest `/techdebt` scan:
 | 2 | ~~Rewatch tracking~~ | Medium | DONE |
 | 3 | ~~Share profile~~ | Low | DONE |
 | 4 | ~~Data export~~ | Low | DONE + REVIEWED |
+| 5 | ~~High priority tech debt~~ | Low | DONE + REVIEWED |
 
-**All pre-launch features complete and reviewed!**
+**All pre-launch features and high priority tech debt complete!**
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
 |---|---------|------------|
-| 5 | **Widgets** | Medium |
-| 6 | **Watch stats** | Medium |
+| 6 | **Widgets** | Medium |
+| 7 | **Watch stats** | Medium |
 
 ## Next Steps
-1. **Fix remaining 4 high priority tech debt items** - See list above
+1. **Test the app** - Verify all features work after tech debt fixes
 2. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
 3. **Production prep** - Move API key to env vars, final testing
 4. **Launch prep** - App store assets, screenshots, descriptions
