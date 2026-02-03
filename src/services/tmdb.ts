@@ -89,49 +89,64 @@ class TMDBService {
   }
 
   // Get trending TV shows
-  async getTrending(timeWindow: 'day' | 'week' = 'week'): Promise<TMDBShow[]> {
-    const url = `${TMDB_BASE_URL}/trending/tv/${timeWindow}`;
+  async getTrending(timeWindow: 'day' | 'week' = 'week', pages: number = 1): Promise<TMDBShow[]> {
+    const results: TMDBShow[] = [];
 
-    const response = await fetch(url, { headers: this.headers });
+    for (let page = 1; page <= pages; page++) {
+      const url = `${TMDB_BASE_URL}/trending/tv/${timeWindow}?page=${page}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get trending: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get trending: ${response.status}`);
+      }
+
+      const data: TMDBSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // Get popular TV shows
-  async getPopular(page: number = 1): Promise<TMDBShow[]> {
-    const url = `${TMDB_BASE_URL}/tv/popular?page=${page}`;
+  async getPopular(pages: number = 1): Promise<TMDBShow[]> {
+    const results: TMDBShow[] = [];
 
-    const response = await fetch(url, { headers: this.headers });
+    for (let page = 1; page <= pages; page++) {
+      const url = `${TMDB_BASE_URL}/tv/popular?page=${page}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get popular: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get popular: ${response.status}`);
+      }
+
+      const data: TMDBSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // Get top rated TV shows
-  async getTopRated(page: number = 1): Promise<TMDBShow[]> {
-    const url = `${TMDB_BASE_URL}/tv/top_rated?page=${page}`;
+  async getTopRated(pages: number = 1): Promise<TMDBShow[]> {
+    const results: TMDBShow[] = [];
 
-    const response = await fetch(url, { headers: this.headers });
+    for (let page = 1; page <= pages; page++) {
+      const url = `${TMDB_BASE_URL}/tv/top_rated?page=${page}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get top rated: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get top rated: ${response.status}`);
+      }
+
+      const data: TMDBSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // Discover TV shows by genre (OR logic - matches ANY of the genres)
-  async discoverByGenres(genreIds: number[]): Promise<TMDBShow[]> {
+  async discoverByGenres(genreIds: number[], pages: number = 1): Promise<TMDBShow[]> {
     if (genreIds.length === 0) return [];
 
     // Calculate date 15 years ago to filter out older shows
@@ -139,24 +154,30 @@ class TMDBService {
     fifteenYearsAgo.setFullYear(fifteenYearsAgo.getFullYear() - 15);
     const minDate = fifteenYearsAgo.toISOString().split('T')[0];
 
-    const params = new URLSearchParams({
-      with_genres: genreIds.join('|'), // Use pipe for OR logic (comma = AND)
-      sort_by: 'popularity.desc',
-      'vote_count.gte': '50',
-      include_adult: 'false',
-      'first_air_date.gte': minDate,
-    });
+    const results: TMDBShow[] = [];
 
-    const url = `${TMDB_BASE_URL}/discover/tv?${params}`;
+    for (let page = 1; page <= pages; page++) {
+      const params = new URLSearchParams({
+        with_genres: genreIds.join('|'), // Use pipe for OR logic (comma = AND)
+        sort_by: 'popularity.desc',
+        'vote_count.gte': '50',
+        include_adult: 'false',
+        'first_air_date.gte': minDate,
+        page: page.toString(),
+      });
 
-    const response = await fetch(url, { headers: this.headers });
+      const url = `${TMDB_BASE_URL}/discover/tv?${params}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to discover shows: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to discover shows: ${response.status}`);
+      }
+
+      const data: TMDBSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // ==================== MOVIE ENDPOINTS ====================
@@ -208,49 +229,64 @@ class TMDBService {
   }
 
   // Get trending movies
-  async getTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Promise<TMDBMovie[]> {
-    const url = `${TMDB_BASE_URL}/trending/movie/${timeWindow}`;
+  async getTrendingMovies(timeWindow: 'day' | 'week' = 'week', pages: number = 1): Promise<TMDBMovie[]> {
+    const results: TMDBMovie[] = [];
 
-    const response = await fetch(url, { headers: this.headers });
+    for (let page = 1; page <= pages; page++) {
+      const url = `${TMDB_BASE_URL}/trending/movie/${timeWindow}?page=${page}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get trending movies: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get trending movies: ${response.status}`);
+      }
+
+      const data: TMDBMovieSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBMovieSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // Get popular movies
-  async getPopularMovies(page: number = 1): Promise<TMDBMovie[]> {
-    const url = `${TMDB_BASE_URL}/movie/popular?page=${page}`;
+  async getPopularMovies(pages: number = 1): Promise<TMDBMovie[]> {
+    const results: TMDBMovie[] = [];
 
-    const response = await fetch(url, { headers: this.headers });
+    for (let page = 1; page <= pages; page++) {
+      const url = `${TMDB_BASE_URL}/movie/popular?page=${page}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get popular movies: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get popular movies: ${response.status}`);
+      }
+
+      const data: TMDBMovieSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBMovieSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // Get top rated movies
-  async getTopRatedMovies(page: number = 1): Promise<TMDBMovie[]> {
-    const url = `${TMDB_BASE_URL}/movie/top_rated?page=${page}`;
+  async getTopRatedMovies(pages: number = 1): Promise<TMDBMovie[]> {
+    const results: TMDBMovie[] = [];
 
-    const response = await fetch(url, { headers: this.headers });
+    for (let page = 1; page <= pages; page++) {
+      const url = `${TMDB_BASE_URL}/movie/top_rated?page=${page}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to get top rated movies: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get top rated movies: ${response.status}`);
+      }
+
+      const data: TMDBMovieSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBMovieSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 
   // Discover movies by genre (OR logic - matches ANY of the genres)
-  async discoverMoviesByGenres(genreIds: number[]): Promise<TMDBMovie[]> {
+  async discoverMoviesByGenres(genreIds: number[], pages: number = 1): Promise<TMDBMovie[]> {
     if (genreIds.length === 0) return [];
 
     // Calculate date 15 years ago to filter out older movies
@@ -258,24 +294,30 @@ class TMDBService {
     fifteenYearsAgo.setFullYear(fifteenYearsAgo.getFullYear() - 15);
     const minDate = fifteenYearsAgo.toISOString().split('T')[0];
 
-    const params = new URLSearchParams({
-      with_genres: genreIds.join('|'),
-      sort_by: 'popularity.desc',
-      'vote_count.gte': '50',
-      include_adult: 'false',
-      'primary_release_date.gte': minDate,
-    });
+    const results: TMDBMovie[] = [];
 
-    const url = `${TMDB_BASE_URL}/discover/movie?${params}`;
+    for (let page = 1; page <= pages; page++) {
+      const params = new URLSearchParams({
+        with_genres: genreIds.join('|'),
+        sort_by: 'popularity.desc',
+        'vote_count.gte': '50',
+        include_adult: 'false',
+        'primary_release_date.gte': minDate,
+        page: page.toString(),
+      });
 
-    const response = await fetch(url, { headers: this.headers });
+      const url = `${TMDB_BASE_URL}/discover/movie?${params}`;
+      const response = await fetch(url, { headers: this.headers });
 
-    if (!response.ok) {
-      throw new Error(`Failed to discover movies: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Failed to discover movies: ${response.status}`);
+      }
+
+      const data: TMDBMovieSearchResponse = await response.json();
+      results.push(...data.results);
     }
 
-    const data: TMDBMovieSearchResponse = await response.json();
-    return data.results;
+    return results;
   }
 }
 

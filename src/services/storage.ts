@@ -887,11 +887,18 @@ class StorageService {
   }
 
   // Dismissed Shows (for hiding recommendations)
+  // Auto-expires dismissals older than 90 days so users get fresh recommendations
   async getDismissedShowIds(): Promise<Set<number>> {
     if (!this.db) await this.init();
 
+    // Only return dismissals from the last 90 days
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const cutoffDate = ninetyDaysAgo.toISOString();
+
     const rows = await this.db!.getAllAsync<{ tmdb_id: number }>(
-      'SELECT tmdb_id FROM dismissed_shows'
+      'SELECT tmdb_id FROM dismissed_shows WHERE dismissed_at > ?',
+      [cutoffDate]
     );
 
     return new Set(rows.map((row) => row.tmdb_id));
@@ -954,11 +961,18 @@ class StorageService {
 
   // ==================== DISMISSED MOVIES ====================
 
+  // Auto-expires dismissals older than 90 days so users get fresh recommendations
   async getDismissedMovieIds(): Promise<Set<number>> {
     if (!this.db) await this.init();
 
+    // Only return dismissals from the last 90 days
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const cutoffDate = ninetyDaysAgo.toISOString();
+
     const rows = await this.db!.getAllAsync<{ tmdb_id: number }>(
-      'SELECT tmdb_id FROM dismissed_movies'
+      'SELECT tmdb_id FROM dismissed_movies WHERE dismissed_at > ?',
+      [cutoffDate]
     );
 
     return new Set(rows.map((row) => row.tmdb_id));

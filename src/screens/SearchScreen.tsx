@@ -66,6 +66,15 @@ export default function SearchScreen() {
   // Friends watching (shows from people you follow)
   const { shows: friendsWatching, loading: friendsLoading } = useFriendsWatching(trackedShowIds);
 
+  // Stable callbacks for dismiss handlers (prevents re-renders that reset scroll)
+  const handleDismissShow = useCallback((show: TMDBShow) => {
+    dismissShow(show.id);
+  }, [dismissShow]);
+
+  const handleDismissMovie = useCallback((movie: TMDBMovie) => {
+    dismissMovie(movie.id);
+  }, [dismissMovie]);
+
   // Load tracked IDs for both shows and movies
   useEffect(() => {
     async function loadTracked() {
@@ -296,7 +305,7 @@ export default function SearchScreen() {
                   key={show.id}
                   show={show}
                   onPress={setSelectedShow}
-                  onDismiss={(s) => dismissShow(s.id)}
+                  onDismiss={handleDismissShow}
                 />
               ))}
             </ScrollView>
@@ -316,7 +325,7 @@ export default function SearchScreen() {
                   key={show.id}
                   show={show}
                   onPress={setSelectedShow}
-                  onDismiss={(s) => dismissShow(s.id)}
+                  onDismiss={handleDismissShow}
                 />
               ))}
             </ScrollView>
@@ -336,7 +345,7 @@ export default function SearchScreen() {
                   key={show.id}
                   show={show}
                   onPress={setSelectedShow}
-                  onDismiss={(s) => dismissShow(s.id)}
+                  onDismiss={handleDismissShow}
                 />
               ))}
             </ScrollView>
@@ -399,7 +408,7 @@ export default function SearchScreen() {
                   key={movie.id}
                   movie={movie}
                   onPress={setSelectedMovie}
-                  onDismiss={(m) => dismissMovie(m.id)}
+                  onDismiss={handleDismissMovie}
                 />
               ))}
             </ScrollView>
@@ -419,7 +428,7 @@ export default function SearchScreen() {
                   key={movie.id}
                   movie={movie}
                   onPress={setSelectedMovie}
-                  onDismiss={(m) => dismissMovie(m.id)}
+                  onDismiss={handleDismissMovie}
                 />
               ))}
             </ScrollView>
@@ -439,7 +448,7 @@ export default function SearchScreen() {
                   key={movie.id}
                   movie={movie}
                   onPress={setSelectedMovie}
-                  onDismiss={(m) => dismissMovie(m.id)}
+                  onDismiss={handleDismissMovie}
                 />
               ))}
             </ScrollView>
@@ -534,25 +543,29 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {/* Results */}
+      {/* Results or Recommendations - avoid ListEmptyComponent to prevent scroll reset on dismiss */}
       {searchType === 'tv' ? (
-        <FlatList
-          data={showResults}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderShowItem}
-          ListEmptyComponent={renderEmpty}
-          contentContainerStyle={showResults.length === 0 ? styles.emptyList : undefined}
-          keyboardShouldPersistTaps="handled"
-        />
+        showResults.length > 0 ? (
+          <FlatList
+            data={showResults}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderShowItem}
+            keyboardShouldPersistTaps="handled"
+          />
+        ) : (
+          renderEmpty()
+        )
       ) : (
-        <FlatList
-          data={movieResults}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderMovieItem}
-          ListEmptyComponent={renderEmpty}
-          contentContainerStyle={movieResults.length === 0 ? styles.emptyList : undefined}
-          keyboardShouldPersistTaps="handled"
-        />
+        movieResults.length > 0 ? (
+          <FlatList
+            data={movieResults}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderMovieItem}
+            keyboardShouldPersistTaps="handled"
+          />
+        ) : (
+          renderEmpty()
+        )
       )}
 
       {/* Add Show Modal */}

@@ -28,16 +28,20 @@ async function extractGenresFromMovies(movies: TrackedMovie[]): Promise<number[]
   return Array.from(genreSet);
 }
 
+// Number of pages to fetch for recommendations (2 pages = ~40 items per category)
+// This ensures enough items for backfill after filtering out tracked/dismissed/duplicates
+const RECOMMENDATION_PAGES = 2;
+
 export function useMovieRecommendations(trackedIds: Set<number>) {
   const config = useMemo(() => ({
     cacheKeyPrefix: 'movie',
     getDismissedIds: () => storageService.getDismissedMovieIds(),
     dismissItem: (tmdbId: number) => storageService.dismissMovie(tmdbId),
     getAllTracked: () => storageService.getAllMovies(),
-    fetchTrending: () => tmdbService.getTrendingMovies('week'),
-    fetchByGenres: (genreIds: number[]) => tmdbService.discoverMoviesByGenres(genreIds),
-    fetchPopular: () => tmdbService.getPopularMovies(),
-    fetchTopRated: () => tmdbService.getTopRatedMovies(),
+    fetchTrending: () => tmdbService.getTrendingMovies('week', RECOMMENDATION_PAGES),
+    fetchByGenres: (genreIds: number[]) => tmdbService.discoverMoviesByGenres(genreIds, RECOMMENDATION_PAGES),
+    fetchPopular: () => tmdbService.getPopularMovies(RECOMMENDATION_PAGES),
+    fetchTopRated: () => tmdbService.getTopRatedMovies(RECOMMENDATION_PAGES),
     extractGenres: extractGenresFromMovies,
   }), []);
 

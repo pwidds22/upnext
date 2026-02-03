@@ -28,16 +28,20 @@ async function extractGenresFromShows(shows: TrackedShow[]): Promise<number[]> {
   return Array.from(genreSet);
 }
 
+// Number of pages to fetch for recommendations (2 pages = ~40 items per category)
+// This ensures enough items for backfill after filtering out tracked/dismissed/duplicates
+const RECOMMENDATION_PAGES = 2;
+
 export function useRecommendations(trackedIds: Set<number>) {
   const config = useMemo(() => ({
     cacheKeyPrefix: 'show',
     getDismissedIds: () => storageService.getDismissedShowIds(),
     dismissItem: (tmdbId: number) => storageService.dismissShow(tmdbId),
     getAllTracked: () => storageService.getAllShows(),
-    fetchTrending: () => tmdbService.getTrending('week'),
-    fetchByGenres: (genreIds: number[]) => tmdbService.discoverByGenres(genreIds),
-    fetchPopular: () => tmdbService.getPopular(),
-    fetchTopRated: () => tmdbService.getTopRated(),
+    fetchTrending: () => tmdbService.getTrending('week', RECOMMENDATION_PAGES),
+    fetchByGenres: (genreIds: number[]) => tmdbService.discoverByGenres(genreIds, RECOMMENDATION_PAGES),
+    fetchPopular: () => tmdbService.getPopular(RECOMMENDATION_PAGES),
+    fetchTopRated: () => tmdbService.getTopRated(RECOMMENDATION_PAGES),
     extractGenres: extractGenresFromShows,
   }), []);
 
