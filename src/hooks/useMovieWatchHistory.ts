@@ -6,6 +6,7 @@ import { useSyncOptional } from '../contexts/SyncContext';
 export function useMovieWatchHistory(movieTmdbId: number) {
   const [watchCount, setWatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Sync integration - returns null if SyncProvider is not available
   const syncContext = useSyncOptional();
@@ -15,10 +16,12 @@ export function useMovieWatchHistory(movieTmdbId: number) {
   const loadWatchCount = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const count = await storageService.getMovieWatchCount(movieTmdbId);
       setWatchCount(count);
     } catch (e) {
       console.error('Failed to load movie watch count:', e);
+      setError(e instanceof Error ? e.message : 'Failed to load watch history');
     } finally {
       setLoading(false);
     }
@@ -86,6 +89,7 @@ export function useMovieWatchHistory(movieTmdbId: number) {
   return {
     watchCount,
     loading,
+    error,
     isWatched,
     refresh: loadWatchCount,
     addWatch,

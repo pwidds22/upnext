@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { followsService } from '../services/supabase/follows';
 import { useAuth } from '../contexts/AuthContext';
 import type { FollowCounts, UserWithFollowStatus } from '../types';
@@ -8,6 +8,12 @@ export function useFollowStatus(targetUserId: string) {
   const { user } = useAuth();
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Use ref to avoid unstable callback reference when isFollowing changes
+  const isFollowingRef = useRef(isFollowing);
+  useEffect(() => {
+    isFollowingRef.current = isFollowing;
+  }, [isFollowing]);
 
   useEffect(() => {
     if (!user || user.id === targetUserId) {
@@ -27,7 +33,7 @@ export function useFollowStatus(targetUserId: string) {
 
     setLoading(true);
     try {
-      if (isFollowing) {
+      if (isFollowingRef.current) {
         await followsService.unfollow(user.id, targetUserId);
         setIsFollowing(false);
       } else {
@@ -39,7 +45,7 @@ export function useFollowStatus(targetUserId: string) {
     } finally {
       setLoading(false);
     }
-  }, [user, targetUserId, isFollowing]);
+  }, [user, targetUserId]);
 
   return { isFollowing, loading, toggleFollow };
 }

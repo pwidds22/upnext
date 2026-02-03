@@ -25,22 +25,23 @@ import StarRating from '../components/StarRating';
 import { useRecommendations } from '../hooks/useRecommendations';
 import { useMovieRecommendations } from '../hooks/useMovieRecommendations';
 import { useFriendsWatching } from '../hooks/useFriendsWatching';
-import {
-  COLORS,
-  SEARCH_DEBOUNCE_MS,
-  MAX_SEARCH_RESULTS,
-  getYearFromDate,
-} from '../utils/constants';
-
-type SearchType = 'tv' | 'movie';
+import { useSearch } from '../hooks/useSearch';
+import { COLORS, getYearFromDate } from '../utils/constants';
 
 export default function SearchScreen() {
-  const [searchType, setSearchType] = useState<SearchType>('tv');
-  const [query, setQuery] = useState('');
-  const [showResults, setShowResults] = useState<TMDBShow[]>([]);
-  const [movieResults, setMovieResults] = useState<TMDBMovie[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Search state via hook
+  const {
+    searchType,
+    setSearchType,
+    query,
+    setQuery,
+    showResults,
+    movieResults,
+    loading,
+    error,
+    clearSearch,
+  } = useSearch();
+
   const [trackedShowIds, setTrackedShowIds] = useState<Set<number>>(new Set());
   const [trackedMovieIds, setTrackedMovieIds] = useState<Set<number>>(new Set());
 
@@ -78,45 +79,6 @@ export default function SearchScreen() {
     loadTracked();
   }, []);
 
-  // Debounced search
-  useEffect(() => {
-    if (!query.trim()) {
-      setShowResults([]);
-      setMovieResults([]);
-      setError(null);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        if (searchType === 'tv') {
-          const searchResults = await tmdbService.searchShows(query);
-          setShowResults(searchResults.slice(0, MAX_SEARCH_RESULTS));
-        } else {
-          const searchResults = await tmdbService.searchMovies(query);
-          setMovieResults(searchResults.slice(0, MAX_SEARCH_RESULTS));
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Search failed');
-        setShowResults([]);
-        setMovieResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => clearTimeout(timer);
-  }, [query, searchType]);
-
-  // Clear results when switching search type
-  useEffect(() => {
-    setShowResults([]);
-    setMovieResults([]);
-  }, [searchType]);
-
   const handleAddShow = useCallback(async (show: TMDBShow, status: ShowStatus, rating: number) => {
     setAddingShow(true);
 
@@ -152,15 +114,14 @@ export default function SearchScreen() {
       setSelectedShow(null);
       setSelectedShowStatus('watchlist');
       setModalRating(0);
-      setQuery('');
-      setShowResults([]);
+      clearSearch();
     } catch (e) {
       console.error('Failed to add show:', e);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setAddingShow(false);
     }
-  }, [user]);
+  }, [user, clearSearch]);
 
   const handleAddMovie = useCallback(async (movie: TMDBMovie, status: MovieStatus, rating: number) => {
     setAddingMovie(true);
@@ -197,15 +158,14 @@ export default function SearchScreen() {
       setSelectedMovie(null);
       setSelectedMovieStatus('watchlist');
       setModalRating(0);
-      setQuery('');
-      setMovieResults([]);
+      clearSearch();
     } catch (e) {
       console.error('Failed to add movie:', e);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setAddingMovie(false);
     }
-  }, [user]);
+  }, [user, clearSearch]);
 
   const renderShowItem = useCallback(
     ({ item }: { item: TMDBShow }) => {
