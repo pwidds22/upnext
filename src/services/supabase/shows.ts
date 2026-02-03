@@ -114,7 +114,7 @@ export const showsCloudService = {
     const { data, error } = await supabase
       .from('user_shows')
       .upsert(row, {
-        onConflict: 'user_id,tmdb_id',
+        onConflict: 'user_id,tmdb_id,media_type',
         ignoreDuplicates: false,
       })
       .select()
@@ -133,7 +133,7 @@ export const showsCloudService = {
     const { data, error } = await supabase
       .from('user_shows')
       .upsert(rows, {
-        onConflict: 'user_id,tmdb_id',
+        onConflict: 'user_id,tmdb_id,media_type',
         ignoreDuplicates: false,
       })
       .select();
@@ -148,7 +148,8 @@ export const showsCloudService = {
       .from('user_shows')
       .update({ status })
       .eq('user_id', userId)
-      .eq('tmdb_id', tmdbId);
+      .eq('tmdb_id', tmdbId)
+      .eq('media_type', 'tv');
 
     if (error) throw error;
   },
@@ -159,7 +160,8 @@ export const showsCloudService = {
       .from('user_shows')
       .update({ deleted_at: new Date().toISOString() })
       .eq('user_id', userId)
-      .eq('tmdb_id', tmdbId);
+      .eq('tmdb_id', tmdbId)
+      .eq('media_type', 'tv');
 
     if (error) throw error;
   },
@@ -225,7 +227,7 @@ export const showsCloudService = {
     const { data, error } = await supabase
       .from('user_shows')
       .upsert(row, {
-        onConflict: 'user_id,tmdb_id',
+        onConflict: 'user_id,tmdb_id,media_type',
         ignoreDuplicates: false,
       })
       .select()

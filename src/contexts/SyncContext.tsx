@@ -30,68 +30,19 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const wasOfflineRef = useRef(false);
   const initialSyncDoneRef = useRef(false);
   const syncInProgressRef = useRef(false);
+  const isOnlineRef = useRef(isOnline);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
 
   // Load last sync time on mount
   useEffect(() => {
     syncService.getLastSyncTime().then(setLastSyncedAt);
   }, []);
 
-  // Network monitoring
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
-      const nowOnline = state.isConnected === true && state.isInternetReachable !== false;
-
-      // Track if we were offline
-      if (!isOnline && nowOnline) {
-        wasOfflineRef.current = true;
-      }
-
-      setIsOnline(nowOnline);
-    });
-
-    return () => unsubscribe();
-  }, [isOnline]);
-
-  // Auto-sync when coming back online
-  useEffect(() => {
-    if (wasOfflineRef.current && isOnline && user && !syncInProgressRef.current) {
-      wasOfflineRef.current = false;
-      triggerSync();
-    }
-  }, [isOnline, user]);
-
-  // Initial sync on user sign-in
-  useEffect(() => {
-    if (user && !initialSyncDoneRef.current && isOnline) {
-      initialSyncDoneRef.current = true;
-      triggerFullSync();
-    }
-
-    // Reset when user signs out
-    if (!user) {
-      initialSyncDoneRef.current = false;
-      setLastSyncedAt(null);
-      setSyncError(null);
-      setSyncState('idle');
-    }
-  }, [user, isOnline]);
-
-  // Poll pending changes count
-  useEffect(() => {
-    const updatePendingCount = async () => {
-      try {
-        const count = await storageService.getSyncQueueCount();
-        setPendingChangesCount(count);
-      } catch {
-        // Ignore errors
-      }
-    };
-
-    updatePendingCount();
-    const interval = setInterval(updatePendingCount, SYNC_POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, []);
-
+  // Define callbacks before effects that use them
   const triggerSync = useCallback(async () => {
     if (!user || syncInProgressRef.current || !isOnline) return;
 
@@ -114,7 +65,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       const count = await storageService.getSyncQueueCount();
       setPendingChangesCount(count);
     } catch (error) {
-      setSyncError((error as Error).message);
+      setSyncError(error instanceof Error ? error.message : 'Sync failed');
       setSyncState('error');
     } finally {
       syncInProgressRef.current = false;
@@ -143,12 +94,68 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       const count = await storageService.getSyncQueueCount();
       setPendingChangesCount(count);
     } catch (error) {
-      setSyncError((error as Error).message);
+      setSyncError(error instanceof Error ? error.message : 'Sync failed');
       setSyncState('error');
     } finally {
       syncInProgressRef.current = false;
     }
   }, [user]);
+
+  // Network monitoring - subscribe once, use ref to avoid re-subscription
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      const nowOnline = state.isConnected === true && state.isInternetReachable !== false;
+
+      // Track if we were offline
+      if (!isOnlineRef.current && nowOnline) {
+        wasOfflineRef.current = true;
+      }
+
+      setIsOnline(nowOnline);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Auto-sync when coming back online
+  useEffect(() => {
+    if (wasOfflineRef.current && isOnline && user && !syncInProgressRef.current) {
+      wasOfflineRef.current = false;
+      triggerSync();
+    }
+  }, [isOnline, user, triggerSync]);
+
+  // Initial sync on user sign-in
+  useEffect(() => {
+    if (user && !initialSyncDoneRef.current && isOnline) {
+      initialSyncDoneRef.current = true;
+      triggerFullSync();
+    }
+
+    // Reset when user signs out
+    if (!user) {
+      initialSyncDoneRef.current = false;
+      setLastSyncedAt(null);
+      setSyncError(null);
+      setSyncState('idle');
+    }
+  }, [user, isOnline, triggerFullSync]);
+
+  // Poll pending changes count
+  useEffect(() => {
+    const updatePendingCount = async () => {
+      try {
+        const count = await storageService.getSyncQueueCount();
+        setPendingChangesCount(count);
+      } catch {
+        // Ignore errors
+      }
+    };
+
+    updatePendingCount();
+    const interval = setInterval(updatePendingCount, SYNC_POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
 
   const value = useMemo(
     () => ({

@@ -551,6 +551,21 @@ class StorageService {
   async markSeasonUnwatched(showTmdbId: number, seasonNumber: number): Promise<void> {
     if (!this.db) await this.init();
 
+    // Query episodes first to queue for sync deletion
+    const rows = await this.db!.getAllAsync<{ episode_number: number }>(
+      'SELECT DISTINCT episode_number FROM watched_episodes WHERE show_tmdb_id = ? AND season_number = ?',
+      [showTmdbId, seasonNumber]
+    );
+
+    for (const row of rows) {
+      const id = `${showTmdbId}-${seasonNumber}-${row.episode_number}`;
+      await this.addToSyncQueue('watched_episodes', id, 'delete', {
+        showTmdbId,
+        season: seasonNumber,
+        episode: row.episode_number,
+      });
+    }
+
     await this.db!.runAsync(
       'DELETE FROM watched_episodes WHERE show_tmdb_id = ? AND season_number = ?',
       [showTmdbId, seasonNumber]

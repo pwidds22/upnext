@@ -1,6 +1,6 @@
 # Technical Debt Tracker
 
-Last scanned: 2026-02-02
+Last scanned: 2026-02-03
 
 ## How to Use
 - Run `/techdebt` periodically to rescan and update this file
@@ -11,126 +11,183 @@ Last scanned: 2026-02-02
 
 ## Critical (Fix Before Launch)
 
-- [x] **Conditional Hook Call** - `useEpisodeReactions.ts:14-20` - FIXED: Now uses `useSyncOptional` unconditionally
-- [x] **Stale Closure** - `useEpisodeReactions.ts:41-45` - FIXED: `sync` and `isOnline` now derived from hook result
-- [x] **ON CONFLICT Anti-Pattern** - `storage.ts:757-761` - FIXED: Now uses check-then-insert pattern
+### Sync Engine Data Gaps
+- [ ] **Initial sync missing movies** - `sync.ts:128-242` - `initialSync()` only syncs shows/episodes, NOT movies. Multi-device users lose movie data
+- [ ] **Initial sync missing reactions/dismissed/history** - `sync.ts:128-242` - Episode reactions, dismissed shows/movies, watch history never pulled during initial sync
+- [ ] **Incremental pull missing data types** - `sync.ts:278-358` - `pullChanges` only fetches shows and episodes. Movies, reactions, dismissals, watch history changes from other devices are never pulled
+- [ ] **Movie sync uses wrong converter** - `sync.ts:364-381` - `processSyncQueueItem` casts movie payloads as `TrackedShow`, uses `toSupabaseRow()` instead of `movieToSupabaseRow()`, losing movie-specific fields
+- [ ] **Upsert conflict key missing media_type** - `shows.ts:117,135,227` - `onConflict: 'user_id,tmdb_id'` can overwrite a show with a movie (or vice versa) when same TMDB ID exists for both
+- [ ] **markSeasonUnwatched missing sync** - `storage.ts:551-558` - Bulk DELETE doesn't queue individual episode deletions to sync queue, causing cloud desync
+
+### SyncContext Bugs
+- [ ] **Missing useEffect dependency** - `SyncContext.tsx:56-62` - `triggerSync` called in effect but not in dependency array, stale closure risk
+- [ ] **Missing useEffect dependency** - `SyncContext.tsx:64-77` - `triggerFullSync` called in effect but not in dependency array
+- [ ] **NetInfo re-subscription** - `SyncContext.tsx:40-53` - Listener unsubscribes/re-subscribes every time `isOnline` changes, brief window where events are missed
+
+### Previously Fixed
+- [x] **Conditional Hook Call** - `useEpisodeReactions.ts` - FIXED: Uses `useSyncOptional` unconditionally
+- [x] **Stale Closure** - `useEpisodeReactions.ts` - FIXED: sync/isOnline derived from hook result
+- [x] **ON CONFLICT Anti-Pattern** - `storage.ts` - FIXED: Uses check-then-insert pattern
 
 ---
 
 ## High Priority (Fix Soon)
 
-### Service Layer Issues
-- [x] **INSERT OR REPLACE Usage** - FIXED: All 4 uses converted to check-then-insert pattern
+### Service Layer
+- [x] **INSERT OR REPLACE Usage** - FIXED: All 4 uses converted to check-then-insert
+- [ ] **softDeleteShow missing media_type filter** - `shows.ts:157-165` - Could soft-delete wrong record when movie/show share TMDB ID
+- [ ] **updateShowStatus missing media_type filter** - `shows.ts:146-154` - Same issue; compare with `updateMovieStatus` which correctly filters
+- [ ] **Unsafe JSON.parse in sync** - `sync.ts:362` - Payload parsed and cast without runtime validation
+- [ ] **N+1 query in getAllLocalEpisodes** - `sync.ts:457-467` - Loops through shows individually instead of using `getAllWatchedEpisodes()`
+- [ ] **Inefficient removeFromQueueIfExists** - `sync.ts:470-478` - Loads entire sync queue then scans in JS instead of direct SQL query
 
-### Screen Anti-Patterns
-- [x] **Direct Service Calls** - FIXED: Created `useProfileLookup` hook for SignInScreen
-- [x] **Direct Service Calls** - FIXED: Created `useUsernameCheck` hook for SignUpScreen
-- [ ] **Direct TMDB Calls** - `SearchScreen.tsx:96-100` - Calls `tmdbService.searchShows()` directly in component
+### Screen Anti-Patterns (Direct Service Calls)
+- [x] **Direct Service Calls** - FIXED: Created `useProfileLookup` hook
+- [x] **Direct Service Calls** - FIXED: Created `useUsernameCheck` hook
+- [ ] **UserProfileScreen** - 5+ direct `followsService` calls - needs `useUserProfile` hook
+- [ ] **MovieDetailScreen** - 3 direct `ratingsService`/`followsService` calls
+- [ ] **ProfileScreen** - 6 direct `followsService`/`ratingsService` calls
+- [ ] **SearchScreen** - 3 direct TMDB calls + 2 direct ratings calls
+- [ ] **UpNextScreen** - Direct `tmdbService.getSeason()` call
+- [ ] **ActivityItem component** - Direct `activityService` call from component
+
+### Race Conditions (Missing Transactions)
+- [ ] **markEpisodeWatched** - `storage.ts:479-514` - check-then-insert not wrapped in `withTransactionAsync`
+- [ ] **setReaction** - `storage.ts:793-849` - check-then-insert not in transaction
+- [ ] **addToSyncQueue** - `storage.ts:583-611` - check-then-insert not in transaction
+- [ ] **dismissShow/dismissMovie** - `storage.ts:907-949,997-1039` - check-then-insert not in transaction
 
 ### Code Duplication
 - [x] **Username Validation** - FIXED: Extracted to `src/utils/validation.ts`
-- [x] **Follow Toggle Logic** - FIXED: Created `useFollowToggle` hook, updated 3 screens
-- [x] **ShowCard/MovieCard** - FIXED: Created `MediaCard` component, simplified both cards
+- [x] **Follow Toggle Logic** - FIXED: Created `useFollowToggle` hook
+- [x] **ShowCard/MovieCard** - FIXED: Created `MediaCard` component
 - [x] **Recommendation Hooks** - FIXED: Created `useMediaRecommendations` generic hook
+- [ ] **FollowersScreen/FollowingScreen** - 147 lines each, structurally identical, should be one parameterized component
 
-### Safety Issues
-- [x] **Unsafe Non-Null Assertion** - FIXED: Changed to `activity.rating ?? 0`
-- [x] **Unsafe String Access** - FIXED: Changed to `displayName.charAt(0) || 'U'`
+### Safety
+- [x] **Unsafe Non-Null Assertion** - FIXED
+- [x] **Unsafe String Access** - FIXED
+- [ ] **Unsafe error cast in SyncContext** - `SyncContext.tsx:117,146` - `(error as Error).message` will break on non-Error throws
 
-### Hook Issues (Newly Found)
+### Hook Issues
 - [ ] **Missing useCallback Dependency** - `useFollows.ts:42` - `toggleFollow` depends on `isFollowing` but not in deps
 - [ ] **Circular useEffect Dependency** - `useActivityFeed.ts:60` - `loadMore` includes `activities` in deps
-- [ ] **Missing Error State** - `useMovieWatchHistory.ts` - No `error` state returned unlike similar hooks
+- [ ] **Missing Error State** - 6 hooks catch errors but never expose `error` to UI consumers
+
+### Non-functional UI
+- [ ] **Auto-sync toggle** - `SyncSettingsScreen.tsx:30` - Local state only, not persisted, doesn't affect behavior
+- [ ] **"See All" button** - `ProfileScreen.tsx:669-673` - No `onPress` handler, does nothing
 
 ---
 
 ## Medium Priority (Fix When Convenient)
 
 ### Type Safety
-- [ ] **`any` Type Usage** - `activity.ts:296,349,423,475,598,601` - 6 uses for row casting
-- [ ] **`any` Type Usage** - `follows.ts:171,202,324,356` - 4 uses for profile data
-- [ ] **Loose Type Assertions** - `activity.ts:78,304,369,427,483,605` - Multiple `as any[]` and `as ProfileRow` casts
+- [ ] **`any` Type Usage** - `activity.ts:78,296,304,349,369,423,475,598,601` - 9 uses
+- [ ] **`any` Type Usage** - `follows.ts:171,202,324,356` - 4 uses
+- [ ] **`as any` cast** - `SyncSettingsScreen.tsx:131` - Icon name cast
+- [ ] **Duplicate `RatingWithShowInfo`** - Defined differently in ProfileScreen and UserProfileScreen
+- [ ] **`UserShowRow.status` allows invalid combos** - Union of ShowStatus|MovieStatus without discrimination
+- [ ] **Types in wrong files** - `RatingType`, `UserRatingRow` in ratings.ts; `UserPublicShow` in follows.ts
+
+### Duplicated Code (Services)
+- [ ] **Row type + mapper boilerplate** - `storage.ts` - 8+ identical row-to-object mappings
+- [ ] **Dismissed shows/movies methods** - `storage.ts` - Near-identical, differ only by table name
+- [ ] **Episode/movie watch history** - `storage.ts` - 9 pairs of identical methods
+- [ ] **profileFromRow duplicated** - `activity.ts:15` and `follows.ts:25` - Different shapes, should be unified
+- [ ] **Rating methods** - `ratings.ts` - 4 rate* methods follow identical upsert pattern
+- [ ] **Average rating methods** - `ratings.ts` - show/movie versions identical except filter
+- [ ] **rowToTrackedShow duplicated** - `sync.ts:481` vs `shows.ts:47` - same field mapping
+- [ ] **TMDB paginated fetch** - `tmdb.ts` - 8 functions share same loop pattern
+- [ ] **triggerSyncIfOnline** - Duplicated in 4 hooks, extract to `useTriggerSync()`
+
+### Duplicated Code (UI)
+- [ ] **Rating section** - ShowDetailScreen and MovieDetailScreen - near-identical rating UI
+- [ ] **Streaming providers** - ShowDetailScreen and MovieDetailScreen - same "Where to Watch" section
+- [ ] **Avatar placeholder** - 3 components implement same circle-with-initial pattern differently
+- [ ] **Modal header** - ProfileVisibilitySheet and WatchHistorySheet - identical header structure
+- [ ] **Empty state** - 7 screens implement same centered icon+text pattern independently
 
 ### Missing Error UI
-- [ ] **WatchHistorySheet.tsx** - Errors caught but no user feedback (4 catch blocks)
-- [ ] **ProfileVisibilitySheet.tsx** - Errors caught but no user feedback
+- [ ] **WatchHistorySheet.tsx** - 4 catch blocks with no user feedback
+- [ ] **ProfileVisibilitySheet.tsx** - Error caught, no user feedback
 - [ ] **ActivityItem.tsx:132-140** - Fetches user activity, console.error only
+- [ ] **UpNextScreen** - No error state at all, shows empty state on failure
+- [ ] **MyShowsScreen** - No error state, shows "Library Empty" on failure
+- [ ] **MovieDetailScreen** - Optimistic status update with no rollback on failure
+- [ ] **ShowDetailScreen** - Same optimistic update issue
+- [ ] **UpNextScreen** - `handleMarkWatched` optimistic with no rollback
 
 ### Component Structure
-- [ ] **Large Component** - `ProfileScreen.tsx` is 1,065 lines - extract EditProfileModal
-- [ ] **Large Component** - `ShowDetailScreen.tsx` is 1,134 lines - extract sections
-- [ ] **Large Component** - `SearchScreen.tsx` is 1,033 lines - extract modal content
-- [x] **Hardcoded Colors** - FIXED: ShowCard/MovieCard now use MediaCard which uses COLORS constants
+- [ ] **ProfileScreen** - 1,122 lines, extract EditProfileModal
+- [ ] **ShowDetailScreen** - Extract rating section, providers, about section
+- [ ] **SearchScreen** - 1,034 lines, extract AddShowModal and AddMovieModal
+- [ ] **Missing React.memo** - No components use React.memo (EpisodeRow, ShowCard, MovieCard, etc.)
+- [ ] **Missing useCallback** - EpisodeRow, ActivityItem, FriendsWatchingCard handlers recreated every render
 
-### Hardcoded Colors (Components)
-- [ ] **EpisodeRow.tsx:254,259** - `'#fff'` and `rgba(0,0,0,0.5)` should use constants
-- [ ] **MediaCard.tsx:41,50,71** - `rgba` and `#FFD700` should use constants
-- [ ] **ActivityItem.tsx:44,46,48,50** - `#34C759`, `#9B59B6`, `#FFD700`, `#FF3B30` need constants
+### Inline Styles
+- [ ] **MyShowsScreen:416** - `{{ flex: 1 }}`
+- [ ] **UserProfileScreen:412,458** - `{{ padding: 20 }}`
+- [ ] **ProfileScreen:506,641** - `{{ marginVertical: 8 }}`, `{{ padding: 20 }}`
+- [ ] **SearchScreen:585,694** - `{{ width: 60 }}`
+- [ ] **ProfileVisibilitySheet:119, WatchHistorySheet:190** - `{{ width: 40 }}`
+- [ ] **EpisodeRow:151** - `{ color: COLORS.error }`
+- [ ] **ShowPoster:40** - Dynamic dimensions inline
 
-### Hook Issues
-- [x] **Missing Cleanup** - FIXED: Added debounceTimerRef in ProfileScreen and SignUpScreen
-- [ ] **Duplicated Sync Pattern** - `useShowData.ts:46`, `useEpisodeReactions.ts:36` - `sync?.catch(console.error)` repeated
+### Hardcoded Colors
+- [ ] **EpisodeRow.tsx:254,259** - `'#fff'` and `rgba(0,0,0,0.5)`
+- [ ] **MediaCard.tsx:41,50,71** - `rgba` and `#FFD700`
+- [ ] **ActivityItem.tsx:44-50** - `#34C759`, `#9B59B6`, `#FFD700`, `#FF3B30`
+- [ ] **REACTION_CONFIG in types/index.ts** - Hardcoded colors, should use COLORS constants
 
 ### Cleanup
-- [ ] **Console Statements** - 30+ console.error/console.warn calls across codebase:
-  - Services: `activity.ts:317,495`, `auth.ts:44`, `follows.ts:73`
-  - Hooks: `useFollows.ts` (6), `useActivityFeed.ts` (3), `useShowData.ts` (3), etc.
-  - Components: `WatchHistorySheet.tsx` (4), `ActivityItem.tsx:137`, `ProfileVisibilitySheet.tsx:91`
+- [ ] **30+ console.error/console.warn** - Replace with proper logging for production
+- [ ] **Stale comment in sync.ts:320** - Says "addShow uses INSERT OR REPLACE" but it's been fixed
+- [ ] **Unused imports** - FlatList in MyShowsScreen, MediaType in MyShowsScreen/SearchScreen, TMDBEpisode in UpNextScreen, formatEpisodeCode in EpisodeRow, EpisodeReaction in useEpisodeReactions
+- [ ] **Dead code** - SignUpScreen success state (never set), EpisodeReactionPicker default emoji size (always overridden), empty provider logo in ShowDetailScreen
+- [ ] **Silent partial export** - `export.ts:58,68,80` - Errors swallowed, user gets incomplete data without knowing
+- [ ] **formatRating/starsToValue/valueToStars** - Utility functions exported from StarRating.tsx component file, should be in utils/
 
 ---
 
 ## Low Priority (Nice to Have)
 
-### Duplication
-- [ ] **Show/Movie Methods** - `storage.ts`, `shows.ts`, `ratings.ts` - extensive duplication
-- [ ] **Genre Extraction** - `useRecommendations.ts:8-29` and `useMovieRecommendations.ts:8-29` nearly identical
-- [ ] **Profile Row Mapping** - `activity.ts` has 3 identical profile mapping patterns
-- [ ] **Avatar Placeholder** - Same pattern in `UserRow.tsx`, `ActivityItem.tsx`, `FriendsWatchingCard.tsx`
-
 ### Accessibility
-- [ ] **Missing Labels** - All components lack `accessibilityLabel` on interactive elements
+- [ ] **Missing accessibilityLabel** - All interactive elements across all screens and components
+- [ ] **Missing accessibilityRole** - No roles on buttons, inputs, or toggles
+- [ ] **Missing accessibilityLabel on TextInputs** - Across SearchScreen, auth screens, ProfileScreen
 
 ### Code Quality
-- [ ] **Inconsistent Loading State Names** - `addingShow` vs `ratingLoading` vs `isLoading`
-- [ ] **Missing Return Type Annotations** - Multiple hooks should have explicit return types
-- [ ] **Type Organization** - `types/index.ts` is 533 lines without section comments
-- [ ] **State Consolidation** - `SearchScreen.tsx:37-57` has 12 useState hooks
-
-### Performance
-- [ ] **Missing Memoization** - `ActivityItem.tsx:23-93` helper functions recreated every render
-- [ ] **Inline Object Creation** - `ActivityItem.tsx:44-50` creates new objects on each call
-
----
-
-## Patterns to Add to CLAUDE.md Anti-Patterns
-
-When fixing these, add these patterns to CLAUDE.md:
-
-1. **Don't call hooks conditionally** - wrap in try/catch seen in useEpisodeReactions.ts
-2. **Don't duplicate show/movie methods** - extract to generic `media` methods with type parameter
-3. **Don't use `any` for Supabase row data** - create proper row types
-4. **Don't call services directly from auth screens** - create dedicated hooks
-5. **Don't use hardcoded hex colors** - add to COLORS constants first
-6. **Don't console.error without user feedback** - show toast/alert or set error state
+- [ ] **Inconsistent loading state names** - `addingShow` vs `ratingLoading` vs `isLoading`
+- [ ] **Missing return type annotations** - Multiple hooks lack explicit return types
+- [ ] **Type organization** - `types/index.ts` is 533+ lines without section comments
+- [ ] **State consolidation** - `SearchScreen.tsx` has 12+ useState hooks
+- [ ] **ExportFormat single-value union** - `types/index.ts:538` - only `'json'`, no value
+- [ ] **Misleading comments** - "returns null" but `useSyncOptional` returns `undefined`
+- [ ] **Duplicate follow-toggle logic** - `useFollowToggle.ts` and `useFollows.ts:toggleFollow` both exist
+- [ ] **FlatList misuse in UpNextScreen** - Empty data + ListHeaderComponent, should be ScrollView
+- [ ] **Stale findNextEpisode closure** - `UpNextScreen.tsx` - Not memoized but called from memoized callback
 
 ---
 
 ## Session Notes
 
+### 2026-02-03 (Full Rescan - Pre-Launch Audit)
+- Fixed 3 review feedback issues (re-dismiss, expiry consistency, partial fetch)
+- Full 4-agent tech debt scan across services, screens, components, hooks
+- **Major new findings:**
+  - Sync engine has significant data gaps (movies, reactions, dismissals, watch history never pulled)
+  - SyncContext has stale closure bugs from missing useEffect dependencies
+  - Movie sync uses wrong converter, upsert conflict key missing media_type
+  - 6 critical + 3 SyncContext bugs identified
+- Build config check: EAS Build ready, 70% App Store ready (missing privacy policy, screenshots, metadata)
+
 ### 2026-02-02 (Full Tech Debt Pass)
-- Fixed all 3 critical issues + all 9 high-priority issues:
-  - **Critical fixes:** useEpisodeReactions hooks, storage.ts setReaction
-  - **INSERT OR REPLACE:** Fixed 4 more locations in storage.ts
-  - **Service hooks:** Created useProfileLookup, useUsernameCheck
-  - **Validation:** Extracted to src/utils/validation.ts
-  - **Follow toggle:** Created useFollowToggle hook, updated 3 screens
-  - **MediaCard:** Unified ShowCard/MovieCard
-  - **Recommendations:** Created useMediaRecommendations generic hook
-  - **Safety:** Fixed unsafe assertions in ActivityItem, UserRow
+- Fixed all 3 critical issues + all 9 high-priority issues
 - Fixed debounce cleanup bugs found in Claude Web review (2 rounds)
-- Ran `/techdebt` scan - found new hook dependency issues, more hardcoded colors
+- Created useProfileLookup, useUsernameCheck, useFollowToggle, MediaCard, useMediaRecommendations
+- Extracted validation utilities
 
 ### 2026-02-02
 - Initial scan completed
 - Share profile feature done, all review feedback fixed
-- Next feature: Data export (last before launch)

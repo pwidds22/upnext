@@ -9,14 +9,21 @@ import type {
   SyncResult,
   SyncQueueItem,
   TrackedShow,
+  TrackedMovie,
   ShowStatus,
+  MovieStatus,
   WatchedEpisode,
   EpisodeReaction,
+  EpisodeReactionType,
   DismissedShow,
   EpisodeWatchHistory,
   MovieWatchHistory,
   UserShowRow,
   UserWatchedEpisodeRow,
+  UserEpisodeReactionRow,
+  UserDismissedShowRow,
+  UserEpisodeWatchHistoryRow,
+  UserMovieWatchHistoryRow,
 } from '../../types';
 
 const LAST_SYNC_KEY = '@upnext_last_sync';
@@ -222,11 +229,145 @@ export const syncService = {
         }
       }
 
-      // Step 5: Clear sync queue and update timestamp
+      // Step 5: Sync movies
+      const localMovies = await storageService.getAllMovies();
+      const remoteMovies = await showsCloudService.fetchAllMovies(userId);
+      const remoteMoviesMap = new Map(remoteMovies.map((m) => [m.tmdbId, m]));
+      const localMoviesMap = new Map(localMovies.map((m) => [m.tmdbId, m]));
+
+      // Push local-only movies
+      const moviesToPush: TrackedMovie[] = [];
+      for (const localMovie of localMovies) {
+        if (!remoteMoviesMap.has(localMovie.tmdbId)) {
+          moviesToPush.push(localMovie);
+        }
+      }
+      if (moviesToPush.length > 0) {
+        for (const movie of moviesToPush) {
+          await showsCloudService.upsertMovie(userId, movie);
+        }
+      }
+
+      // Pull remote-only movies
+      for (const remoteMovie of remoteMovies) {
+        if (!localMoviesMap.has(remoteMovie.tmdbId)) {
+          await storageService.addMovie(remoteMovie);
+        }
+      }
+
+      // Step 6: Sync episode reactions
+      const localReactions = await storageService.getAllEpisodeReactions();
+      const remoteReactions = await episodeReactionsCloudService.fetchAllReactions(userId);
+      const remoteReactionsMap = new Map(
+        remoteReactions.map((r) => [`${r.showTmdbId}-${r.seasonNumber}-${r.episodeNumber}`, r])
+      );
+      const localReactionsMap = new Map(
+        localReactions.map((r) => [`${r.showTmdbId}-${r.seasonNumber}-${r.episodeNumber}`, r])
+      );
+
+      // Push local-only reactions
+      for (const localReaction of localReactions) {
+        const key = `${localReaction.showTmdbId}-${localReaction.seasonNumber}-${localReaction.episodeNumber}`;
+        if (!remoteReactionsMap.has(key)) {
+          await episodeReactionsCloudService.upsertReaction(userId, localReaction);
+        }
+      }
+
+      // Pull remote-only reactions
+      for (const remoteReaction of remoteReactions) {
+        const key = `${remoteReaction.showTmdbId}-${remoteReaction.seasonNumber}-${remoteReaction.episodeNumber}`;
+        if (!localReactionsMap.has(key)) {
+          await storageService.setReaction(
+            remoteReaction.showTmdbId,
+            remoteReaction.seasonNumber,
+            remoteReaction.episodeNumber,
+            remoteReaction.reaction
+          );
+        }
+      }
+
+      // Step 7: Sync dismissed shows
+      const localDismissedShows = await storageService.getAllDismissedShows();
+      const remoteDismissed = await dismissedShowsCloudService.fetchAllDismissed(userId);
+      const remoteDismissedMap = new Map(remoteDismissed.map((d) => [d.tmdbId, d]));
+      const localDismissedMap = new Map(localDismissedShows.map((d) => [d.tmdbId, d]));
+
+      // Push local-only dismissals
+      for (const localDismissed of localDismissedShows) {
+        if (!remoteDismissedMap.has(localDismissed.tmdbId)) {
+          await dismissedShowsCloudService.upsertDismissed(userId, {
+            id: `dismissed-${localDismissed.tmdbId}`,
+            tmdbId: localDismissed.tmdbId,
+            dismissedAt: localDismissed.dismissedAt,
+          });
+        }
+      }
+
+      // Pull remote-only dismissals
+      for (const remoteDismissedShow of remoteDismissed) {
+        if (!localDismissedMap.has(remoteDismissedShow.tmdbId)) {
+          await storageService.dismissShow(remoteDismissedShow.tmdbId);
+        }
+      }
+
+      // Step 8: Sync episode watch history
+      const localEpHistory = await storageService.getAllEpisodeWatchHistory();
+      const remoteEpHistory = await episodeWatchHistoryService.fetchAllWatchHistory(userId);
+      const localEpHistoryIds = new Set(localEpHistory.map((h) => h.id));
+      const remoteEpHistoryLocalIds = new Set(
+        remoteEpHistory.map((h) => h.id).filter(Boolean)
+      );
+
+      // Push local-only episode watch history
+      const epHistoryToPush = localEpHistory.filter((h) => !remoteEpHistoryLocalIds.has(h.id));
+      if (epHistoryToPush.length > 0) {
+        await episodeWatchHistoryService.insertWatches(userId, epHistoryToPush);
+      }
+
+      // Pull remote-only episode watch history
+      for (const remoteWatch of remoteEpHistory) {
+        if (!localEpHistoryIds.has(remoteWatch.id)) {
+          await storageService.addEpisodeWatchHistory(
+            remoteWatch.showTmdbId,
+            remoteWatch.seasonNumber,
+            remoteWatch.episodeNumber,
+            remoteWatch.watchedAt,
+            remoteWatch.episodeTitle
+          );
+        }
+      }
+
+      // Step 9: Sync movie watch history
+      const localMovieHistory = await storageService.getAllMovieWatchHistory();
+      const remoteMovieHistory = await movieWatchHistoryService.fetchAllWatchHistory(userId);
+      const localMovieHistoryIds = new Set(localMovieHistory.map((h) => h.id));
+      const remoteMovieHistoryLocalIds = new Set(
+        remoteMovieHistory.map((h) => h.id).filter(Boolean)
+      );
+
+      // Push local-only movie watch history
+      const movieHistoryToPush = localMovieHistory.filter(
+        (h) => !remoteMovieHistoryLocalIds.has(h.id)
+      );
+      if (movieHistoryToPush.length > 0) {
+        await movieWatchHistoryService.insertWatches(userId, movieHistoryToPush);
+      }
+
+      // Pull remote-only movie watch history
+      for (const remoteWatch of remoteMovieHistory) {
+        if (!localMovieHistoryIds.has(remoteWatch.id)) {
+          await storageService.addMovieWatchHistory(
+            remoteWatch.movieTmdbId,
+            remoteWatch.watchedAt
+          );
+        }
+      }
+
+      // Step 10: Clear sync queue and update timestamp
       await storageService.clearSyncQueue();
       await this.setLastSyncTime(new Date().toISOString());
 
-      // Mark all local shows as synced
+      // Mark all local shows and movies as synced
       for (const show of localShows) {
         const remoteId = (await showsCloudService.getShowRemoteId(userId, show.tmdbId)) ?? undefined;
         await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteId);
@@ -283,45 +424,71 @@ export const syncService = {
     let conflicts = 0;
 
     // Fetch changes from remote
-    const [remoteShowChanges, remoteEpisodeChanges] = await Promise.all([
+    const [
+      remoteShowChanges,
+      remoteEpisodeChanges,
+      remoteReactionChanges,
+      remoteDismissedChanges,
+      remoteEpHistoryChanges,
+      remoteMovieHistoryChanges,
+    ] = await Promise.all([
       showsCloudService.fetchShowsSince(userId, since),
       episodesCloudService.fetchEpisodesSince(userId, since),
+      episodeReactionsCloudService.fetchReactionsSince(userId, since),
+      dismissedShowsCloudService.fetchDismissedSince(userId, since),
+      episodeWatchHistoryService.fetchWatchHistorySince(userId, since),
+      movieWatchHistoryService.fetchWatchHistorySince(userId, since),
     ]);
 
-    // Apply show changes
+    // Apply show/movie changes (fetchShowsSince returns all media types)
     for (const remoteRow of remoteShowChanges) {
-      const localShow = await storageService.getShow(remoteRow.tmdb_id);
+      const isMovie = remoteRow.media_type === 'movie';
 
       if (remoteRow.deleted_at) {
-        // Remote was deleted
-        if (localShow) {
+        if (isMovie) {
+          await storageService.deleteMovie(remoteRow.tmdb_id);
+        } else {
           await storageService.deleteShow(remoteRow.tmdb_id);
-          // Remove the delete from sync queue since it came from remote
-          await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'delete');
         }
+        await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'delete');
         pulled.shows++;
         continue;
       }
 
-      if (!localShow) {
-        // New remote show - add locally
-        const show = this.rowToTrackedShow(remoteRow);
-        await storageService.addShow(show);
-        await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteRow.id);
-        // Remove from queue since we just pulled it
-        await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'create');
-        pulled.shows++;
-      } else {
-        // Both exist - conflict resolution
-        const winner = resolveConflict(localShow.lastSyncedAt, remoteRow.updated_at);
-        if (winner === 'remote') {
-          // Update local with remote data
-          const show = this.rowToTrackedShow(remoteRow);
-          await storageService.addShow(show); // addShow uses INSERT OR REPLACE
-          await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteRow.id);
+      if (isMovie) {
+        const localMovie = await storageService.getMovie(remoteRow.tmdb_id);
+        if (!localMovie) {
+          const movie = this.rowToTrackedMovie(remoteRow);
+          await storageService.addMovie(movie);
+          await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'create');
           pulled.shows++;
+        } else {
+          const winner = resolveConflict(localMovie.lastSyncedAt, remoteRow.updated_at);
+          if (winner === 'remote') {
+            const movie = this.rowToTrackedMovie(remoteRow);
+            await storageService.addMovie(movie);
+            pulled.shows++;
+          }
+          conflicts++;
         }
-        conflicts++;
+      } else {
+        const localShow = await storageService.getShow(remoteRow.tmdb_id);
+        if (!localShow) {
+          const show = this.rowToTrackedShow(remoteRow);
+          await storageService.addShow(show);
+          await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteRow.id);
+          await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'create');
+          pulled.shows++;
+        } else {
+          const winner = resolveConflict(localShow.lastSyncedAt, remoteRow.updated_at);
+          if (winner === 'remote') {
+            const show = this.rowToTrackedShow(remoteRow);
+            await storageService.addShow(show);
+            await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteRow.id);
+            pulled.shows++;
+          }
+          conflicts++;
+        }
       }
     }
 
@@ -330,7 +497,6 @@ export const syncService = {
       const episodeId = `${remoteRow.tmdb_show_id}-${remoteRow.season_number}-${remoteRow.episode_number}`;
 
       if (remoteRow.deleted_at) {
-        // Remote was deleted
         await storageService.markEpisodeUnwatched(
           remoteRow.tmdb_show_id,
           remoteRow.season_number,
@@ -341,7 +507,6 @@ export const syncService = {
         continue;
       }
 
-      // Add/update episode locally
       await storageService.markEpisodeWatched({
         showTmdbId: remoteRow.tmdb_show_id,
         seasonNumber: remoteRow.season_number,
@@ -352,6 +517,82 @@ export const syncService = {
       });
       await this.removeFromQueueIfExists('watched_episodes', episodeId, 'create');
       pulled.episodes++;
+    }
+
+    // Apply reaction changes
+    for (const remoteRow of remoteReactionChanges) {
+      const reactionId = `${remoteRow.tmdb_show_id}-${remoteRow.season_number}-${remoteRow.episode_number}-reaction`;
+
+      if (remoteRow.deleted_at) {
+        await storageService.removeReaction(
+          remoteRow.tmdb_show_id,
+          remoteRow.season_number,
+          remoteRow.episode_number
+        );
+        await this.removeFromQueueIfExists('episode_reactions', reactionId, 'delete');
+        continue;
+      }
+
+      await storageService.setReaction(
+        remoteRow.tmdb_show_id,
+        remoteRow.season_number,
+        remoteRow.episode_number,
+        remoteRow.reaction as EpisodeReactionType
+      );
+      await this.removeFromQueueIfExists('episode_reactions', reactionId, 'create');
+    }
+
+    // Apply dismissed show changes
+    for (const remoteRow of remoteDismissedChanges) {
+      if (remoteRow.deleted_at) {
+        await storageService.undismissShow(remoteRow.tmdb_id);
+        await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'delete');
+        continue;
+      }
+
+      await storageService.dismissShow(remoteRow.tmdb_id);
+      await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'create');
+    }
+
+    // Apply episode watch history changes
+    for (const remoteRow of remoteEpHistoryChanges) {
+      if (remoteRow.deleted_at) {
+        if (remoteRow.local_id) {
+          await storageService.deleteEpisodeWatch(remoteRow.local_id);
+          await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'delete');
+        }
+        continue;
+      }
+
+      await storageService.addEpisodeWatchHistory(
+        remoteRow.tmdb_show_id,
+        remoteRow.season_number,
+        remoteRow.episode_number,
+        remoteRow.watched_at,
+        remoteRow.episode_title ?? undefined
+      );
+      if (remoteRow.local_id) {
+        await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'create');
+      }
+    }
+
+    // Apply movie watch history changes
+    for (const remoteRow of remoteMovieHistoryChanges) {
+      if (remoteRow.deleted_at) {
+        if (remoteRow.local_id) {
+          await storageService.deleteMovieWatch(remoteRow.local_id);
+          await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'delete');
+        }
+        continue;
+      }
+
+      await storageService.addMovieWatchHistory(
+        remoteRow.tmdb_movie_id,
+        remoteRow.watched_at
+      );
+      if (remoteRow.local_id) {
+        await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'create');
+      }
     }
 
     return { pulled, conflicts };
@@ -365,17 +606,27 @@ export const syncService = {
       switch (item.operation) {
         case 'create':
         case 'update': {
-          const show = payload as TrackedShow;
-          const result = await withRetry(() => showsCloudService.upsertShow(userId, show));
-          await storageService.updateShowSyncStatus(show.tmdbId, 'synced', result.id);
+          if (payload.mediaType === 'movie') {
+            const movie = payload as TrackedMovie;
+            const result = await withRetry(() => showsCloudService.upsertMovie(userId, movie));
+            await storageService.updateShowSyncStatus(movie.tmdbId, 'synced', result.id);
+          } else {
+            const show = payload as TrackedShow;
+            const result = await withRetry(() => showsCloudService.upsertShow(userId, show));
+            await storageService.updateShowSyncStatus(show.tmdbId, 'synced', result.id);
+          }
           break;
         }
         case 'delete': {
-          const { tmdbId } = payload;
-          await withRetry(() => showsCloudService.softDeleteShow(userId, tmdbId));
-          // Also soft-delete episodes and reactions for this show
-          await withRetry(() => episodesCloudService.softDeleteShowEpisodes(userId, tmdbId));
-          await withRetry(() => episodeReactionsCloudService.softDeleteShowReactions(userId, tmdbId));
+          const { tmdbId, mediaType } = payload;
+          if (mediaType === 'movie') {
+            await withRetry(() => showsCloudService.softDeleteMovie(userId, tmdbId));
+          } else {
+            await withRetry(() => showsCloudService.softDeleteShow(userId, tmdbId));
+            // Also soft-delete episodes and reactions for this show
+            await withRetry(() => episodesCloudService.softDeleteShowEpisodes(userId, tmdbId));
+            await withRetry(() => episodeReactionsCloudService.softDeleteShowReactions(userId, tmdbId));
+          }
           break;
         }
       }
@@ -489,6 +740,24 @@ export const syncService = {
       totalSeasons: row.total_seasons,
       totalEpisodes: row.total_episodes,
       airedEpisodes: row.aired_episodes ?? undefined,
+      streamingServices: row.streaming_services ?? [],
+      syncStatus: 'synced',
+      remoteId: row.id,
+      lastSyncedAt: row.synced_at,
+    };
+  },
+
+  // Convert Supabase row to TrackedMovie
+  rowToTrackedMovie(row: UserShowRow): TrackedMovie {
+    return {
+      mediaType: 'movie',
+      tmdbId: row.tmdb_id,
+      title: row.title,
+      posterPath: row.poster_path,
+      status: row.status as MovieStatus,
+      addedAt: row.added_at,
+      releaseDate: row.release_date,
+      runtime: row.runtime,
       streamingServices: row.streaming_services ?? [],
       syncStatus: 'synced',
       remoteId: row.id,
