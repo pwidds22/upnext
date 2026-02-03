@@ -59,7 +59,7 @@ function EditProfileModal({
   const [error, setError] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize form when modal opens
+  // Initialize form when modal opens, cleanup on close/unmount
   useEffect(() => {
     if (visible && currentProfile) {
       setUsername(currentProfile.username || '');
@@ -68,6 +68,12 @@ function EditProfileModal({
       setUsernameStatus('unchanged');
       setError(null);
     }
+    return () => {
+      // Clear debounce timer on close or unmount
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [visible, currentProfile]);
 
   // Check username availability with debounce
@@ -106,6 +112,11 @@ function EditProfileModal({
       const cleaned = cleanUsername(value);
       setUsername(cleaned);
 
+      // Clear previous debounce timer FIRST (before any early returns)
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+
       // Check if unchanged from original
       if (cleaned.toLowerCase() === currentProfile?.username?.toLowerCase()) {
         setUsernameStatus('unchanged');
@@ -113,11 +124,6 @@ function EditProfileModal({
       }
 
       setUsernameStatus('idle');
-
-      // Clear previous debounce timer
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
 
       // Debounce the availability check
       if (cleaned.length >= USERNAME_MIN_LENGTH) {
