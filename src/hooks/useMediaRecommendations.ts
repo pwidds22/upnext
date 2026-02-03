@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 // Simple in-memory cache with TTL
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -44,6 +44,7 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
+  const isDismissingRef = useRef(false);
 
   const isCacheValid = useCallback((key: string): boolean => {
     const entry = cache[key];
@@ -135,16 +136,22 @@ export function useMediaRecommendations<TMedia extends { id: number }, TTracked>
 
   // Dismiss an item from recommendations
   const dismiss = useCallback(async (tmdbId: number) => {
+    // Mark that we're dismissing to prevent unnecessary reload
+    isDismissingRef.current = true;
     await config.dismissItem(tmdbId);
     setDismissedIds((prev) => new Set([...prev, tmdbId]));
     // Remove from current lists immediately for responsive UI
     setTrending((prev) => prev.filter((item) => item.id !== tmdbId));
     setForYou((prev) => prev.filter((item) => item.id !== tmdbId));
     setTopRated((prev) => prev.filter((item) => item.id !== tmdbId));
+    // Reset flag after state updates
+    setTimeout(() => { isDismissingRef.current = false; }, 0);
   }, [config]);
 
   // Load recommendations when trackedIds or dismissedIds changes
+  // Skip reload if we just dismissed (UI already updated, avoids scroll-to-top)
   useEffect(() => {
+    if (isDismissingRef.current) return;
     loadRecommendations(trackedIds, dismissedIds);
   }, [trackedIds, dismissedIds, loadRecommendations]);
 

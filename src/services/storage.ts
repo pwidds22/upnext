@@ -297,34 +297,51 @@ class StorageService {
   async addShow(show: TrackedShow): Promise<void> {
     if (!this.db) await this.init();
 
-    // Use atomic upsert to prevent race conditions during sync
-    // ON CONFLICT updates metadata but preserves existing data if already tracked
-    await this.db!.runAsync(
-      `INSERT INTO tracked_shows
-       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status, media_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tv')
-       ON CONFLICT(tmdb_id, media_type) DO UPDATE SET
-         title = excluded.title,
-         poster_path = excluded.poster_path,
-         status = excluded.status,
-         total_seasons = excluded.total_seasons,
-         total_episodes = excluded.total_episodes,
-         aired_episodes = excluded.aired_episodes,
-         streaming_services = excluded.streaming_services,
-         sync_status = excluded.sync_status`,
-      [
-        show.tmdbId,
-        show.title,
-        show.posterPath,
-        show.status,
-        show.addedAt,
-        show.totalSeasons,
-        show.totalEpisodes,
-        show.airedEpisodes ?? null,
-        JSON.stringify(show.streamingServices),
-        DEFAULT_SYNC_STATUS,
-      ]
-    );
+    // Use transaction for atomic check-then-insert/update to prevent race conditions
+    await this.db!.withTransactionAsync(async () => {
+      const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
+        "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)",
+        [show.tmdbId]
+      );
+
+      if (existing) {
+        await this.db!.runAsync(
+          `UPDATE tracked_shows SET
+             title = ?, poster_path = ?, status = ?, total_seasons = ?, total_episodes = ?,
+             aired_episodes = ?, streaming_services = ?, sync_status = ?, media_type = 'tv'
+           WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)`,
+          [
+            show.title,
+            show.posterPath,
+            show.status,
+            show.totalSeasons,
+            show.totalEpisodes,
+            show.airedEpisodes ?? null,
+            JSON.stringify(show.streamingServices),
+            DEFAULT_SYNC_STATUS,
+            show.tmdbId,
+          ]
+        );
+      } else {
+        await this.db!.runAsync(
+          `INSERT INTO tracked_shows
+           (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, aired_episodes, streaming_services, sync_status, media_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'tv')`,
+          [
+            show.tmdbId,
+            show.title,
+            show.posterPath,
+            show.status,
+            show.addedAt,
+            show.totalSeasons,
+            show.totalEpisodes,
+            show.airedEpisodes ?? null,
+            JSON.stringify(show.streamingServices),
+            DEFAULT_SYNC_STATUS,
+          ]
+        );
+      }
+    });
 
     // Queue for sync
     await this.addToSyncQueue('tracked_shows', show.tmdbId.toString(), 'create', { ...show, mediaType: 'tv' });
@@ -1065,31 +1082,49 @@ class StorageService {
   async addMovie(movie: TrackedMovie): Promise<void> {
     if (!this.db) await this.init();
 
-    // Use atomic upsert to prevent race conditions during sync
-    await this.db!.runAsync(
-      `INSERT INTO tracked_shows
-       (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, streaming_services, sync_status, media_type, release_date, runtime)
-       VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 'movie', ?, ?)
-       ON CONFLICT(tmdb_id, media_type) DO UPDATE SET
-         title = excluded.title,
-         poster_path = excluded.poster_path,
-         status = excluded.status,
-         streaming_services = excluded.streaming_services,
-         release_date = excluded.release_date,
-         runtime = excluded.runtime,
-         sync_status = excluded.sync_status`,
-      [
-        movie.tmdbId,
-        movie.title,
-        movie.posterPath,
-        movie.status,
-        movie.addedAt,
-        JSON.stringify(movie.streamingServices),
-        DEFAULT_SYNC_STATUS,
-        movie.releaseDate,
-        movie.runtime,
-      ]
-    );
+    // Use transaction for atomic check-then-insert/update to prevent race conditions
+    await this.db!.withTransactionAsync(async () => {
+      const existing = await this.db!.getFirstAsync<{ tmdb_id: number }>(
+        "SELECT tmdb_id FROM tracked_shows WHERE tmdb_id = ? AND media_type = 'movie'",
+        [movie.tmdbId]
+      );
+
+      if (existing) {
+        await this.db!.runAsync(
+          `UPDATE tracked_shows SET
+             title = ?, poster_path = ?, status = ?, streaming_services = ?,
+             release_date = ?, runtime = ?, sync_status = ?
+           WHERE tmdb_id = ? AND media_type = 'movie'`,
+          [
+            movie.title,
+            movie.posterPath,
+            movie.status,
+            JSON.stringify(movie.streamingServices),
+            movie.releaseDate,
+            movie.runtime,
+            DEFAULT_SYNC_STATUS,
+            movie.tmdbId,
+          ]
+        );
+      } else {
+        await this.db!.runAsync(
+          `INSERT INTO tracked_shows
+           (tmdb_id, title, poster_path, status, added_at, total_seasons, total_episodes, streaming_services, sync_status, media_type, release_date, runtime)
+           VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, 'movie', ?, ?)`,
+          [
+            movie.tmdbId,
+            movie.title,
+            movie.posterPath,
+            movie.status,
+            movie.addedAt,
+            JSON.stringify(movie.streamingServices),
+            DEFAULT_SYNC_STATUS,
+            movie.releaseDate,
+            movie.runtime,
+          ]
+        );
+      }
+    });
 
     // Queue for sync
     await this.addToSyncQueue('tracked_shows', `movie-${movie.tmdbId}`, 'create', movie);
