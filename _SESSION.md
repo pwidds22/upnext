@@ -1,58 +1,17 @@
 # UpNext - Session State
 Updated: 2026-02-03 | Branch: main
 
-## Status: Testing Complete + Review Feedback Received
+## Status: Review Feedback Fixed
 
 ### This Session
-- Tested 4 bugs from previous session: 3/4 passed, 1 needed more work
-- Fixed dismiss scroll-to-top bug (was only working for Trending, not For You/Top Rated)
-- Added 2-page fetching for recommendations (~40 items per category for better backfill)
-- Added 90-day auto-expiration for dismissed items
-- Received Claude Web review with issues to fix next session
+- Fixed all 3 Claude Web review feedback issues:
+  1. ✅ Re-dismiss bug: `dismissShow()` and `dismissMovie()` now UPDATE `dismissed_at` instead of returning early
+  2. ✅ Expiry inconsistency: `isShowDismissed()` now respects 90-day window like `getDismissedShowIds()`
+  3. ✅ Partial fetch: All 8 multi-page TMDB functions now use try-catch and return partial results on failure
 
 ### Files Modified This Session
-- `src/screens/SearchScreen.tsx` - Avoid ListEmptyComponent, stable callbacks
-- `src/hooks/useRecommendations.ts` - Fetch 2 pages
-- `src/hooks/useMovieRecommendations.ts` - Fetch 2 pages
-- `src/services/storage.ts` - 90-day expiration for dismissed items
-- `src/services/tmdb.ts` - Multi-page fetch support
-
-## Review Feedback (FIX NEXT SESSION)
-
-### 🐛 Bug: 90-Day Re-Dismiss Fails Silently
-**Location:** `src/services/storage.ts:907-919` and `981-993`
-
-When a dismissal expires after 90 days and user tries to dismiss again:
-- `dismissShow()` finds the old record and returns early without updating `dismissed_at`
-- Result: The show stays in recommendations indefinitely
-
-**Fix needed:** Update `dismissed_at` when record exists:
-```typescript
-if (existing) {
-    // Update dismissed_at to refresh the 90-day window
-    await this.db!.runAsync(
-      'UPDATE dismissed_shows SET dismissed_at = ?, sync_status = ? WHERE tmdb_id = ?',
-      [now, DEFAULT_SYNC_STATUS, tmdbId]
-    );
-    return;
-}
-```
-
-### ⚠️ Inconsistency: isShowDismissed Ignores Expiry
-**Location:** `src/services/storage.ts:951-960`
-
-`isShowDismissed()` returns true even for expired dismissals, while `getDismissedShowIds()` respects the 90-day window. Could cause inconsistent behavior if used elsewhere.
-
-### ⚠️ TMDB Multi-Page Fetch Loses Partial Results
-**Location:** `src/services/tmdb.ts:92-108` (and similar patterns)
-
-If page 1 succeeds but page 2 fails, all results are lost. Consider using `Promise.allSettled` or returning partial results.
-
-### ✅ Good Patterns Confirmed
-- Scroll reset fix is solid (useMemo filtering)
-- Stable callback handlers prevent re-renders
-- Avoiding ListEmptyComponent prevents FlatList reset
-- Transaction-based constraint handling correct
+- `src/services/storage.ts` - Fixed `dismissShow()`, `dismissMovie()`, `isShowDismissed()`
+- `src/services/tmdb.ts` - Added try-catch to 8 multi-page fetch functions
 
 ## Pre-Launch Roadmap
 
@@ -61,8 +20,8 @@ If page 1 succeeds but page 2 fails, all results are lost. Consider using `Promi
 |---|------|--------|
 | 1 | Fix 4 critical bugs | ✅ DONE |
 | 2 | Test all fixes | ✅ DONE |
-| 3 | Fix review feedback (3 issues above) | **NEXT** |
-| 4 | Medium priority tech debt | PENDING |
+| 3 | Fix review feedback (3 issues) | ✅ DONE |
+| 4 | Medium priority tech debt | **NEXT** |
 | 5 | Production prep (API key to env) | PENDING |
 | 6 | Launch prep (app store assets) | PENDING |
 

@@ -914,7 +914,18 @@ class StorageService {
     );
 
     if (existing) {
-      // Already dismissed, skip
+      // Update dismissed_at to refresh the 90-day window
+      const now = new Date().toISOString();
+      await this.db!.runAsync(
+        'UPDATE dismissed_shows SET dismissed_at = ?, sync_status = ? WHERE tmdb_id = ?',
+        [now, DEFAULT_SYNC_STATUS, tmdbId]
+      );
+      // Queue sync for update
+      await this.addToSyncQueue('dismissed_shows', existing.id, 'update', {
+        id: existing.id,
+        tmdbId,
+        dismissedAt: now,
+      });
       return;
     }
 
@@ -951,9 +962,14 @@ class StorageService {
   async isShowDismissed(tmdbId: number): Promise<boolean> {
     if (!this.db) await this.init();
 
+    // Respect 90-day expiry to match getDismissedShowIds()
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const cutoffDate = ninetyDaysAgo.toISOString();
+
     const row = await this.db!.getFirstAsync<{ count: number }>(
-      'SELECT COUNT(*) as count FROM dismissed_shows WHERE tmdb_id = ?',
-      [tmdbId]
+      'SELECT COUNT(*) as count FROM dismissed_shows WHERE tmdb_id = ? AND dismissed_at > ?',
+      [tmdbId, cutoffDate]
     );
 
     return (row?.count ?? 0) > 0;
@@ -988,7 +1004,18 @@ class StorageService {
     );
 
     if (existing) {
-      // Already dismissed, skip
+      // Update dismissed_at to refresh the 90-day window
+      const now = new Date().toISOString();
+      await this.db!.runAsync(
+        'UPDATE dismissed_movies SET dismissed_at = ?, sync_status = ? WHERE tmdb_id = ?',
+        [now, DEFAULT_SYNC_STATUS, tmdbId]
+      );
+      // Queue sync for update
+      await this.addToSyncQueue('dismissed_movies', existing.id, 'update', {
+        id: existing.id,
+        tmdbId,
+        dismissedAt: now,
+      });
       return;
     }
 
