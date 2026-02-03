@@ -1,5 +1,5 @@
 # UpNext - Session State
-Updated: 2026-02-03 | Branch: master
+Updated: 2026-02-03 | Branch: main
 
 ## Status: All 5 Testing Bugs Fixed
 
