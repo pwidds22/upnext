@@ -20,6 +20,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
+import { useDataExport } from '../hooks/useDataExport';
 import { storageService } from '../services/storage';
 import { useFollowCounts } from '../hooks/useFollows';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
@@ -317,6 +318,9 @@ export default function ProfileScreen() {
   // Profile visibility settings
   const { visibility, updateVisibility } = useProfileVisibility();
 
+  // Data export
+  const { isExporting, exportData } = useDataExport();
+
   // Follow counts for signed-in user
   const { followers, following, loading: followCountsLoading } = useFollowCounts(
     user?.id ?? ''
@@ -438,6 +442,31 @@ export default function ProfileScreen() {
         [{ text: 'OK' }]
       );
     }
+  };
+
+  const handleExportData = () => {
+    Alert.alert(
+      'Export Data',
+      'Export all your shows, movies, watch history, and ratings to a JSON file.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Export',
+          onPress: async () => {
+            try {
+              await exportData();
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (e) {
+              Alert.alert(
+                'Export Failed',
+                'Unable to export your data. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Show auth screen if user is not signed in and wants to sign in
@@ -577,6 +606,20 @@ export default function ProfileScreen() {
             <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
             <Text style={styles.menuItemText}>Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={handleExportData}
+            disabled={isExporting}
+          >
+            <Ionicons name="download-outline" size={22} color={COLORS.text} />
+            <Text style={styles.menuItemText}>Export Data</Text>
+            {isExporting ? (
+              <ActivityIndicator size="small" color={COLORS.textSecondary} />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+            )}
           </TouchableOpacity>
         </View>
 

@@ -1548,6 +1548,142 @@ class StorageService {
     await this.db!.runAsync('DELETE FROM movie_watch_history WHERE movie_tmdb_id = ?', [movieTmdbId]);
   }
 
+  // ========== BULK RETRIEVAL METHODS (for data export) ==========
+
+  // Get all watched episodes across all shows
+  async getAllWatchedEpisodes(): Promise<WatchedEpisode[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      watched_at: string;
+      episode_title: string | null;
+      still_path: string | null;
+    }>('SELECT * FROM watched_episodes ORDER BY show_tmdb_id, season_number, episode_number');
+
+    return rows.map((row) => ({
+      id: row.id,
+      showTmdbId: row.show_tmdb_id,
+      seasonNumber: row.season_number,
+      episodeNumber: row.episode_number,
+      watchedAt: row.watched_at,
+      episodeTitle: row.episode_title ?? undefined,
+      stillPath: row.still_path ?? undefined,
+    }));
+  }
+
+  // Get all episode reactions across all shows
+  async getAllEpisodeReactions(): Promise<EpisodeReaction[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      reaction: EpisodeReactionType;
+      created_at: string;
+      updated_at: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+      last_synced_at: string | null;
+    }>('SELECT * FROM episode_reactions ORDER BY show_tmdb_id, season_number, episode_number');
+
+    return rows.map((row) => ({
+      id: row.id,
+      showTmdbId: row.show_tmdb_id,
+      seasonNumber: row.season_number,
+      episodeNumber: row.episode_number,
+      reaction: row.reaction,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+      lastSyncedAt: row.last_synced_at ?? undefined,
+    }));
+  }
+
+  // Get all episode watch history (rewatch records)
+  async getAllEpisodeWatchHistory(): Promise<EpisodeWatchHistory[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      watched_at: string;
+      episode_title: string | null;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+    }>('SELECT * FROM episode_watch_history ORDER BY show_tmdb_id, watched_at');
+
+    return rows.map((row) => ({
+      id: row.id,
+      showTmdbId: row.show_tmdb_id,
+      seasonNumber: row.season_number,
+      episodeNumber: row.episode_number,
+      watchedAt: row.watched_at,
+      episodeTitle: row.episode_title ?? undefined,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+    }));
+  }
+
+  // Get all movie watch history (rewatch records)
+  async getAllMovieWatchHistory(): Promise<MovieWatchHistory[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      id: string;
+      movie_tmdb_id: number;
+      watched_at: string;
+      sync_status: SyncStatus | null;
+      remote_id: string | null;
+    }>('SELECT * FROM movie_watch_history ORDER BY movie_tmdb_id, watched_at');
+
+    return rows.map((row) => ({
+      id: row.id,
+      movieTmdbId: row.movie_tmdb_id,
+      watchedAt: row.watched_at,
+      syncStatus: row.sync_status ?? undefined,
+      remoteId: row.remote_id ?? undefined,
+    }));
+  }
+
+  // Get all dismissed shows with full data
+  async getAllDismissedShows(): Promise<{ tmdbId: number; dismissedAt: string }[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      tmdb_id: number;
+      dismissed_at: string;
+    }>('SELECT tmdb_id, dismissed_at FROM dismissed_shows ORDER BY dismissed_at DESC');
+
+    return rows.map((row) => ({
+      tmdbId: row.tmdb_id,
+      dismissedAt: row.dismissed_at,
+    }));
+  }
+
+  // Get all dismissed movies with full data
+  async getAllDismissedMovies(): Promise<{ tmdbId: number; dismissedAt: string }[]> {
+    if (!this.db) await this.init();
+
+    const rows = await this.db!.getAllAsync<{
+      tmdb_id: number;
+      dismissed_at: string;
+    }>('SELECT tmdb_id, dismissed_at FROM dismissed_movies ORDER BY dismissed_at DESC');
+
+    return rows.map((row) => ({
+      tmdbId: row.tmdb_id,
+      dismissedAt: row.dismissed_at,
+    }));
+  }
+
   // Clear all local data (used on sign out to prevent data bleeding between accounts)
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();

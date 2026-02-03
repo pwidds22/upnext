@@ -530,3 +530,50 @@ export interface WatchHistorySummary {
   lastWatchedAt: string | null;
   watches: Array<{ id: string; watchedAt: string }>;
 }
+
+// Data Export Types
+export type ExportFormat = 'json';
+
+export interface ExportStats {
+  showsCount: number;
+  moviesCount: number;
+  watchedEpisodesCount: number;
+  episodeReactionsCount: number;
+  episodeWatchHistoryCount: number;
+  movieWatchHistoryCount: number;
+  dismissedShowsCount: number;
+  dismissedMoviesCount: number;
+  ratingsCount: number;
+}
+
+export interface ExportRating {
+  tmdbId: number;
+  ratingType: RatingType;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  rating: number;
+  review?: string;
+  isPublic: boolean;
+  createdAt: string;
+}
+
+export interface ExportDismissedItem {
+  tmdbId: number;
+  dismissedAt: string;
+}
+
+export interface ExportData {
+  exportedAt: string;
+  appVersion: string;
+  formatVersion: '1.0';
+  user?: { id: string; username?: string };
+  shows: TrackedShow[];
+  movies: TrackedMovie[];
+  watchedEpisodes: WatchedEpisode[];
+  episodeReactions: EpisodeReaction[];
+  episodeWatchHistory: EpisodeWatchHistory[];
+  movieWatchHistory: MovieWatchHistory[];
+  dismissedShows: ExportDismissedItem[];
+  dismissedMovies: ExportDismissedItem[];
+  ratings?: ExportRating[];
+}

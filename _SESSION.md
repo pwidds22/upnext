@@ -1,12 +1,41 @@
 # UpNext - Session State
 Updated: 2026-02-02 | Branch: master
 
-## Status: Critical + High Priority Tech Debt Fixed, Ready for Remaining High Priority
+## Status: Data Export Feature Complete - Ready for Launch!
 
 ### Completed This Session
-- **Fixed ALL 3 Critical + 9 High-Priority Tech Debt Issues**
+- **Data Export Feature** - Users can now export all their data as JSON
+- **Fixed ALL 3 Critical + 9 High-Priority Tech Debt Issues** (previous session)
 - **Fixed debounce cleanup bugs** (2 rounds of Claude Web review)
 - **Ran `/techdebt` scan** - Updated TECH_DEBT.md with new findings
+
+### Data Export Feature (NEW)
+Files created:
+- `src/services/export.ts` - Export service (data collection + file writing)
+- `src/hooks/useDataExport.ts` - Hook for export state management
+
+Files modified:
+- `src/types/index.ts` - Added ExportData, ExportStats, ExportRating types
+- `src/services/storage.ts` - Added 6 bulk retrieval methods
+- `src/screens/ProfileScreen.tsx` - Added "Export Data" menu item
+
+Packages added:
+- `expo-file-system` - Write export files
+- `expo-sharing` - Share via native share sheet
+
+Export includes:
+- Tracked shows and movies
+- Watched episodes and rewatch history
+- Episode reactions (good/meh/bad)
+- Movie watch history
+- Dismissed recommendations
+- Ratings (if signed in)
+
+**Code Review Findings (for Claude Web review):**
+- `useDataExport.ts:8` - `error` state set but never used in UI (dead code)
+- `export.ts:52-62` - Silent console.error for ratings/profile failures (no user feedback)
+- `export.ts:85-97` - `getExportStats()` fetches all data just to count (inefficient, unused)
+- `useDataExport.ts` - No `Sharing.isAvailableAsync()` check before sharing
 
 **Critical (All Fixed):**
 - `useEpisodeReactions.ts` - Removed conditional hook call (useSync inside try/catch)
@@ -81,6 +110,7 @@ From latest `/techdebt` scan - fix in next session:
 - **Movies** - Full tracking with search, status, ratings
 - **Rewatch Tracking** - Full watch history for episodes and movies
 - **Share Profile** - Deep links, privacy controls, profile stats
+- **Data Export** - JSON export of all user data via native share sheet
 
 ## Pre-Launch Roadmap
 
@@ -90,7 +120,9 @@ From latest `/techdebt` scan - fix in next session:
 | 1 | ~~Movie tracking~~ | Medium-High | DONE |
 | 2 | ~~Rewatch tracking~~ | Medium | DONE |
 | 3 | ~~Share profile~~ | Low | DONE |
-| 4 | **Data export** | Low | Not started |
+| 4 | ~~Data export~~ | Low | DONE |
+
+**All pre-launch features complete!**
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -99,9 +131,9 @@ From latest `/techdebt` scan - fix in next session:
 | 6 | **Watch stats** | Medium |
 
 ## Next Steps
-1. **Fix remaining 4 high priority tech debt items** - See above
-2. **Data export** - Last feature before launch
-3. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
+1. **Fix remaining 4 high priority tech debt items** - See Remaining High Priority above
+2. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
+3. **Production prep** - Move API key to env vars, final testing
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
