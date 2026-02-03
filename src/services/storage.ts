@@ -297,6 +297,9 @@ class StorageService {
   async addShow(show: TrackedShow): Promise<void> {
     if (!this.db) await this.init();
 
+    // Track if operation succeeded (for sync queue)
+    let added = false;
+
     // Helper to perform the update
     const doUpdate = async () => {
       await this.db!.runAsync(
@@ -331,11 +334,12 @@ class StorageService {
         if (existing.media_type === 'tv' || existing.media_type === null) {
           // Update existing TV show
           await doUpdate();
+          added = true;
         } else {
           // A movie with this TMDB ID already exists - can't add TV show with same ID
           // This is rare (TMDB IDs don't usually overlap) but possible
           console.warn(`Cannot add TV show ${show.tmdbId}: a movie with this TMDB ID already exists`);
-          return; // Skip silently rather than error
+          // added remains false - don't queue for sync
         }
       } else {
         await this.db!.runAsync(
@@ -355,10 +359,12 @@ class StorageService {
             DEFAULT_SYNC_STATUS,
           ]
         );
+        added = true;
       }
     });
 
-    // Queue for sync
+    // Only queue for sync if operation succeeded
+    if (!added) return;
     await this.addToSyncQueue('tracked_shows', show.tmdbId.toString(), 'create', { ...show, mediaType: 'tv' });
   }
 
@@ -1097,6 +1103,9 @@ class StorageService {
   async addMovie(movie: TrackedMovie): Promise<void> {
     if (!this.db) await this.init();
 
+    // Track if operation succeeded (for sync queue)
+    let added = false;
+
     // Helper to perform the update
     const doUpdate = async () => {
       await this.db!.runAsync(
@@ -1130,11 +1139,12 @@ class StorageService {
         if (existing.media_type === 'movie') {
           // Update existing movie
           await doUpdate();
+          added = true;
         } else {
           // A TV show with this TMDB ID already exists - can't add movie with same ID
           // This is rare (TMDB IDs don't usually overlap) but possible
           console.warn(`Cannot add movie ${movie.tmdbId}: a TV show with this TMDB ID already exists`);
-          return; // Skip silently rather than error
+          // added remains false - don't queue for sync
         }
       } else {
         await this.db!.runAsync(
@@ -1153,8 +1163,12 @@ class StorageService {
             movie.runtime,
           ]
         );
+        added = true;
       }
     });
+
+    // Only queue for sync if operation succeeded
+    if (!added) return;
 
     // Queue for sync
     await this.addToSyncQueue('tracked_shows', `movie-${movie.tmdbId}`, 'create', movie);
