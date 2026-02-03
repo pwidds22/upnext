@@ -1,15 +1,13 @@
 # UpNext - Session State
 Updated: 2026-02-02 | Branch: master
 
-## Status: Data Export Feature Complete - Ready for Launch!
+## Status: Data Export Feature Needs Review Fixes
 
 ### Completed This Session
 - **Data Export Feature** - Users can now export all their data as JSON
-- **Fixed ALL 3 Critical + 9 High-Priority Tech Debt Issues** (previous session)
-- **Fixed debounce cleanup bugs** (2 rounds of Claude Web review)
-- **Ran `/techdebt` scan** - Updated TECH_DEBT.md with new findings
+- **Ran Claude Web code review** - Found additional issues to fix
 
-### Data Export Feature (NEW)
+### Data Export Feature
 Files created:
 - `src/services/export.ts` - Export service (data collection + file writing)
 - `src/hooks/useDataExport.ts` - Hook for export state management
@@ -23,19 +21,26 @@ Packages added:
 - `expo-file-system` - Write export files
 - `expo-sharing` - Share via native share sheet
 
-Export includes:
-- Tracked shows and movies
-- Watched episodes and rewatch history
-- Episode reactions (good/meh/bad)
-- Movie watch history
-- Dismissed recommendations
-- Ratings (if signed in)
+### Claude Web Review Findings - FIX NEXT SESSION
 
-**Code Review Findings (for Claude Web review):**
-- `useDataExport.ts:8` - `error` state set but never used in UI (dead code)
+**Critical (Runtime Error Risk):**
+- `export.ts:1` - Verify `import { Paths, File } from 'expo-file-system'` is correct for SDK 54
+  - May need `expo-file-system/next` or legacy `FileSystem.documentDirectory` API
+
+**High Priority (UX Bugs):**
+- `useDataExport.ts:27-30` - Share sheet cancellation treated as error, shows false "Export Failed" alert
+- `useDataExport.ts:8` + `ProfileScreen.tsx:322` - `error` state set but never used (dead code)
+
+**Medium Priority (Should Fix):**
 - `export.ts:52-62` - Silent console.error for ratings/profile failures (no user feedback)
-- `export.ts:85-97` - `getExportStats()` fetches all data just to count (inefficient, unused)
 - `useDataExport.ts` - No `Sharing.isAvailableAsync()` check before sharing
+- `export.ts:85-97` - Remove unused `getExportStats()` function
+- `export.ts:67` - Hardcoded `appVersion: '1.0.0'` should use Constants.expoConfig.version
+
+**Low Priority (Nice to Have):**
+- `export.ts:106` - Filename uses timestamp, better: `upnext-export-2026-02-03.json`
+- No file cleanup on error (orphaned files accumulate)
+- Consider adding export confirmation with stats before sharing
 
 **Critical (All Fixed):**
 - `useEpisodeReactions.ts` - Removed conditional hook call (useSync inside try/catch)
@@ -131,9 +136,10 @@ From latest `/techdebt` scan - fix in next session:
 | 6 | **Watch stats** | Medium |
 
 ## Next Steps
-1. **Fix remaining 4 high priority tech debt items** - See Remaining High Priority above
-2. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
-3. **Production prep** - Move API key to env vars, final testing
+1. **Fix data export review findings** - See Claude Web Review Findings above (critical + high first)
+2. **Fix remaining 4 high priority tech debt items** - See Remaining High Priority above
+3. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
+4. **Production prep** - Move API key to env vars, final testing
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
