@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import * as Sharing from 'expo-sharing';
-import { File } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { exportService } from '../services/export';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -54,11 +54,10 @@ export function useDataExport() {
       throw e; // Re-throw actual errors for caller to handle
     } finally {
       setIsExporting(false);
-      // Clean up temp file
+      // Clean up temp file (use legacy API which accepts URI strings)
       if (filePath) {
         try {
-          const file = new File(filePath);
-          await file.delete();
+          await FileSystem.deleteAsync(filePath, { idempotent: true });
         } catch {
           // Ignore cleanup errors
         }

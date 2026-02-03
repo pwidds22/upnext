@@ -460,6 +460,7 @@ export default function ProfileScreen() {
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               }
             } catch (e) {
+              console.error('Failed to export data:', e);
               Alert.alert(
                 'Export Failed',
                 'Unable to export your data. Please try again.',
