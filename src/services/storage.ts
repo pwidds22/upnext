@@ -1319,8 +1319,9 @@ class StorageService {
 
     return {
       totalWatches: rows.length,
-      firstWatchedAt: rows.length > 0 ? rows[0].watched_at : null,
-      lastWatchedAt: rows.length > 0 ? rows[rows.length - 1].watched_at : null,
+      // With ORDER BY DESC: rows[0] is newest, rows[length-1] is oldest
+      firstWatchedAt: rows.length > 0 ? rows[rows.length - 1].watched_at : null,
+      lastWatchedAt: rows.length > 0 ? rows[0].watched_at : null,
       watches: rows.map((r) => ({ id: r.id, watchedAt: r.watched_at })),
     };
   }
@@ -1504,8 +1505,9 @@ class StorageService {
 
     return {
       totalWatches: rows.length,
-      firstWatchedAt: rows.length > 0 ? rows[0].watched_at : null,
-      lastWatchedAt: rows.length > 0 ? rows[rows.length - 1].watched_at : null,
+      // With ORDER BY DESC: rows[0] is newest, rows[length-1] is oldest
+      firstWatchedAt: rows.length > 0 ? rows[rows.length - 1].watched_at : null,
+      lastWatchedAt: rows.length > 0 ? rows[0].watched_at : null,
       watches: rows.map((r) => ({ id: r.id, watchedAt: r.watched_at })),
     };
   }

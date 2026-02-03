@@ -393,6 +393,9 @@ export default function ShowDetailScreen() {
         pendingAutoMarkRef.current = true;
         // If seasons are already loaded, the effect will run immediately
         // If not, it will run when seasons load
+      } else {
+        // Clear pending auto-mark if user changes to different status
+        pendingAutoMarkRef.current = false;
       }
 
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
