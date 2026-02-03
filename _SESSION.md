@@ -1,50 +1,46 @@
 # UpNext - Session State
 Updated: 2026-02-02 | Branch: master
 
-## Status: All High-Priority Tech Debt Fixed
+## Status: Critical + High Priority Tech Debt Fixed, Ready for Remaining High Priority
 
 ### Completed This Session
-- **Fixed 3 Critical + 9 High-Priority Tech Debt Issues:**
+- **Fixed ALL 3 Critical + 9 High-Priority Tech Debt Issues**
+- **Fixed debounce cleanup bugs** (2 rounds of Claude Web review)
+- **Ran `/techdebt` scan** - Updated TECH_DEBT.md with new findings
 
-  **Critical:**
-  - `useEpisodeReactions.ts` - Removed conditional hook call (useSync inside try/catch)
-  - `useEpisodeReactions.ts` - Fixed stale closure (sync/isOnline now from hook result)
-  - `storage.ts` - Refactored setReaction() from ON CONFLICT to check-then-insert
+**Critical (All Fixed):**
+- `useEpisodeReactions.ts` - Removed conditional hook call (useSync inside try/catch)
+- `useEpisodeReactions.ts` - Fixed stale closure (sync/isOnline now from hook result)
+- `storage.ts` - Refactored setReaction() from ON CONFLICT to check-then-insert
 
-  **Service Layer:**
-  - `storage.ts` - Fixed 4 more INSERT OR REPLACE usages (check-then-insert)
-  - Created `useProfileLookup` hook for SignInScreen
-  - Created `useUsernameCheck` hook for SignUpScreen
+**Service Layer (All Fixed):**
+- `storage.ts` - Fixed 4 more INSERT OR REPLACE usages (check-then-insert)
+- Created `useProfileLookup` hook for SignInScreen
+- Created `useUsernameCheck` hook for SignUpScreen
 
-  **Code Duplication:**
-  - Extracted username validation to `src/utils/validation.ts`
-  - Created `useFollowToggle` hook (FollowersScreen, FollowingScreen, UserSearchScreen)
-  - Created `MediaCard` component (unified ShowCard + MovieCard)
-  - Created `useMediaRecommendations` generic hook
+**Code Duplication (All Fixed):**
+- Extracted username validation to `src/utils/validation.ts`
+- Created `useFollowToggle` hook (FollowersScreen, FollowingScreen, UserSearchScreen)
+- Created `MediaCard` component (unified ShowCard + MovieCard)
+- Created `useMediaRecommendations` generic hook
 
-  **Safety:**
-  - `ActivityItem.tsx` - Fixed unsafe `activity.rating!` assertion
-  - `UserRow.tsx` - Fixed unsafe `displayName[0]` access
+**Safety (All Fixed):**
+- `ActivityItem.tsx` - Fixed unsafe `activity.rating!` assertion
+- `UserRow.tsx` - Fixed unsafe `displayName[0]` access
 
-### Previous Session Work
-- **Share Profile feature implemented** - Full implementation as per spec:
-  - Added `visibility_shows`, `visibility_activity`, `visibility_stats` columns to profiles table
-  - Created `ProfileVisibilitySheet` component for privacy settings
-  - Created `ProfileStats` component for showing total shows/movies/episodes
-  - Created `useProfileVisibility` hook
-  - Added share button and privacy button to ProfileScreen
-  - Added deep linking support with `upnext://profile/username` URL scheme
-  - Updated UserProfileScreen for visibility-aware rendering and username lookup
+**Debounce Cleanup Bugs (All Fixed):**
+- `ProfileScreen.tsx` - Move timer clear before early return, add useEffect cleanup
+- `SignUpScreen.tsx` - Add useEffect cleanup on unmount
 
-- **Claude Web review feedback fixed:**
-  - Fixed race condition: wait for profile to load before checking visibility
-  - Fixed own profile via deep link: always show full content regardless of visibility settings
-  - Added visibility check to ratings loading (respects shows visibility)
-  - Added user feedback Alert when share fails
-  - Handle empty/whitespace usernames in deep link parsing
+### Remaining High Priority Tech Debt (4 items)
+From latest `/techdebt` scan - fix in next session:
+- [ ] **Direct TMDB Calls** - `SearchScreen.tsx:96-100` - Should use a hook
+- [ ] **Missing useCallback Dependency** - `useFollows.ts:42` - `toggleFollow` depends on `isFollowing`
+- [ ] **Circular useEffect Dependency** - `useActivityFeed.ts:60` - `loadMore` includes `activities`
+- [ ] **Missing Error State** - `useMovieWatchHistory.ts` - No error state unlike similar hooks
 
-### Key Files Changed (This Session)
-- `src/services/storage.ts` - 5 methods refactored to check-then-insert pattern
+### Key Files Changed This Session
+- `src/services/storage.ts` - 5 methods refactored to check-then-insert
 - `src/hooks/useSync.ts` - Uses `useSyncOptional`, returns undefined if no provider
 - `src/hooks/useEpisodeReactions.ts` - Removed try/catch, uses optional chaining
 - `src/hooks/useFollowToggle.ts` - NEW: Follow/unfollow logic with haptics
@@ -60,35 +56,20 @@ Updated: 2026-02-02 | Branch: master
 - `src/components/UserRow.tsx` - Fixed unsafe string access
 - `src/utils/validation.ts` - NEW: Username validation utilities
 - `src/screens/auth/SignInScreen.tsx` - Uses useProfileLookup hook
-- `src/screens/auth/SignUpScreen.tsx` - Uses useUsernameCheck hook, validation utils
-- `src/screens/ProfileScreen.tsx` - Uses validation utils
+- `src/screens/auth/SignUpScreen.tsx` - Uses useUsernameCheck hook, debounce cleanup
+- `src/screens/ProfileScreen.tsx` - Uses validation utils, debounce cleanup
 - `src/screens/FollowersScreen.tsx` - Uses useFollowToggle hook
 - `src/screens/FollowingScreen.tsx` - Uses useFollowToggle hook
 - `src/screens/UserSearchScreen.tsx` - Uses useFollowToggle hook
-
-### Key Files Changed (Previous Session)
-- `supabase/migrations/015_add_profile_visibility.sql` - Applied via MCP
-- `src/types/index.ts` - Added ProfileVisibility, ProfileStats types
-- `src/services/supabase/follows.ts` - Added visibility methods, getUserStats, updated queries
-- `src/components/ProfileVisibilitySheet.tsx` - New privacy settings sheet
-- `src/components/ProfileStats.tsx` - New stats display component
-- `src/hooks/useProfileVisibility.ts` - New hook for visibility management
-- `src/navigation/linking.ts` - New deep link configuration
-- `src/navigation/AppNavigator.tsx` - Integrated deep linking
-- `src/screens/ProfileScreen.tsx` - Added share + privacy buttons
-- `src/screens/UserProfileScreen.tsx` - Visibility-aware rendering, username lookup
-- `app.json` - Added `scheme: "upnext"`
-
-### New Dependencies Added
-- `expo-linking` - For deep link URL handling
-
-### Previous Session Work
-- Rewatch tracking complete and reviewed
-- Delete sync issues fixed
+- `TECH_DEBT.md` - Updated with scan results
 
 ### Commits This Session
-- `0cf5be1` Add share profile feature with deep links and privacy controls
+- `0190d64` Add tech debt tracker for future session reference
 - `7101683` Fix share profile review feedback: visibility and error handling
+- `0cf5be1` Add share profile feature with deep links and privacy controls
+- `5a464a0` Fix debounce cleanup bug in username availability check
+- `e8c5726` Fix remaining debounce cleanup issues from review
+- (plus all tech debt fix commits)
 
 ### Completed Features
 - **Core** - Search, tracking, episodes, sync engine
@@ -118,9 +99,9 @@ Updated: 2026-02-02 | Branch: master
 | 6 | **Watch stats** | Medium |
 
 ## Next Steps
-1. **Test share profile on device** - Verify deep links and visibility controls work
+1. **Fix remaining 4 high priority tech debt items** - See above
 2. **Data export** - Last feature before launch
-3. **High priority tech debt** - See `TECH_DEBT.md` (critical issues fixed, 9 high priority remain)
+3. **Medium priority tech debt** - See `TECH_DEBT.md` (15 items)
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
