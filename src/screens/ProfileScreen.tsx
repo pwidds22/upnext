@@ -600,13 +600,19 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('SyncSettings')}
+          >
             <Ionicons name="sync-outline" size={22} color={COLORS.text} />
             <Text style={styles.menuItemText}>Sync Settings</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('Notifications')}
+          >
             <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
             <Text style={styles.menuItemText}>Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
@@ -670,7 +676,10 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>App</Text>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('About')}
+          >
             <Ionicons name="information-circle-outline" size={22} color={COLORS.text} />
             <Text style={styles.menuItemText}>About</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />

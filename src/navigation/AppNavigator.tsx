@@ -24,6 +24,9 @@ import UserSearchScreen from '../screens/UserSearchScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import FollowersScreen from '../screens/FollowersScreen';
 import FollowingScreen from '../screens/FollowingScreen';
+import AboutScreen from '../screens/AboutScreen';
+import SyncSettingsScreen from '../screens/SyncSettingsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -216,6 +219,21 @@ export default function AppNavigator() {
               ? `${route.params.username} Following`
               : 'Following',
           })}
+        />
+        <Stack.Screen
+          name="About"
+          component={AboutScreen}
+          options={{ title: 'About' }}
+        />
+        <Stack.Screen
+          name="SyncSettings"
+          component={SyncSettingsScreen}
+          options={{ title: 'Sync Settings' }}
+        />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          options={{ title: 'Notifications' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

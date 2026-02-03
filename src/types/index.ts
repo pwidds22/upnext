@@ -247,6 +247,9 @@ export type RootStackParamList = {
   UserProfile: { userId: string } | { username: string };
   Followers: { userId: string; username?: string };
   Following: { userId: string; username?: string };
+  About: undefined;
+  SyncSettings: undefined;
+  Notifications: undefined;
 };
 
 export type AuthStackParamList = {
@@ -553,8 +556,15 @@ export interface ExportDismissedItem {
 export interface ExportData {
   exportedAt: string;
   appVersion: string;
-  formatVersion: '1.0';
-  user?: { id: string; username?: string };
+  formatVersion: '1.0' | '1.1';
+  user?: {
+    id: string;
+    username?: string;
+    displayName?: string;
+    bio?: string;
+    followers?: string[];
+    following?: string[];
+  };
   shows: TrackedShow[];
   movies: TrackedMovie[];
   watchedEpisodes: WatchedEpisode[];

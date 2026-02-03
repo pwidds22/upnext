@@ -70,6 +70,7 @@ export default function ShowDetailScreen() {
     removeLatestWatch,
     getWatchHistory,
     deleteWatch,
+    updateWatchDate,
     watchedCount,
     watchedCountForSeason,
     markSeasonWatched,
@@ -427,13 +428,16 @@ export default function ShowDetailScreen() {
                     backgroundColor: `${STATUS_CONFIG[status].color}20`,
                     borderColor: STATUS_CONFIG[status].color,
                   },
+                  loading && styles.statusOptionDisabled,
                 ]}
                 onPress={() => handleStatusChange(status)}
+                disabled={loading}
               >
                 <Text
                   style={[
                     styles.statusOptionText,
                     currentStatus === status && { color: STATUS_CONFIG[status].color },
+                    loading && styles.statusOptionTextDisabled,
                   ]}
                 >
                   {STATUS_CONFIG[status].label}
@@ -774,11 +778,13 @@ export default function ShowDetailScreen() {
           getWatchHistory={() =>
             getWatchHistory(historySheetEpisode.season, historySheetEpisode.episode)
           }
-          onAddWatch={async () => {
+          onAddWatch={async (watchedAt) => {
             await addWatch(
               historySheetEpisode.season,
               historySheetEpisode.episode,
-              historySheetEpisode.title
+              historySheetEpisode.title,
+              undefined,
+              watchedAt
             );
           }}
           onRemoveWatch={() =>
@@ -787,6 +793,7 @@ export default function ShowDetailScreen() {
           onDeleteWatch={(watchId) =>
             deleteWatch(watchId, historySheetEpisode.season, historySheetEpisode.episode)
           }
+          onUpdateWatch={updateWatchDate}
         />
       )}
     </ScrollView>
@@ -854,6 +861,12 @@ const styles = StyleSheet.create({
   statusOptionText: {
     fontSize: 12,
     color: COLORS.textSecondary,
+  },
+  statusOptionDisabled: {
+    opacity: 0.5,
+  },
+  statusOptionTextDisabled: {
+    color: COLORS.textTertiary,
   },
   ratingSection: {
     paddingHorizontal: 16,

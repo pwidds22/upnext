@@ -1370,6 +1370,42 @@ class StorageService {
     await this.db!.runAsync('DELETE FROM episode_watch_history WHERE id = ?', [watchId]);
   }
 
+  // Update the watched_at date for an episode watch
+  async updateEpisodeWatchDate(watchId: string, watchedAt: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Get the existing watch to include full data in sync queue
+    const existing = await this.db!.getFirstAsync<{
+      show_tmdb_id: number;
+      season_number: number;
+      episode_number: number;
+      episode_title: string | null;
+    }>(
+      `SELECT show_tmdb_id, season_number, episode_number, episode_title
+       FROM episode_watch_history WHERE id = ?`,
+      [watchId]
+    );
+
+    if (!existing) {
+      throw new Error(`Watch not found: ${watchId}`);
+    }
+
+    await this.db!.runAsync(
+      'UPDATE episode_watch_history SET watched_at = ? WHERE id = ?',
+      [watchedAt, watchId]
+    );
+
+    // Queue for sync with updated data
+    await this.addToSyncQueue('episode_watch_history', watchId, 'update', {
+      id: watchId,
+      showTmdbId: existing.show_tmdb_id,
+      seasonNumber: existing.season_number,
+      episodeNumber: existing.episode_number,
+      watchedAt,
+      episodeTitle: existing.episode_title,
+    });
+  }
+
   // Delete the most recent watch for an episode (for undo/unwatch)
   async deleteLatestEpisodeWatch(
     showTmdbId: number,
@@ -1517,6 +1553,33 @@ class StorageService {
     await this.addToSyncQueue('movie_watch_history', watchId, 'delete', { id: watchId });
 
     await this.db!.runAsync('DELETE FROM movie_watch_history WHERE id = ?', [watchId]);
+  }
+
+  // Update the watched_at date for a movie watch
+  async updateMovieWatchDate(watchId: string, watchedAt: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Get the existing watch to include full data in sync queue
+    const existing = await this.db!.getFirstAsync<{ movie_tmdb_id: number }>(
+      'SELECT movie_tmdb_id FROM movie_watch_history WHERE id = ?',
+      [watchId]
+    );
+
+    if (!existing) {
+      throw new Error(`Watch not found: ${watchId}`);
+    }
+
+    await this.db!.runAsync(
+      'UPDATE movie_watch_history SET watched_at = ? WHERE id = ?',
+      [watchedAt, watchId]
+    );
+
+    // Queue for sync with updated data
+    await this.addToSyncQueue('movie_watch_history', watchId, 'update', {
+      id: watchId,
+      movieTmdbId: existing.movie_tmdb_id,
+      watchedAt,
+    });
   }
 
   // Delete the most recent watch for a movie

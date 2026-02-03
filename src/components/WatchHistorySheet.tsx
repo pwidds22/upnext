@@ -7,9 +7,11 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { WatchHistorySummary } from '../types';
 import { COLORS } from '../utils/constants';
 
@@ -19,9 +21,10 @@ interface WatchHistorySheetProps {
   title: string; // Episode title or movie title
   subtitle?: string; // e.g., "S1 E5" for episodes
   getWatchHistory: () => Promise<WatchHistorySummary>;
-  onAddWatch: () => Promise<void>;
+  onAddWatch: (watchedAt?: string) => Promise<void>;
   onRemoveWatch: () => Promise<void>;
   onDeleteWatch: (watchId: string) => Promise<void>;
+  onUpdateWatch?: (watchId: string, watchedAt: string) => Promise<void>;
 }
 
 export default function WatchHistorySheet({
@@ -33,10 +36,17 @@ export default function WatchHistorySheet({
   onAddWatch,
   onRemoveWatch,
   onDeleteWatch,
+  onUpdateWatch,
 }: WatchHistorySheetProps) {
   const [history, setHistory] = useState<WatchHistorySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Date picker state
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [editingWatchId, setEditingWatchId] = useState<string | null>(null);
+  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
 
   const loadHistory = useCallback(async () => {
     try {
@@ -67,17 +77,67 @@ export default function WatchHistorySheet({
     });
   };
 
-  const handleAddWatch = async () => {
+  const openAddWatchPicker = () => {
+    setSelectedDate(new Date());
+    setEditingWatchId(null);
+    setPickerMode('date');
+    setShowDatePicker(true);
+  };
+
+  const openEditWatchPicker = (watchId: string, currentDate: string) => {
+    setSelectedDate(new Date(currentDate));
+    setEditingWatchId(watchId);
+    setPickerMode('date');
+    setShowDatePicker(true);
+  };
+
+  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type === 'set' && date) {
+        if (pickerMode === 'date') {
+          setSelectedDate(date);
+          setPickerMode('time');
+          setShowDatePicker(true);
+        } else {
+          confirmDateSelection(date);
+        }
+      }
+    } else {
+      // iOS - date picker stays open
+      if (date) {
+        setSelectedDate(date);
+      }
+    }
+  };
+
+  const confirmDateSelection = async (date: Date = selectedDate) => {
+    setShowDatePicker(false);
     setActionLoading(true);
     try {
-      await onAddWatch();
+      const isoDate = date.toISOString();
+      if (editingWatchId && onUpdateWatch) {
+        await onUpdateWatch(editingWatchId, isoDate);
+      } else {
+        await onAddWatch(isoDate);
+      }
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await loadHistory();
     } catch (e) {
-      console.error('Failed to add watch:', e);
+      console.error('Failed to save watch:', e);
     } finally {
       setActionLoading(false);
+      setEditingWatchId(null);
     }
+  };
+
+  const cancelDateSelection = () => {
+    setShowDatePicker(false);
+    setEditingWatchId(null);
+  };
+
+  const handleAddWatch = async () => {
+    openAddWatchPicker();
   };
 
   const handleRemoveLatest = async () => {
@@ -181,14 +241,26 @@ export default function WatchHistorySheet({
                     <Text style={styles.watchNumber}>#{history.watches.length - index}</Text>
                     <Text style={styles.watchDate}>{formatDate(watch.watchedAt)}</Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteWatch(watch.id)}
-                    disabled={actionLoading}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color={COLORS.textSecondary} />
-                  </TouchableOpacity>
+                  <View style={styles.historyItemActions}>
+                    {onUpdateWatch && (
+                      <TouchableOpacity
+                        style={styles.editButton}
+                        onPress={() => openEditWatchPicker(watch.id, watch.watchedAt)}
+                        disabled={actionLoading}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="pencil-outline" size={18} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteWatch(watch.id)}
+                      disabled={actionLoading}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </ScrollView>
@@ -200,6 +272,33 @@ export default function WatchHistorySheet({
             </View>
           )}
         </View>
+
+        {/* Date Picker Modal */}
+        {showDatePicker && (
+          <View style={styles.datePickerOverlay}>
+            <View style={styles.datePickerContainer}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity onPress={cancelDateSelection}>
+                  <Text style={styles.datePickerCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.datePickerTitle}>
+                  {editingWatchId ? 'Edit Watch Date' : 'When did you watch?'}
+                </Text>
+                <TouchableOpacity onPress={() => confirmDateSelection()}>
+                  <Text style={styles.datePickerDone}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={selectedDate}
+                mode={Platform.OS === 'ios' ? 'datetime' : pickerMode}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+                themeVariant="dark"
+              />
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -326,8 +425,54 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
   },
+  historyItemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editButton: {
+    padding: 8,
+  },
   deleteButton: {
     padding: 8,
+  },
+  datePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  datePickerContainer: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 20,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  datePickerCancel: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  datePickerDone: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   emptyHistory: {
     alignItems: 'center',

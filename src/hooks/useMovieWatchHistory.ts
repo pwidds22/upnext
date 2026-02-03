@@ -41,8 +41,8 @@ export function useMovieWatchHistory(movieTmdbId: number) {
   const isWatched = watchCount > 0;
 
   // Add a new watch (for first watch or rewatch)
-  const addWatch = useCallback(async () => {
-    const watchedAt = new Date().toISOString();
+  const addWatch = useCallback(async (customWatchedAt?: string) => {
+    const watchedAt = customWatchedAt || new Date().toISOString();
 
     // Add to watch history
     await storageService.addMovieWatchHistory(movieTmdbId, watchedAt);
@@ -79,6 +79,15 @@ export function useMovieWatchHistory(movieTmdbId: number) {
     [triggerSyncIfOnline]
   );
 
+  // Update the watched_at date for a specific watch
+  const updateWatchDate = useCallback(
+    async (watchId: string, watchedAt: string) => {
+      await storageService.updateMovieWatchDate(watchId, watchedAt);
+      triggerSyncIfOnline();
+    },
+    [triggerSyncIfOnline]
+  );
+
   // Delete all watch history for this movie
   const deleteAllWatches = useCallback(async () => {
     await storageService.deleteAllMovieWatchHistory(movieTmdbId);
@@ -96,6 +105,7 @@ export function useMovieWatchHistory(movieTmdbId: number) {
     removeLatestWatch,
     getWatchHistory,
     deleteWatch,
+    updateWatchDate,
     deleteAllWatches,
   };
 }

@@ -35,6 +35,10 @@ export const exportService = {
     // Fetch cloud data if user is signed in
     let ratings: ExportRating[] | undefined;
     let username: string | undefined;
+    let displayName: string | undefined;
+    let bio: string | undefined;
+    let followers: string[] | undefined;
+    let following: string[] | undefined;
 
     if (userId) {
       // Fetch ratings (cloud-only)
@@ -54,20 +58,43 @@ export const exportService = {
         console.error('Failed to fetch ratings for export:', e);
       }
 
-      // Fetch username from profile
+      // Fetch profile data
       try {
         const profile = await followsService.getUserProfile(userId);
         username = profile?.username ?? undefined;
+        displayName = profile?.display_name ?? undefined;
+        bio = profile?.bio ?? undefined;
       } catch (e) {
         console.error('Failed to fetch profile for export:', e);
+      }
+
+      // Fetch follow relationships
+      try {
+        const [followersList, followingList] = await Promise.all([
+          followsService.getFollowers(userId),
+          followsService.getFollowing(userId),
+        ]);
+        followers = followersList.map((f) => f.username || f.id);
+        following = followingList.map((f) => f.username || f.id);
+      } catch (e) {
+        console.error('Failed to fetch follows for export:', e);
       }
     }
 
     return {
       exportedAt: new Date().toISOString(),
       appVersion: Constants.expoConfig?.version ?? '1.0.0',
-      formatVersion: '1.0',
-      user: userId ? { id: userId, username } : undefined,
+      formatVersion: '1.1', // Updated version for new fields
+      user: userId
+        ? {
+            id: userId,
+            username,
+            displayName,
+            bio,
+            followers,
+            following,
+          }
+        : undefined,
       shows,
       movies,
       watchedEpisodes,

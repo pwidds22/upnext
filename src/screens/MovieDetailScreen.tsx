@@ -57,6 +57,7 @@ export default function MovieDetailScreen() {
     removeLatestWatch,
     getWatchHistory,
     deleteWatch,
+    updateWatchDate,
   } = useMovieWatchHistory(movie.tmdbId);
   const [showWatchHistory, setShowWatchHistory] = useState(false);
 
@@ -386,6 +387,7 @@ export default function MovieDetailScreen() {
         onAddWatch={addWatch}
         onRemoveWatch={removeLatestWatch}
         onDeleteWatch={deleteWatch}
+        onUpdateWatch={updateWatchDate}
       />
     </ScrollView>
   );

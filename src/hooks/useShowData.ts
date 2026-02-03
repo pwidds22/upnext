@@ -146,8 +146,8 @@ export function useWatchedEpisodes(showTmdbId: number) {
 
   // Add a new watch (for first watch or rewatch)
   const addWatch = useCallback(
-    async (season: number, episode: number, episodeTitle?: string, stillPath?: string) => {
-      const watchedAt = new Date().toISOString();
+    async (season: number, episode: number, episodeTitle?: string, stillPath?: string, customWatchedAt?: string) => {
+      const watchedAt = customWatchedAt || new Date().toISOString();
 
       // Add to watch history (always creates new entry)
       await storageService.addEpisodeWatchHistory(showTmdbId, season, episode, watchedAt, episodeTitle);
@@ -265,6 +265,15 @@ export function useWatchedEpisodes(showTmdbId: number) {
     [showTmdbId, triggerSyncIfOnline]
   );
 
+  // Update the watched_at date for a specific watch
+  const updateWatchDate = useCallback(
+    async (watchId: string, watchedAt: string) => {
+      await storageService.updateEpisodeWatchDate(watchId, watchedAt);
+      triggerSyncIfOnline();
+    },
+    [triggerSyncIfOnline]
+  );
+
   // Legacy toggleWatched - now uses addWatch for first watch
   const toggleWatched = useCallback(
     async (season: number, episode: number, episodeTitle?: string, stillPath?: string) => {
@@ -350,6 +359,7 @@ export function useWatchedEpisodes(showTmdbId: number) {
     removeLatestWatch,
     getWatchHistory,
     deleteWatch,
+    updateWatchDate,
     markSeasonWatched,
     markSeasonUnwatched,
     watchedCount,
