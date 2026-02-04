@@ -1,17 +1,46 @@
 # UpNext - Session State
 Updated: 2026-02-03 | Branch: main
 
-## Status: Review Feedback Fixed
+## Status: Sync Engine Hardened (5 Review Rounds Complete)
 
 ### This Session
-- Fixed all 3 Claude Web review feedback issues:
-  1. ✅ Re-dismiss bug: `dismissShow()` and `dismissMovie()` now UPDATE `dismissed_at` instead of returning early
-  2. ✅ Expiry inconsistency: `isShowDismissed()` now respects 90-day window like `getDismissedShowIds()`
-  3. ✅ Partial fetch: All 8 multi-page TMDB functions now use try-catch and return partial results on failure
+- Fixed 9 critical sync engine bugs for multi-device reliability
+- Ran 5 rounds of Claude Web review, fixing all issues found in each round
+- Sync engine now handles all data types: shows, movies, episodes, reactions, dismissed shows, episode/movie watch history
+- Performance: `removeFromQueueIfExists` now uses direct SQL instead of loading entire queue
+
+### What Was Completed
+1. **Sync engine initial sync** (`src/services/supabase/sync.ts`) - Expanded from 2 to 7 data types with conflict resolution
+2. **Sync engine incremental pull** (`src/services/supabase/sync.ts`) - `pullChanges()` handles all data types with correct queue cleanup
+3. **Movie sync queue IDs** (`src/services/supabase/sync.ts`) - Uses `movie-${tmdbId}` format matching storage.ts
+4. **Remote-winning conflicts** (`src/services/supabase/sync.ts`) - initialSync applies remote-winning data locally for shows, episodes, movies
+5. **Episode update path** (`src/services/storage.ts`) - `markEpisodeWatched` now UPDATEs existing episodes instead of returning early
+6. **Season unwatch sync** (`src/services/storage.ts`) - `markSeasonUnwatched` queues sync deletions before bulk DELETE
+7. **Queue cleanup completeness** (`src/services/supabase/sync.ts`) - All paths (create/update/delete) clean all operation types from queue
+8. **removeFromQueueIfExists perf** (`src/services/storage.ts`) - New `removeSyncQueueItemByKey` uses direct SQL DELETE
+9. **Supabase constraint** - `user_shows` UNIQUE constraint now includes `media_type`
+10. **onConflict fixes** (`src/services/supabase/shows.ts`) - All 3 upserts use `'user_id,tmdb_id,media_type'`
+11. **media_type filters** (`src/services/supabase/shows.ts`) - `softDeleteShow`, `updateShowStatus`, `getShowRemoteId` filter by media_type
+12. **SyncContext fixes** (`src/contexts/SyncContext.tsx`) - NetInfo subscribe once, dependency arrays fixed, safe error casts
+13. **TECH_DEBT.md** - Updated with all fixed items
 
 ### Files Modified This Session
-- `src/services/storage.ts` - Fixed `dismissShow()`, `dismissMovie()`, `isShowDismissed()`
-- `src/services/tmdb.ts` - Added try-catch to 8 multi-page fetch functions
+- `src/services/supabase/sync.ts` - Major sync engine overhaul (initialSync, pullChanges, processSyncQueueItem, removeFromQueueIfExists)
+- `src/services/supabase/shows.ts` - onConflict, media_type filters, getShowRemoteId
+- `src/services/storage.ts` - markEpisodeWatched UPDATE path, markSeasonUnwatched sync, removeSyncQueueItemByKey
+- `src/contexts/SyncContext.tsx` - NetInfo ref, dependency arrays, error casts
+- `TECH_DEBT.md` - Marked 14+ items as fixed
+
+### Next Session Plan
+1. **Run `/techdebt`** - Full rescan to find remaining issues
+2. **Fix all tech debt** - Address everything found in the scan
+3. **Run `/review`** - Claude Web review after all tech debt is fixed
+4. **Production prep** - Move API key to env vars
+5. **Launch prep** - App Store assets, privacy policy
+
+### Deferred Items
+- Bug 8: `dismissed_movies` cloud sync - needs new Supabase table (currently only dismissed_shows syncs)
+- Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at` field
 
 ## Pre-Launch Roadmap
 
@@ -21,9 +50,10 @@ Updated: 2026-02-03 | Branch: main
 | 1 | Fix 4 critical bugs | ✅ DONE |
 | 2 | Test all fixes | ✅ DONE |
 | 3 | Fix review feedback (3 issues) | ✅ DONE |
-| 4 | Medium priority tech debt | **NEXT** |
-| 5 | Production prep (API key to env) | PENDING |
-| 6 | Launch prep (app store assets) | PENDING |
+| 4 | Sync engine hardening (5 review rounds) | ✅ DONE |
+| 5 | Medium priority tech debt | **NEXT** |
+| 6 | Production prep (API key to env) | PENDING |
+| 7 | Launch prep (app store assets) | PENDING |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -51,6 +81,12 @@ Updated: 2026-02-03 | Branch: main
 
 ## Commits This Session
 ```
+3240379 Fix delete path queue cleanup and removeFromQueueIfExists performance
+987f862 Fix pullChanges queue cleanup: add 'update' operation removal
+884cb32 Fix 4 issues from Claude Web review round 3
+4b19517 Fix 9 sync engine bugs found in Claude Web review round 2
+9c9f63a Fix 9 critical sync engine bugs for multi-device reliability
+23fada2 Fix 3 review feedback issues: re-dismiss, expiry check, partial fetch
 7c176ba Fix dismiss scroll-to-top bug and improve recommendations
 595a363 Update session notes: all 4 bugs fixed, ready for testing
 ced9a6e Fix sync queue bug: only queue when add actually succeeds
