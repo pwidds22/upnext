@@ -501,6 +501,8 @@ export const syncService = {
           await storageService.deleteShow(remoteRow.tmdb_id);
         }
         await this.removeFromQueueIfExists('tracked_shows', queueId, 'delete');
+        await this.removeFromQueueIfExists('tracked_shows', queueId, 'create');
+        await this.removeFromQueueIfExists('tracked_shows', queueId, 'update');
         pulled.shows++;
         continue;
       }
@@ -558,6 +560,8 @@ export const syncService = {
           remoteRow.episode_number
         );
         await this.removeFromQueueIfExists('watched_episodes', episodeId, 'delete');
+        await this.removeFromQueueIfExists('watched_episodes', episodeId, 'create');
+        await this.removeFromQueueIfExists('watched_episodes', episodeId, 'update');
         pulled.episodes++;
         continue;
       }
@@ -587,6 +591,8 @@ export const syncService = {
           remoteRow.episode_number
         );
         await this.removeFromQueueIfExists('episode_reactions', reactionId, 'delete');
+        await this.removeFromQueueIfExists('episode_reactions', reactionId, 'create');
+        await this.removeFromQueueIfExists('episode_reactions', reactionId, 'update');
         continue;
       }
 
@@ -606,6 +612,8 @@ export const syncService = {
       if (remoteRow.deleted_at) {
         await storageService.undismissShow(remoteRow.tmdb_id);
         await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'delete');
+        await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'create');
+        await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'update');
         continue;
       }
 
@@ -621,6 +629,8 @@ export const syncService = {
         if (remoteRow.local_id) {
           await storageService.deleteEpisodeWatch(remoteRow.local_id);
           await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'delete');
+          await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'create');
+          await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'update');
         } else {
           console.warn(`Cannot delete episode watch history: remote row missing local_id (remote id: ${remoteRow.id})`);
         }
@@ -646,6 +656,8 @@ export const syncService = {
         if (remoteRow.local_id) {
           await storageService.deleteMovieWatch(remoteRow.local_id);
           await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'delete');
+          await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'create');
+          await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'update');
         } else {
           console.warn(`Cannot delete movie watch history: remote row missing local_id (remote id: ${remoteRow.id})`);
         }
@@ -784,15 +796,9 @@ export const syncService = {
     return allEpisodes;
   },
 
-  // Helper to remove an item from sync queue if it exists
+  // Helper to remove an item from sync queue if it exists (direct SQL, no full queue load)
   async removeFromQueueIfExists(tableName: string, recordId: string, operation: string): Promise<void> {
-    const queue = await storageService.getSyncQueue();
-    const item = queue.find(
-      (i) => i.tableName === tableName && i.recordId === recordId && i.operation === operation
-    );
-    if (item) {
-      await storageService.removeSyncQueueItem(item.id);
-    }
+    await storageService.removeSyncQueueItemByKey(tableName, recordId, operation);
   },
 
   // Convert Supabase row to TrackedShow

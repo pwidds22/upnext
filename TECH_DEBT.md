@@ -44,7 +44,7 @@ Last scanned: 2026-02-03
 - [x] **updateShowStatus missing media_type filter** - FIXED: Added `.eq('media_type', 'tv')` filter
 - [ ] **Unsafe JSON.parse in sync** - `sync.ts:362` - Payload parsed and cast without runtime validation
 - [ ] **N+1 query in getAllLocalEpisodes** - `sync.ts:457-467` - Loops through shows individually instead of using `getAllWatchedEpisodes()`
-- [ ] **Inefficient removeFromQueueIfExists** - `sync.ts:470-478` - Loads entire sync queue then scans in JS instead of direct SQL query
+- [x] **Inefficient removeFromQueueIfExists** - FIXED: Uses direct SQL DELETE via `removeSyncQueueItemByKey`
 
 ### Screen Anti-Patterns (Direct Service Calls)
 - [x] **Direct Service Calls** - FIXED: Created `useProfileLookup` hook

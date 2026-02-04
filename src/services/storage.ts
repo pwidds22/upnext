@@ -679,6 +679,15 @@ class StorageService {
     );
   }
 
+  async removeSyncQueueItemByKey(tableName: string, recordId: string, operation: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    await this.db!.runAsync(
+      'DELETE FROM sync_queue WHERE table_name = ? AND record_id = ? AND operation = ?',
+      [tableName, recordId, operation]
+    );
+  }
+
   async clearSyncQueue(): Promise<void> {
     if (!this.db) await this.init();
 
