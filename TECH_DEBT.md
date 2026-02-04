@@ -12,17 +12,22 @@ Last scanned: 2026-02-03
 ## Critical (Fix Before Launch)
 
 ### Sync Engine Data Gaps
-- [ ] **Initial sync missing movies** - `sync.ts:128-242` - `initialSync()` only syncs shows/episodes, NOT movies. Multi-device users lose movie data
-- [ ] **Initial sync missing reactions/dismissed/history** - `sync.ts:128-242` - Episode reactions, dismissed shows/movies, watch history never pulled during initial sync
-- [ ] **Incremental pull missing data types** - `sync.ts:278-358` - `pullChanges` only fetches shows and episodes. Movies, reactions, dismissals, watch history changes from other devices are never pulled
-- [ ] **Movie sync uses wrong converter** - `sync.ts:364-381` - `processSyncQueueItem` casts movie payloads as `TrackedShow`, uses `toSupabaseRow()` instead of `movieToSupabaseRow()`, losing movie-specific fields
-- [ ] **Upsert conflict key missing media_type** - `shows.ts:117,135,227` - `onConflict: 'user_id,tmdb_id'` can overwrite a show with a movie (or vice versa) when same TMDB ID exists for both
-- [ ] **markSeasonUnwatched missing sync** - `storage.ts:551-558` - Bulk DELETE doesn't queue individual episode deletions to sync queue, causing cloud desync
+- [x] **Initial sync missing movies** - FIXED: `initialSync()` now syncs movies with conflict resolution
+- [x] **Initial sync missing reactions/dismissed/history** - FIXED: Steps 6-9 added for reactions, dismissals, watch history
+- [x] **Incremental pull missing data types** - FIXED: `pullChanges` now handles all data types
+- [x] **Movie sync uses wrong converter** - FIXED: `processSyncQueueItem` checks `mediaType` and uses correct converter
+- [x] **Upsert conflict key missing media_type** - FIXED: `onConflict: 'user_id,tmdb_id,media_type'` + Supabase migration
+- [x] **markSeasonUnwatched missing sync** - FIXED: Queries episodes and queues deletions before bulk DELETE
+- [x] **Remote-winning conflicts dropped** - FIXED: initialSync now applies remote-winning data locally
+- [x] **Movie sync queue ID mismatch** - FIXED: pullChanges uses `movie-${tmdbId}` format matching storage.ts
+- [x] **Pulled movies not marked synced** - FIXED: updateShowSyncStatus called for pulled movies + movies in step 10
+- [x] **getShowRemoteId missing media_type** - FIXED: Added media_type parameter to prevent .single() errors
+- [x] **triggerFullSync missing isOnline check** - FIXED: Now checks isOnline before syncing
 
 ### SyncContext Bugs
-- [ ] **Missing useEffect dependency** - `SyncContext.tsx:56-62` - `triggerSync` called in effect but not in dependency array, stale closure risk
-- [ ] **Missing useEffect dependency** - `SyncContext.tsx:64-77` - `triggerFullSync` called in effect but not in dependency array
-- [ ] **NetInfo re-subscription** - `SyncContext.tsx:40-53` - Listener unsubscribes/re-subscribes every time `isOnline` changes, brief window where events are missed
+- [x] **Missing useEffect dependency** - FIXED: `triggerSync` added to dependency array
+- [x] **Missing useEffect dependency** - FIXED: `triggerFullSync` added to dependency array
+- [x] **NetInfo re-subscription** - FIXED: Subscribes once with empty dependency array, uses ref for isOnline
 
 ### Previously Fixed
 - [x] **Conditional Hook Call** - `useEpisodeReactions.ts` - FIXED: Uses `useSyncOptional` unconditionally
@@ -35,8 +40,8 @@ Last scanned: 2026-02-03
 
 ### Service Layer
 - [x] **INSERT OR REPLACE Usage** - FIXED: All 4 uses converted to check-then-insert
-- [ ] **softDeleteShow missing media_type filter** - `shows.ts:157-165` - Could soft-delete wrong record when movie/show share TMDB ID
-- [ ] **updateShowStatus missing media_type filter** - `shows.ts:146-154` - Same issue; compare with `updateMovieStatus` which correctly filters
+- [x] **softDeleteShow missing media_type filter** - FIXED: Added `.eq('media_type', 'tv')` filter
+- [x] **updateShowStatus missing media_type filter** - FIXED: Added `.eq('media_type', 'tv')` filter
 - [ ] **Unsafe JSON.parse in sync** - `sync.ts:362` - Payload parsed and cast without runtime validation
 - [ ] **N+1 query in getAllLocalEpisodes** - `sync.ts:457-467` - Loops through shows individually instead of using `getAllWatchedEpisodes()`
 - [ ] **Inefficient removeFromQueueIfExists** - `sync.ts:470-478` - Loads entire sync queue then scans in JS instead of direct SQL query
@@ -67,7 +72,7 @@ Last scanned: 2026-02-03
 ### Safety
 - [x] **Unsafe Non-Null Assertion** - FIXED
 - [x] **Unsafe String Access** - FIXED
-- [ ] **Unsafe error cast in SyncContext** - `SyncContext.tsx:117,146` - `(error as Error).message` will break on non-Error throws
+- [x] **Unsafe error cast in SyncContext** - FIXED: Uses `error instanceof Error ? error.message : 'Sync failed'`
 
 ### Hook Issues
 - [ ] **Missing useCallback Dependency** - `useFollows.ts:42` - `toggleFollow` depends on `isFollowing` but not in deps
@@ -172,14 +177,23 @@ Last scanned: 2026-02-03
 
 ## Session Notes
 
+### 2026-02-03 (Claude Web Review Round 2 - Sync Engine)
+- Claude Web found 7 bugs (3 critical, 4 significant) in the sync engine fixes
+- Fixed all 11 issues from review:
+  - Bug 1: Remote-winning conflicts now applied to local data
+  - Bug 2+11: Movie sync queue IDs use correct `movie-${tmdbId}` format
+  - Bug 3: Pulled movies/reactions/dismissals/history cleaned from sync queue
+  - Bug 4: triggerFullSync now checks isOnline
+  - Bug 5: updateShowSyncStatus documented (PK prevents media_type collision)
+  - Bug 6: getShowRemoteId now filters by media_type
+  - Bug 7: Pulled movies now marked as synced + included in step 10
+  - Bug 9: Null local_id in watch history deletion now warns
+- Deferred: Bug 8 (dismissed_movies cloud sync - needs new Supabase table), Bug 10 (conflict resolution timestamps)
+
 ### 2026-02-03 (Full Rescan - Pre-Launch Audit)
 - Fixed 3 review feedback issues (re-dismiss, expiry consistency, partial fetch)
+- Fixed 9 critical sync engine bugs (movies, reactions, dismissals, watch history, SyncContext)
 - Full 4-agent tech debt scan across services, screens, components, hooks
-- **Major new findings:**
-  - Sync engine has significant data gaps (movies, reactions, dismissals, watch history never pulled)
-  - SyncContext has stale closure bugs from missing useEffect dependencies
-  - Movie sync uses wrong converter, upsert conflict key missing media_type
-  - 6 critical + 3 SyncContext bugs identified
 - Build config check: EAS Build ready, 70% App Store ready (missing privacy policy, screenshots, metadata)
 
 ### 2026-02-02 (Full Tech Debt Pass)

@@ -73,7 +73,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [user, isOnline]);
 
   const triggerFullSync = useCallback(async () => {
-    if (!user || syncInProgressRef.current) return;
+    if (!user || syncInProgressRef.current || !isOnline) return;
 
     syncInProgressRef.current = true;
     setSyncState('syncing');
@@ -99,7 +99,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     } finally {
       syncInProgressRef.current = false;
     }
-  }, [user]);
+  }, [user, isOnline]);
 
   // Network monitoring - subscribe once, use ref to avoid re-subscription
   useEffect(() => {

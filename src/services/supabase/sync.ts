@@ -157,8 +157,9 @@ export const syncService = {
       const localEpisodesMap = new Map(localEpisodes.map((e) => [e.id, e]));
 
       // Step 3: Sync shows
-      // Push local shows that don't exist remotely
+      // Push local shows that don't exist remotely, resolve conflicts
       const showsToPush: TrackedShow[] = [];
+      const remoteWinningShows: TrackedShow[] = [];
       for (const localShow of localShows) {
         const remoteShow = remoteShowsMap.get(localShow.tmdbId);
         if (!remoteShow) {
@@ -168,6 +169,8 @@ export const syncService = {
           const winner = resolveConflict(localShow.lastSyncedAt, remoteShow.lastSyncedAt);
           if (winner === 'local') {
             showsToPush.push(localShow);
+          } else {
+            remoteWinningShows.push(remoteShow);
           }
           result.conflicts++;
         }
@@ -176,6 +179,13 @@ export const syncService = {
       if (showsToPush.length > 0) {
         await withRetry(() => showsCloudService.upsertShows(userId, showsToPush));
         result.pushed.shows = showsToPush.length;
+      }
+
+      // Apply remote-winning conflict updates to local
+      for (const remoteShow of remoteWinningShows) {
+        await storageService.addShow(remoteShow);
+        await storageService.updateShowSyncStatus(remoteShow.tmdbId, 'synced', remoteShow.remoteId);
+        result.pulled.shows++;
       }
 
       // Pull remote shows that don't exist locally
@@ -189,8 +199,9 @@ export const syncService = {
       }
 
       // Step 4: Sync episodes
-      // Push local episodes that don't exist remotely
+      // Push local episodes that don't exist remotely, resolve conflicts
       const episodesToPush: WatchedEpisode[] = [];
+      const remoteWinningEpisodes: WatchedEpisode[] = [];
       for (const localEp of localEpisodes) {
         const remoteEp = remoteEpisodesMap.get(localEp.id);
         if (!remoteEp) {
@@ -200,6 +211,8 @@ export const syncService = {
           const winner = resolveConflict(localEp.lastSyncedAt, remoteEp.lastSyncedAt);
           if (winner === 'local') {
             episodesToPush.push(localEp);
+          } else {
+            remoteWinningEpisodes.push(remoteEp);
           }
           result.conflicts++;
         }
@@ -212,6 +225,19 @@ export const syncService = {
           await withRetry(() => episodesCloudService.upsertEpisodes(userId, batch));
         }
         result.pushed.episodes = episodesToPush.length;
+      }
+
+      // Apply remote-winning episode conflict updates to local
+      for (const remoteEp of remoteWinningEpisodes) {
+        await storageService.markEpisodeWatched({
+          showTmdbId: remoteEp.showTmdbId,
+          seasonNumber: remoteEp.seasonNumber,
+          episodeNumber: remoteEp.episodeNumber,
+          watchedAt: remoteEp.watchedAt,
+          episodeTitle: remoteEp.episodeTitle,
+          stillPath: remoteEp.stillPath,
+        });
+        result.pulled.episodes++;
       }
 
       // Pull remote episodes that don't exist locally
@@ -235,11 +261,21 @@ export const syncService = {
       const remoteMoviesMap = new Map(remoteMovies.map((m) => [m.tmdbId, m]));
       const localMoviesMap = new Map(localMovies.map((m) => [m.tmdbId, m]));
 
-      // Push local-only movies
+      // Push local-only movies, resolve conflicts
       const moviesToPush: TrackedMovie[] = [];
+      const remoteWinningMovies: TrackedMovie[] = [];
       for (const localMovie of localMovies) {
-        if (!remoteMoviesMap.has(localMovie.tmdbId)) {
+        const remoteMovie = remoteMoviesMap.get(localMovie.tmdbId);
+        if (!remoteMovie) {
           moviesToPush.push(localMovie);
+        } else {
+          const winner = resolveConflict(localMovie.lastSyncedAt, remoteMovie.lastSyncedAt);
+          if (winner === 'local') {
+            moviesToPush.push(localMovie);
+          } else {
+            remoteWinningMovies.push(remoteMovie);
+          }
+          result.conflicts++;
         }
       }
       if (moviesToPush.length > 0) {
@@ -248,10 +284,17 @@ export const syncService = {
         }
       }
 
+      // Apply remote-winning movie conflict updates to local
+      for (const remoteMovie of remoteWinningMovies) {
+        await storageService.addMovie(remoteMovie);
+        await storageService.updateShowSyncStatus(remoteMovie.tmdbId, 'synced', remoteMovie.remoteId);
+      }
+
       // Pull remote-only movies
       for (const remoteMovie of remoteMovies) {
         if (!localMoviesMap.has(remoteMovie.tmdbId)) {
           await storageService.addMovie(remoteMovie);
+          await storageService.updateShowSyncStatus(remoteMovie.tmdbId, 'synced', remoteMovie.remoteId);
         }
       }
 
@@ -367,10 +410,16 @@ export const syncService = {
       await storageService.clearSyncQueue();
       await this.setLastSyncTime(new Date().toISOString());
 
-      // Mark all local shows and movies as synced
+      // Mark all local shows as synced
       for (const show of localShows) {
-        const remoteId = (await showsCloudService.getShowRemoteId(userId, show.tmdbId)) ?? undefined;
+        const remoteId = (await showsCloudService.getShowRemoteId(userId, show.tmdbId, 'tv')) ?? undefined;
         await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteId);
+      }
+
+      // Mark all local movies as synced
+      for (const movie of localMovies) {
+        const remoteId = (await showsCloudService.getShowRemoteId(userId, movie.tmdbId, 'movie')) ?? undefined;
+        await storageService.updateShowSyncStatus(movie.tmdbId, 'synced', remoteId);
       }
 
       result.success = true;
@@ -445,28 +494,31 @@ export const syncService = {
       const isMovie = remoteRow.media_type === 'movie';
 
       if (remoteRow.deleted_at) {
+        const queueId = isMovie ? `movie-${remoteRow.tmdb_id}` : remoteRow.tmdb_id.toString();
         if (isMovie) {
           await storageService.deleteMovie(remoteRow.tmdb_id);
         } else {
           await storageService.deleteShow(remoteRow.tmdb_id);
         }
-        await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'delete');
+        await this.removeFromQueueIfExists('tracked_shows', queueId, 'delete');
         pulled.shows++;
         continue;
       }
 
       if (isMovie) {
+        const movieQueueId = `movie-${remoteRow.tmdb_id}`;
         const localMovie = await storageService.getMovie(remoteRow.tmdb_id);
         if (!localMovie) {
           const movie = this.rowToTrackedMovie(remoteRow);
           await storageService.addMovie(movie);
-          await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'create');
+          await this.removeFromQueueIfExists('tracked_shows', movieQueueId, 'create');
           pulled.shows++;
         } else {
           const winner = resolveConflict(localMovie.lastSyncedAt, remoteRow.updated_at);
           if (winner === 'remote') {
             const movie = this.rowToTrackedMovie(remoteRow);
             await storageService.addMovie(movie);
+            await this.removeFromQueueIfExists('tracked_shows', movieQueueId, 'create');
             pulled.shows++;
           }
           conflicts++;
@@ -560,6 +612,8 @@ export const syncService = {
         if (remoteRow.local_id) {
           await storageService.deleteEpisodeWatch(remoteRow.local_id);
           await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'delete');
+        } else {
+          console.warn(`Cannot delete episode watch history: remote row missing local_id (remote id: ${remoteRow.id})`);
         }
         continue;
       }
@@ -582,6 +636,8 @@ export const syncService = {
         if (remoteRow.local_id) {
           await storageService.deleteMovieWatch(remoteRow.local_id);
           await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'delete');
+        } else {
+          console.warn(`Cannot delete movie watch history: remote row missing local_id (remote id: ${remoteRow.id})`);
         }
         continue;
       }
@@ -635,7 +691,7 @@ export const syncService = {
         case 'create': {
           const episode = payload as WatchedEpisode;
           // Get the user_show_id for this episode's show
-          const userShowId = await showsCloudService.getShowRemoteId(userId, episode.showTmdbId);
+          const userShowId = await showsCloudService.getShowRemoteId(userId, episode.showTmdbId, 'tv');
           await withRetry(() => episodesCloudService.upsertEpisode(userId, episode, userShowId ?? undefined));
           break;
         }

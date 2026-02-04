@@ -166,13 +166,14 @@ export const showsCloudService = {
     if (error) throw error;
   },
 
-  // Get a show's remote ID by tmdb_id
-  async getShowRemoteId(userId: string, tmdbId: number): Promise<string | null> {
+  // Get a show/movie's remote ID by tmdb_id and media_type
+  async getShowRemoteId(userId: string, tmdbId: number, mediaType: 'tv' | 'movie' = 'tv'): Promise<string | null> {
     const { data, error } = await supabase
       .from('user_shows')
       .select('id')
       .eq('user_id', userId)
       .eq('tmdb_id', tmdbId)
+      .eq('media_type', mediaType)
       .single();
 
     if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found

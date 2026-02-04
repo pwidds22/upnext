@@ -682,7 +682,7 @@ class StorageService {
     return row?.count ?? 0;
   }
 
-  // Update sync status for a show
+  // Update sync status for a show or movie
   async updateShowSyncStatus(
     tmdbId: number,
     syncStatus: SyncStatus,
@@ -691,6 +691,8 @@ class StorageService {
     if (!this.db) await this.init();
 
     const now = new Date().toISOString();
+    // Note: tmdb_id is PRIMARY KEY so at most one row matches locally.
+    // The media_type filter is not needed since the PK enforces uniqueness.
     await this.db!.runAsync(
       `UPDATE tracked_shows
        SET sync_status = ?, remote_id = COALESCE(?, remote_id), last_synced_at = ?
