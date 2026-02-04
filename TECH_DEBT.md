@@ -42,8 +42,8 @@ Last scanned: 2026-02-03
 - [x] **INSERT OR REPLACE Usage** - FIXED: All 4 uses converted to check-then-insert
 - [x] **softDeleteShow missing media_type filter** - FIXED: Added `.eq('media_type', 'tv')` filter
 - [x] **updateShowStatus missing media_type filter** - FIXED: Added `.eq('media_type', 'tv')` filter
-- [ ] **Unsafe JSON.parse in sync** - `sync.ts:362` - Payload parsed and cast without runtime validation
-- [ ] **N+1 query in getAllLocalEpisodes** - `sync.ts:457-467` - Loops through shows individually instead of using `getAllWatchedEpisodes()`
+- [x] **Unsafe JSON.parse in sync** - FIXED: Wrapped in try-catch, skips malformed items
+- [x] **N+1 query in getAllLocalEpisodes** - FIXED: Uses `storageService.getAllWatchedEpisodes()` single query
 - [x] **Inefficient removeFromQueueIfExists** - FIXED: Uses direct SQL DELETE via `removeSyncQueueItemByKey`
 
 ### Screen Anti-Patterns (Direct Service Calls)
@@ -56,18 +56,20 @@ Last scanned: 2026-02-03
 - [ ] **UpNextScreen** - Direct `tmdbService.getSeason()` call
 - [ ] **ActivityItem component** - Direct `activityService` call from component
 
-### Race Conditions (Missing Transactions)
-- [ ] **markEpisodeWatched** - `storage.ts:479-514` - check-then-insert not wrapped in `withTransactionAsync`
-- [ ] **setReaction** - `storage.ts:793-849` - check-then-insert not in transaction
-- [ ] **addToSyncQueue** - `storage.ts:583-611` - check-then-insert not in transaction
-- [ ] **dismissShow/dismissMovie** - `storage.ts:907-949,997-1039` - check-then-insert not in transaction
+### Race Conditions (Transactions)
+- [x] **markEpisodeWatched** - FIXED: Wrapped in `withTransactionAsync`
+- [x] **setReaction** - FIXED: Wrapped in `withTransactionAsync`
+- [x] **addToSyncQueue** - FIXED: Wrapped in `withTransactionAsync`
+- [x] **dismissShow/dismissMovie** - FIXED: Wrapped in `withTransactionAsync`
+- [ ] **CRITICAL: Nested withTransactionAsync** - `markEpisodeWatched`, `setReaction`, `dismissShow`, `dismissMovie` all wrap in transaction then call `addToSyncQueue` which ALSO wraps in transaction. expo-sqlite may not support nested transactions (no savepoint). **Fix**: Extract `addToSyncQueue` inner logic into `_addToSyncQueueRaw()` that outer transactions call directly, keep `addToSyncQueue` wrapper for standalone callers.
+- [ ] **markSeasonWatched sequential transactions** - `storage.ts:554-563` - Calls `markEpisodeWatched` in a loop, each opening its own transaction. For 20+ episodes, should wrap entire season in one transaction.
 
 ### Code Duplication
 - [x] **Username Validation** - FIXED: Extracted to `src/utils/validation.ts`
 - [x] **Follow Toggle Logic** - FIXED: Created `useFollowToggle` hook
 - [x] **ShowCard/MovieCard** - FIXED: Created `MediaCard` component
 - [x] **Recommendation Hooks** - FIXED: Created `useMediaRecommendations` generic hook
-- [ ] **FollowersScreen/FollowingScreen** - 147 lines each, structurally identical, should be one parameterized component
+- [x] **FollowersScreen/FollowingScreen** - FIXED: Merged into `UserListScreen.tsx`
 
 ### Safety
 - [x] **Unsafe Non-Null Assertion** - FIXED
@@ -77,11 +79,12 @@ Last scanned: 2026-02-03
 ### Hook Issues
 - [ ] **Missing useCallback Dependency** - `useFollows.ts:42` - `toggleFollow` depends on `isFollowing` but not in deps
 - [ ] **Circular useEffect Dependency** - `useActivityFeed.ts:60` - `loadMore` includes `activities` in deps
-- [ ] **Missing Error State** - 6 hooks catch errors but never expose `error` to UI consumers
+- [x] **Missing Error State** - FIXED: `useFollowToggle` and `useEpisodeReactions` now expose `error`
+- [ ] **useFollowToggle error not consumed** - `UserListScreen.tsx` doesn't destructure or display the `error` from useFollowToggle
 
 ### Non-functional UI
-- [ ] **Auto-sync toggle** - `SyncSettingsScreen.tsx:30` - Local state only, not persisted, doesn't affect behavior
-- [ ] **"See All" button** - `ProfileScreen.tsx:669-673` - No `onPress` handler, does nothing
+- [x] **Auto-sync toggle** - FIXED: Removed non-functional toggle from SyncSettingsScreen
+- [x] **"See All" button** - FIXED: Removed non-functional button from ProfileScreen
 
 ---
 
@@ -114,11 +117,11 @@ Last scanned: 2026-02-03
 - [ ] **Empty state** - 7 screens implement same centered icon+text pattern independently
 
 ### Missing Error UI
-- [ ] **WatchHistorySheet.tsx** - 4 catch blocks with no user feedback
-- [ ] **ProfileVisibilitySheet.tsx** - Error caught, no user feedback
+- [x] **WatchHistorySheet.tsx** - FIXED: Added Alert.alert in 4 catch blocks
+- [x] **ProfileVisibilitySheet.tsx** - FIXED: Added Alert.alert on save failure
 - [ ] **ActivityItem.tsx:132-140** - Fetches user activity, console.error only
-- [ ] **UpNextScreen** - No error state at all, shows empty state on failure
-- [ ] **MyShowsScreen** - No error state, shows "Library Empty" on failure
+- [x] **UpNextScreen** - FIXED: Added error state + retry button (but error view lacks pull-to-refresh)
+- [x] **MyShowsScreen** - FIXED: Added error state + retry button (but error view lacks pull-to-refresh)
 - [ ] **MovieDetailScreen** - Optimistic status update with no rollback on failure
 - [ ] **ShowDetailScreen** - Same optimistic update issue
 - [ ] **UpNextScreen** - `handleMarkWatched` optimistic with no rollback
@@ -129,6 +132,7 @@ Last scanned: 2026-02-03
 - [ ] **SearchScreen** - 1,034 lines, extract AddShowModal and AddMovieModal
 - [ ] **Missing React.memo** - No components use React.memo (EpisodeRow, ShowCard, MovieCard, etc.)
 - [ ] **Missing useCallback** - EpisodeRow, ActivityItem, FriendsWatchingCard handlers recreated every render
+- [ ] **Inline ItemSeparatorComponent** - `UserListScreen.tsx:119` - Creates new component ref every render, extract to const
 
 ### Inline Styles
 - [ ] **MyShowsScreen:416** - `{{ flex: 1 }}`
@@ -147,10 +151,13 @@ Last scanned: 2026-02-03
 
 ### Cleanup
 - [ ] **30+ console.error/console.warn** - Replace with proper logging for production
-- [ ] **Stale comment in sync.ts:320** - Says "addShow uses INSERT OR REPLACE" but it's been fixed
-- [ ] **Unused imports** - FlatList in MyShowsScreen, MediaType in MyShowsScreen/SearchScreen, TMDBEpisode in UpNextScreen, formatEpisodeCode in EpisodeRow, EpisodeReaction in useEpisodeReactions
+- [ ] **Stale comment in sync.ts:320** - Already removed (was about INSERT OR REPLACE)
+- [x] **Unused imports** - FIXED: Removed FlatList/MediaType/TMDBEpisode/formatEpisodeCode/EpisodeReaction
 - [ ] **Dead code** - SignUpScreen success state (never set), EpisodeReactionPicker default emoji size (always overridden), empty provider logo in ShowDetailScreen
-- [ ] **Silent partial export** - `export.ts:58,68,80` - Errors swallowed, user gets incomplete data without knowing
+- [x] **Silent partial export** - FIXED: Added warnings array to ExportData, fixed displayName bug
+- [ ] **UserListScreen double hook call** - Both `useFollowersList` and `useFollowingList` fire on mount regardless of mode. Add `enabled` param to skip unused fetch.
+- [ ] **Error state not pull-to-refreshable** - UpNextScreen and MyShowsScreen error views render outside FlatList/SectionList, so pull-to-refresh gesture doesn't work in error state. Wrap error in ScrollView+RefreshControl.
+- [ ] **Schema: tmdb_id PK vs UNIQUE INDEX contradiction** - `tracked_shows` has `tmdb_id INTEGER PRIMARY KEY` but also `UNIQUE INDEX on (tmdb_id, media_type)` — PK already prevents duplicate tmdb_ids regardless of media_type, making the index misleading
 - [ ] **formatRating/starsToValue/valueToStars** - Utility functions exported from StarRating.tsx component file, should be in utils/
 
 ---

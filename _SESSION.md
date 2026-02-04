@@ -1,59 +1,70 @@
 # UpNext - Session State
-Updated: 2026-02-03 | Branch: main
+Updated: 2026-02-04 | Branch: main
 
-## Status: Sync Engine Hardened (5 Review Rounds Complete)
+## Status: Tech Debt Pass Complete + Review Feedback Captured
 
 ### This Session
-- Fixed 9 critical sync engine bugs for multi-device reliability
-- Ran 5 rounds of Claude Web review, fixing all issues found in each round
-- Sync engine now handles all data types: shows, movies, episodes, reactions, dismissed shows, episode/movie watch history
-- Performance: `removeFromQueueIfExists` now uses direct SQL instead of loading entire queue
+- Fixed 7 batches of tech debt (18 files, -101 net lines)
+- Ran Claude Web review — found 1 critical issue (nested transactions) and 4 medium/low issues
+- All review feedback captured in TECH_DEBT.md for next session
+- TypeScript compiles cleanly (zero errors, export.ts displayName bug fixed)
 
 ### What Was Completed
-1. **Sync engine initial sync** (`src/services/supabase/sync.ts`) - Expanded from 2 to 7 data types with conflict resolution
-2. **Sync engine incremental pull** (`src/services/supabase/sync.ts`) - `pullChanges()` handles all data types with correct queue cleanup
-3. **Movie sync queue IDs** (`src/services/supabase/sync.ts`) - Uses `movie-${tmdbId}` format matching storage.ts
-4. **Remote-winning conflicts** (`src/services/supabase/sync.ts`) - initialSync applies remote-winning data locally for shows, episodes, movies
-5. **Episode update path** (`src/services/storage.ts`) - `markEpisodeWatched` now UPDATEs existing episodes instead of returning early
-6. **Season unwatch sync** (`src/services/storage.ts`) - `markSeasonUnwatched` queues sync deletions before bulk DELETE
-7. **Queue cleanup completeness** (`src/services/supabase/sync.ts`) - All paths (create/update/delete) clean all operation types from queue
-8. **removeFromQueueIfExists perf** (`src/services/storage.ts`) - New `removeSyncQueueItemByKey` uses direct SQL DELETE
-9. **Supabase constraint** - `user_shows` UNIQUE constraint now includes `media_type`
-10. **onConflict fixes** (`src/services/supabase/shows.ts`) - All 3 upserts use `'user_id,tmdb_id,media_type'`
-11. **media_type filters** (`src/services/supabase/shows.ts`) - `softDeleteShow`, `updateShowStatus`, `getShowRemoteId` filter by media_type
-12. **SyncContext fixes** (`src/contexts/SyncContext.tsx`) - NetInfo subscribe once, dependency arrays fixed, safe error casts
-13. **TECH_DEBT.md** - Updated with all fixed items
+1. **Race condition transactions** (`src/services/storage.ts`) - Wrapped 5 check-then-insert methods in `withTransactionAsync`: `markEpisodeWatched`, `addToSyncQueue`, `setReaction`, `dismissShow`, `dismissMovie`
+2. **Sync safety** (`src/services/supabase/sync.ts`) - Added try-catch around `JSON.parse` in `processSyncQueueItem`, eliminated N+1 query in `getAllLocalEpisodes`
+3. **Hook error states** (`src/hooks/useFollowToggle.ts`, `src/hooks/useEpisodeReactions.ts`) - Both hooks now expose `error` state to consumers
+4. **Non-functional UI removed** (`src/screens/SyncSettingsScreen.tsx`) - Removed fake auto-sync toggle; (`src/screens/ProfileScreen.tsx`) - Removed non-functional "See All" button
+5. **Unused imports cleaned** - `src/screens/MyShowsScreen.tsx`, `src/screens/SearchScreen.tsx`, `src/screens/UpNextScreen.tsx`, `src/components/EpisodeRow.tsx`
+6. **Export bug fixed** (`src/services/export.ts`) - Fixed `display_name` → `displayName` property access, added `warnings` array for partial export failures; (`src/types/index.ts`) - Added `warnings?: string[]` to ExportData
+7. **Error UI added** (`src/components/WatchHistorySheet.tsx`) - Alert.alert in 4 catch blocks; (`src/components/ProfileVisibilitySheet.tsx`) - Alert on save failure; (`src/screens/UpNextScreen.tsx`, `src/screens/MyShowsScreen.tsx`) - Error state + retry button
+8. **Screen merge** - Merged `FollowersScreen.tsx` + `FollowingScreen.tsx` → `src/screens/UserListScreen.tsx`; updated `src/navigation/AppNavigator.tsx`
 
 ### Files Modified This Session
-- `src/services/supabase/sync.ts` - Major sync engine overhaul (initialSync, pullChanges, processSyncQueueItem, removeFromQueueIfExists)
-- `src/services/supabase/shows.ts` - onConflict, media_type filters, getShowRemoteId
-- `src/services/storage.ts` - markEpisodeWatched UPDATE path, markSeasonUnwatched sync, removeSyncQueueItemByKey
-- `src/contexts/SyncContext.tsx` - NetInfo ref, dependency arrays, error casts
-- `TECH_DEBT.md` - Marked 14+ items as fixed
+- `src/services/storage.ts` - 5 methods wrapped in withTransactionAsync
+- `src/services/supabase/sync.ts` - JSON.parse safety, N+1 elimination
+- `src/hooks/useFollowToggle.ts` - Added error state
+- `src/hooks/useEpisodeReactions.ts` - Added error state, removed unused import
+- `src/screens/SyncSettingsScreen.tsx` - Removed auto-sync toggle + unused imports/styles
+- `src/screens/ProfileScreen.tsx` - Removed "See All" button + styles
+- `src/screens/MyShowsScreen.tsx` - Removed unused imports, added error state + retry UI
+- `src/screens/SearchScreen.tsx` - Removed unused MediaType import
+- `src/screens/UpNextScreen.tsx` - Removed unused import, added error state + retry UI
+- `src/components/EpisodeRow.tsx` - Removed unused formatEpisodeCode import
+- `src/components/WatchHistorySheet.tsx` - Added Alert.alert in 4 catch blocks
+- `src/components/ProfileVisibilitySheet.tsx` - Added Alert.alert on save failure
+- `src/services/export.ts` - Fixed displayName bug, added warnings
+- `src/types/index.ts` - Added warnings to ExportData
+- `src/screens/UserListScreen.tsx` - NEW: merged Followers/Following screen
+- `src/navigation/AppNavigator.tsx` - Updated to use UserListScreen
+- `TECH_DEBT.md` - Updated with fixed items + new review feedback
 
-### Next Session Plan
-1. **Run `/techdebt`** - Full rescan to find remaining issues
-2. **Fix all tech debt** - Address everything found in the scan
-3. **Run `/review`** - Claude Web review after all tech debt is fixed
-4. **Production prep** - Move API key to env vars
-5. **Launch prep** - App Store assets, privacy policy
+### Next Session Plan (Priority Order)
+1. **CRITICAL: Fix nested withTransactionAsync** - `storage.ts` — `markEpisodeWatched` etc. call `addToSyncQueue` which also uses `withTransactionAsync`. expo-sqlite may not support nesting. Extract inner logic into `_addToSyncQueueRaw()` helper.
+2. **Fix UserListScreen double hook call** - Both `useFollowersList` and `useFollowingList` fire on mount. Add `enabled` parameter to skip unused fetch.
+3. **Fix error state pull-to-refresh** - UpNextScreen and MyShowsScreen error views render outside scrollable container. Wrap in ScrollView+RefreshControl.
+4. **Display useFollowToggle error in UI** - UserListScreen doesn't show follow error to user.
+5. **Production prep** - Move API key to env vars
+6. **Launch prep** - App Store assets, privacy policy
 
 ### Deferred Items
-- Bug 8: `dismissed_movies` cloud sync - needs new Supabase table (currently only dismissed_shows syncs)
-- Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at` field
+- Bug 8: `dismissed_movies` cloud sync - needs new Supabase table
+- Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at`
+- `markSeasonWatched` sequential transactions - wraps 20+ individual transactions, should be one
+- Schema: `tmdb_id` PK vs UNIQUE INDEX contradiction in `tracked_shows`
 
 ## Pre-Launch Roadmap
 
 ### Before Launch
 | # | Task | Status |
 |---|------|--------|
-| 1 | Fix 4 critical bugs | ✅ DONE |
-| 2 | Test all fixes | ✅ DONE |
-| 3 | Fix review feedback (3 issues) | ✅ DONE |
-| 4 | Sync engine hardening (5 review rounds) | ✅ DONE |
-| 5 | Medium priority tech debt | **NEXT** |
-| 6 | Production prep (API key to env) | PENDING |
-| 7 | Launch prep (app store assets) | PENDING |
+| 1 | Fix 4 critical bugs | DONE |
+| 2 | Test all fixes | DONE |
+| 3 | Fix review feedback (3 issues) | DONE |
+| 4 | Sync engine hardening (5 review rounds) | DONE |
+| 5 | Tech debt pass | DONE |
+| 6 | Fix review feedback (nested transactions) | **NEXT** |
+| 7 | Production prep (API key to env) | PENDING |
+| 8 | Launch prep (app store assets) | PENDING |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -71,29 +82,20 @@ Updated: 2026-02-03 | Branch: main
 - **Movies** - Full tracking with search, status, ratings
 - **Rewatch Tracking** - Full watch history with editable timestamps
 - **Share Profile** - Deep links, privacy controls, profile stats
-- **Data Export** - JSON export with profile, follows, ratings
+- **Data Export** - JSON export with profile, follows, ratings, warnings
 - **Settings** - About, Sync Settings, Notifications screens
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
-- TypeScript compiles cleanly (except unrelated export.ts error)
+- TypeScript compiles cleanly (zero errors)
 
 ## Commits This Session
 ```
-3240379 Fix delete path queue cleanup and removeFromQueueIfExists performance
-987f862 Fix pullChanges queue cleanup: add 'update' operation removal
-884cb32 Fix 4 issues from Claude Web review round 3
-4b19517 Fix 9 sync engine bugs found in Claude Web review round 2
-9c9f63a Fix 9 critical sync engine bugs for multi-device reliability
-23fada2 Fix 3 review feedback issues: re-dismiss, expiry check, partial fetch
-7c176ba Fix dismiss scroll-to-top bug and improve recommendations
-595a363 Update session notes: all 4 bugs fixed, ready for testing
-ced9a6e Fix sync queue bug: only queue when add actually succeeds
-8c7cfbe Fix 4 bugs: recommendations filter, dismiss backfill, sync constraint, auto-mark
+a1edc53 Fix tech debt: race conditions, error UI, unused code, screen merge
 ```
 
 ## Known Issues
 - API key hardcoded (move to env vars before production)
-- `src/services/export.ts` has unrelated TypeScript error (display_name vs displayName)
+- Nested `withTransactionAsync` may fail at runtime (critical, fix first next session)
 - See `TECH_DEBT.md` for full technical debt tracking
