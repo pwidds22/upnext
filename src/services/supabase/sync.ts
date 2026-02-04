@@ -125,7 +125,7 @@ export const syncService = {
       result.success = result.errors.length === 0;
     } catch (error) {
       result.success = false;
-      result.errors.push((error as Error).message);
+      result.errors.push(error instanceof Error ? error.message : 'Sync failed');
     }
 
     return result;
@@ -425,7 +425,7 @@ export const syncService = {
       result.success = true;
     } catch (error) {
       result.success = false;
-      result.errors.push((error as Error).message);
+      result.errors.push(error instanceof Error ? error.message : 'Sync failed');
     }
 
     return result;
@@ -447,7 +447,7 @@ export const syncService = {
 
         await storageService.removeSyncQueueItem(item.id);
       } catch (error) {
-        const errorMsg = (error as Error).message;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown sync error';
         errors.push(`Failed to sync ${item.tableName} ${item.recordId}: ${errorMsg}`);
 
         // Update retry count
@@ -537,6 +537,7 @@ export const syncService = {
             const show = this.rowToTrackedShow(remoteRow);
             await storageService.addShow(show);
             await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteRow.id);
+            await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'create');
             pulled.shows++;
           }
           conflicts++;
@@ -567,7 +568,9 @@ export const syncService = {
         episodeTitle: remoteRow.episode_title ?? undefined,
         stillPath: remoteRow.still_path ?? undefined,
       });
+      // markEpisodeWatched queues 'create' or 'update' depending on whether episode existed
       await this.removeFromQueueIfExists('watched_episodes', episodeId, 'create');
+      await this.removeFromQueueIfExists('watched_episodes', episodeId, 'update');
       pulled.episodes++;
     }
 
@@ -591,7 +594,9 @@ export const syncService = {
         remoteRow.episode_number,
         remoteRow.reaction as EpisodeReactionType
       );
+      // setReaction queues 'create' or 'update' depending on whether reaction existed
       await this.removeFromQueueIfExists('episode_reactions', reactionId, 'create');
+      await this.removeFromQueueIfExists('episode_reactions', reactionId, 'update');
     }
 
     // Apply dismissed show changes
@@ -603,7 +608,9 @@ export const syncService = {
       }
 
       await storageService.dismissShow(remoteRow.tmdb_id);
+      // dismissShow queues 'create' or 'update' depending on whether it existed
       await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'create');
+      await this.removeFromQueueIfExists('dismissed_shows', `dismissed-${remoteRow.tmdb_id}`, 'update');
     }
 
     // Apply episode watch history changes

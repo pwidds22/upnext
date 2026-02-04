@@ -488,7 +488,20 @@ class StorageService {
     );
 
     if (existing) {
-      // Episode already watched, skip (idempotent)
+      // Episode already watched - update metadata if provided
+      await this.db!.runAsync(
+        `UPDATE watched_episodes
+         SET watched_at = ?, episode_title = COALESCE(?, episode_title), still_path = COALESCE(?, still_path), sync_status = ?
+         WHERE id = ?`,
+        [
+          episode.watchedAt,
+          episode.episodeTitle ?? null,
+          episode.stillPath ?? null,
+          DEFAULT_SYNC_STATUS,
+          existing.id,
+        ]
+      );
+      await this.addToSyncQueue('watched_episodes', existing.id, 'update', { ...episode, id: existing.id });
       return;
     }
 
