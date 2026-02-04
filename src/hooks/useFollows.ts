@@ -75,10 +75,10 @@ export function useFollowCounts(userId: string) {
 }
 
 // Hook for listing followers
-export function useFollowersList(userId: string) {
+export function useFollowersList(userId: string, enabled: boolean = true) {
   const { user } = useAuth();
   const [followers, setFollowers] = useState<UserWithFollowStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -93,17 +93,18 @@ export function useFollowersList(userId: string) {
   }, [userId, user?.id]);
 
   useEffect(() => {
+    if (!enabled) return;
     refresh();
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   return { followers, loading, refresh };
 }
 
 // Hook for listing following
-export function useFollowingList(userId: string) {
+export function useFollowingList(userId: string, enabled: boolean = true) {
   const { user } = useAuth();
   const [following, setFollowing] = useState<UserWithFollowStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -118,8 +119,9 @@ export function useFollowingList(userId: string) {
   }, [userId, user?.id]);
 
   useEffect(() => {
+    if (!enabled) return;
     refresh();
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   return { following, loading, refresh };
 }

@@ -502,7 +502,7 @@ class StorageService {
             existing.id,
           ]
         );
-        await this.addToSyncQueue('watched_episodes', existing.id, 'update', { ...episode, id: existing.id });
+        await this._addToSyncQueueRaw('watched_episodes', existing.id, 'update', { ...episode, id: existing.id });
         return;
       }
 
@@ -524,7 +524,7 @@ class StorageService {
       );
 
       // Queue for sync
-      await this.addToSyncQueue('watched_episodes', id, 'create', { ...episode, id });
+      await this._addToSyncQueueRaw('watched_episodes', id, 'create', { ...episode, id });
     });
   }
 
@@ -551,16 +551,42 @@ class StorageService {
 
     const now = new Date().toISOString();
 
-    for (const ep of episodes) {
-      await this.markEpisodeWatched({
-        showTmdbId,
-        seasonNumber,
-        episodeNumber: ep.episodeNumber,
-        watchedAt: now,
-        episodeTitle: ep.name ?? undefined,
-        stillPath: ep.stillPath ?? undefined,
-      });
-    }
+    await this.db!.withTransactionAsync(async () => {
+      for (const ep of episodes) {
+        const id = `${showTmdbId}-${seasonNumber}-${ep.episodeNumber}`;
+        const episodeTitle = ep.name ?? null;
+        const stillPath = ep.stillPath ?? null;
+
+        const existing = await this.db!.getFirstAsync<{ id: string }>(
+          'SELECT id FROM watched_episodes WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ?',
+          [showTmdbId, seasonNumber, ep.episodeNumber]
+        );
+
+        if (existing) {
+          await this.db!.runAsync(
+            `UPDATE watched_episodes
+             SET watched_at = ?, episode_title = COALESCE(?, episode_title), still_path = COALESCE(?, still_path), sync_status = ?
+             WHERE id = ?`,
+            [now, episodeTitle, stillPath, DEFAULT_SYNC_STATUS, existing.id]
+          );
+          await this._addToSyncQueueRaw('watched_episodes', existing.id, 'update', {
+            showTmdbId, seasonNumber, episodeNumber: ep.episodeNumber, watchedAt: now,
+            episodeTitle: ep.name ?? undefined, stillPath: ep.stillPath ?? undefined, id: existing.id,
+          });
+        } else {
+          await this.db!.runAsync(
+            `INSERT INTO watched_episodes
+             (id, show_tmdb_id, season_number, episode_number, watched_at, episode_title, still_path, sync_status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, showTmdbId, seasonNumber, ep.episodeNumber, now, episodeTitle, stillPath, DEFAULT_SYNC_STATUS]
+          );
+          await this._addToSyncQueueRaw('watched_episodes', id, 'create', {
+            showTmdbId, seasonNumber, episodeNumber: ep.episodeNumber, watchedAt: now,
+            episodeTitle: ep.name ?? undefined, stillPath: ep.stillPath ?? undefined, id,
+          });
+        }
+      }
+    });
   }
 
   async markSeasonUnwatched(showTmdbId: number, seasonNumber: number): Promise<void> {
@@ -610,6 +636,34 @@ class StorageService {
   }
 
   // Sync Queue Operations
+
+  // Raw sync queue logic without transaction wrapper.
+  // Use this inside an existing withTransactionAsync to avoid nesting.
+  private async _addToSyncQueueRaw(
+    tableName: string,
+    recordId: string,
+    operation: SyncOperation,
+    payload: unknown
+  ): Promise<void> {
+    const existing = await this.db!.getFirstAsync<{ id: number }>(
+      'SELECT id FROM sync_queue WHERE table_name = ? AND record_id = ? AND operation = ?',
+      [tableName, recordId, operation]
+    );
+
+    if (existing) {
+      await this.db!.runAsync(
+        'UPDATE sync_queue SET payload = ? WHERE id = ?',
+        [JSON.stringify(payload), existing.id]
+      );
+    } else {
+      await this.db!.runAsync(
+        `INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tableName, recordId, operation, JSON.stringify(payload), new Date().toISOString()]
+      );
+    }
+  }
+
   async addToSyncQueue(
     tableName: string,
     recordId: string,
@@ -619,26 +673,7 @@ class StorageService {
     if (!this.db) await this.init();
 
     await this.db!.withTransactionAsync(async () => {
-      // Check if this sync operation already exists
-      const existing = await this.db!.getFirstAsync<{ id: number }>(
-        'SELECT id FROM sync_queue WHERE table_name = ? AND record_id = ? AND operation = ?',
-        [tableName, recordId, operation]
-      );
-
-      if (existing) {
-        // Update existing sync queue entry (preserve created_at and attempts)
-        await this.db!.runAsync(
-          'UPDATE sync_queue SET payload = ? WHERE id = ?',
-          [JSON.stringify(payload), existing.id]
-        );
-      } else {
-        // Insert new sync queue entry
-        await this.db!.runAsync(
-          `INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at)
-           VALUES (?, ?, ?, ?, ?)`,
-          [tableName, recordId, operation, JSON.stringify(payload), new Date().toISOString()]
-        );
-      }
+      await this._addToSyncQueueRaw(tableName, recordId, operation, payload);
     });
   }
 
@@ -862,7 +897,7 @@ class StorageService {
         );
 
         // Queue for sync as update
-        await this.addToSyncQueue('episode_reactions', existing.id, 'update', {
+        await this._addToSyncQueueRaw('episode_reactions', existing.id, 'update', {
           id: existing.id,
           showTmdbId,
           seasonNumber,
@@ -880,7 +915,7 @@ class StorageService {
         );
 
         // Queue for sync as create
-        await this.addToSyncQueue('episode_reactions', id, 'create', {
+        await this._addToSyncQueueRaw('episode_reactions', id, 'create', {
           id,
           showTmdbId,
           seasonNumber,
@@ -969,7 +1004,7 @@ class StorageService {
           [now, DEFAULT_SYNC_STATUS, tmdbId]
         );
         // Queue sync for update
-        await this.addToSyncQueue('dismissed_shows', existing.id, 'update', {
+        await this._addToSyncQueueRaw('dismissed_shows', existing.id, 'update', {
           id: existing.id,
           tmdbId,
           dismissedAt: now,
@@ -986,7 +1021,7 @@ class StorageService {
       );
 
       // Queue for sync
-      await this.addToSyncQueue('dismissed_shows', id, 'create', {
+      await this._addToSyncQueueRaw('dismissed_shows', id, 'create', {
         id,
         tmdbId,
         dismissedAt: now,
@@ -1060,7 +1095,7 @@ class StorageService {
           [now, DEFAULT_SYNC_STATUS, tmdbId]
         );
         // Queue sync for update
-        await this.addToSyncQueue('dismissed_movies', existing.id, 'update', {
+        await this._addToSyncQueueRaw('dismissed_movies', existing.id, 'update', {
           id: existing.id,
           tmdbId,
           dismissedAt: now,
@@ -1077,7 +1112,7 @@ class StorageService {
       );
 
       // Queue for sync
-      await this.addToSyncQueue('dismissed_movies', id, 'create', {
+      await this._addToSyncQueueRaw('dismissed_movies', id, 'create', {
         id,
         tmdbId,
         dismissedAt: now,

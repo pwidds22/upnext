@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityItem as ActivityItemType, REACTION_CONFIG } from '../types';
 import { activityService } from '../services/supabase/activity';
@@ -135,6 +135,7 @@ export default function ActivityItem({ activity, onShowPress, onMoviePress, onUs
         setUserActivity(filtered);
       } catch (e) {
         console.error('Failed to fetch user activity:', e);
+        Alert.alert('Error', 'Failed to load user activity');
       } finally {
         setLoadingUserActivity(false);
       }

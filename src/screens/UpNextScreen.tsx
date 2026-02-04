@@ -7,6 +7,7 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -263,7 +264,16 @@ export default function UpNextScreen() {
   return (
     <View style={styles.container}>
       {error ? (
-        <View style={styles.emptyContainer}>
+        <ScrollView
+          contentContainerStyle={styles.emptyContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={COLORS.primary}
+            />
+          }
+        >
           <Ionicons name="alert-circle-outline" size={48} color={COLORS.error} />
           <Text style={styles.emptyTitle}>Something Went Wrong</Text>
           <Text style={styles.emptyText}>{error}</Text>
@@ -273,7 +283,7 @@ export default function UpNextScreen() {
           >
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       ) : isEmpty ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="tv-outline" size={48} color={COLORS.textSecondary} />

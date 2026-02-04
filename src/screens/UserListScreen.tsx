@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -41,8 +42,8 @@ export default function UserListScreen() {
   const { user: currentUser } = useAuth();
 
   const isFollowersMode = route.name === 'Followers';
-  const followersList = useFollowersList(userId);
-  const followingList = useFollowingList(userId);
+  const followersList = useFollowersList(userId, isFollowersMode);
+  const followingList = useFollowingList(userId, !isFollowersMode);
   const { followers, loading: followersLoading, refresh: refreshFollowers } = followersList;
   const { following, loading: followingLoading, refresh: refreshFollowing } = followingList;
 
@@ -51,10 +52,16 @@ export default function UserListScreen() {
   const refresh = isFollowersMode ? refreshFollowers : refreshFollowing;
 
   const [refreshing, setRefreshing] = useState(false);
-  const { handleFollowToggle, followLoadingIds } = useFollowToggle({
+  const { handleFollowToggle, followLoadingIds, error: followError } = useFollowToggle({
     currentUserId: currentUser?.id,
     onSuccess: refresh,
   });
+
+  useEffect(() => {
+    if (followError) {
+      Alert.alert('Follow Error', followError);
+    }
+  }, [followError]);
 
   const isCurrentUser = currentUser?.id === userId;
   const emptyText = isFollowersMode ? EMPTY_TEXT.followers : EMPTY_TEXT.following;
@@ -116,7 +123,7 @@ export default function UserListScreen() {
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={users.length === 0 ? styles.emptyList : undefined}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ItemSeparatorComponent={ItemSeparator}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -166,3 +173,5 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
 });
+
+const ItemSeparator = () => <View style={styles.separator} />;
