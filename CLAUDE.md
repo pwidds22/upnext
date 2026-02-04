@@ -188,5 +188,4 @@ Example prompts:
 - **Ghostty**: Recommended terminal for best Unicode and color support
 
 ## Known Issues
-- API key hardcoded in `src/utils/constants.ts` (fix before production)
 - No automated tests yet (add before launch)

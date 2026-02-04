@@ -58,9 +58,6 @@ A mobile app (iOS + Android) for tracking TV shows, movies, and episodes. Featur
 | Trakt | No rewatch history, removed calendar | Rewatch tracking, Up Next calendar |
 | Both | Privacy concerns, data selling | No tracking, user owns data |
 
-## Known Issues
-- API key is hardcoded in `src/utils/constants.ts` (should use env vars for production)
-
 ## Key Files
 - `src/services/supabase/` - Cloud sync services
 - `src/screens/` - All app screens

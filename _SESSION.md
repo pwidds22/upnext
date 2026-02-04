@@ -26,8 +26,7 @@ Updated: 2026-02-04 | Branch: main
 - `src/components/ActivityItem.tsx` — `Alert.alert` on fetch failure, early return on error
 
 ### Next Session Plan (Priority Order)
-1. **Production prep** — Move API key from `src/utils/constants.ts` to environment variables
-2. **Launch prep** — App Store assets, privacy policy, screenshots, metadata
+1. **Launch prep** — App Store assets, privacy policy, screenshots, metadata
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -46,8 +45,8 @@ Updated: 2026-02-04 | Branch: main
 | 4 | Sync engine hardening (5 review rounds) | DONE |
 | 5 | Tech debt pass | DONE |
 | 6 | Fix review feedback (nested transactions + 6 more) | DONE |
-| 7 | Production prep (API key to env) | **NEXT** |
-| 8 | Launch prep (app store assets) | PENDING |
+| 7 | Production prep (env var security + validation) | DONE |
+| 8 | Launch prep (app store assets) | **NEXT** |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -81,5 +80,4 @@ a2153d5 Remove redundant setLoadingUserActivity in catch block
 ```
 
 ## Known Issues
-- API key hardcoded (move to env vars before production)
 - See `TECH_DEBT.md` for full technical debt tracking
