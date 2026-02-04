@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { EpisodeReaction, EpisodeReactionType } from '../types';
+import { EpisodeReactionType } from '../types';
 import { storageService } from '../services/storage';
 import { useSync } from './useSync';
 
 export function useEpisodeReactions(showTmdbId: number) {
   const [reactions, setReactions] = useState<Map<string, EpisodeReactionType>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Sync integration - useSync returns undefined if SyncProvider is not available
   const syncContext = useSync();
@@ -15,6 +16,7 @@ export function useEpisodeReactions(showTmdbId: number) {
   const loadReactions = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await storageService.getReactionsForShow(showTmdbId);
       const map = new Map(
         data.map((r) => [`${r.seasonNumber}-${r.episodeNumber}`, r.reaction])
@@ -22,6 +24,7 @@ export function useEpisodeReactions(showTmdbId: number) {
       setReactions(map);
     } catch (e) {
       console.error('Failed to load episode reactions:', e);
+      setError(e instanceof Error ? e.message : 'Failed to load reactions');
     } finally {
       setLoading(false);
     }
@@ -89,6 +92,7 @@ export function useEpisodeReactions(showTmdbId: number) {
   return {
     reactions,
     loading,
+    error,
     refresh: loadReactions,
     getReaction,
     setReaction,

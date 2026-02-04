@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { TMDBEpisode, EpisodeReactionType } from '../types';
-import { COLORS, getStillUrl, formatEpisodeCode, getCountdownText, hasAiredPacific, formatAirDate } from '../utils/constants';
+import { COLORS, getStillUrl, getCountdownText, hasAiredPacific, formatAirDate } from '../utils/constants';
 import EpisodeReactionPicker from './EpisodeReactionPicker';
 
 interface EpisodeRowProps {

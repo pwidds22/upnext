@@ -679,7 +679,13 @@ export const syncService = {
 
   // Process a single sync queue item
   async processSyncQueueItem(userId: string, item: SyncQueueItem): Promise<void> {
-    const payload = JSON.parse(item.payload);
+    let payload;
+    try {
+      payload = JSON.parse(item.payload);
+    } catch (e) {
+      console.error('Malformed sync queue payload, skipping item:', item.id, e);
+      return;
+    }
 
     if (item.tableName === 'tracked_shows') {
       switch (item.operation) {
@@ -785,15 +791,7 @@ export const syncService = {
 
   // Helper to get all local episodes across all shows
   async getAllLocalEpisodes(): Promise<WatchedEpisode[]> {
-    const shows = await storageService.getAllShows();
-    const allEpisodes: WatchedEpisode[] = [];
-
-    for (const show of shows) {
-      const episodes = await storageService.getWatchedEpisodes(show.tmdbId);
-      allEpisodes.push(...episodes);
-    }
-
-    return allEpisodes;
+    return storageService.getAllWatchedEpisodes();
   },
 
   // Helper to remove an item from sync queue if it exists (direct SQL, no full queue load)

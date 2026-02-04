@@ -12,7 +12,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { RootStackParamList, TrackedShow, UpNextEpisode, TMDBEpisode } from '../types';
+import { RootStackParamList, TrackedShow, UpNextEpisode } from '../types';
 import { storageService } from '../services/storage';
 import { tmdbService } from '../services/tmdb';
 import ShowPoster from '../components/ShowPoster';
@@ -26,9 +26,11 @@ export default function UpNextScreen() {
   const [comingSoon, setComingSoon] = useState<UpNextEpisode[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadUpNext = useCallback(async () => {
     try {
+      setError(null);
       const watchingShows = await storageService.getShowsByStatus('watching');
 
       const ready: UpNextEpisode[] = [];
@@ -63,6 +65,7 @@ export default function UpNextScreen() {
       setComingSoon(upcoming);
     } catch (e) {
       console.error('Failed to load up next:', e);
+      setError('Failed to load your shows. Pull down to retry.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -259,7 +262,19 @@ export default function UpNextScreen() {
 
   return (
     <View style={styles.container}>
-      {isEmpty ? (
+      {error ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={COLORS.error} />
+          <Text style={styles.emptyTitle}>Something Went Wrong</Text>
+          <Text style={styles.emptyText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => { setLoading(true); loadUpNext(); }}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : isEmpty ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="tv-outline" size={48} color={COLORS.textSecondary} />
           <Text style={styles.emptyTitle}>No Shows Being Watched</Text>
@@ -371,5 +386,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

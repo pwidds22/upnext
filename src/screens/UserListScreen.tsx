@@ -11,22 +11,45 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
-import { useFollowingList } from '../hooks/useFollows';
+import { useFollowersList, useFollowingList } from '../hooks/useFollows';
 import { useFollowToggle } from '../hooks/useFollowToggle';
 import UserRow from '../components/UserRow';
 import { COLORS } from '../utils/constants';
 import type { RootStackParamList, UserWithFollowStatus } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-type ScreenRouteProp = RouteProp<RootStackParamList, 'Following'>;
+type FollowersRouteProp = RouteProp<RootStackParamList, 'Followers'>;
+type FollowingRouteProp = RouteProp<RootStackParamList, 'Following'>;
 
-export default function FollowingScreen() {
+const EMPTY_TEXT = {
+  followers: {
+    title: 'No Followers',
+    self: "You don't have any followers yet",
+    other: "This user doesn't have any followers yet",
+  },
+  following: {
+    title: 'Not Following Anyone',
+    self: "You aren't following anyone yet",
+    other: "This user isn't following anyone yet",
+  },
+};
+
+export default function UserListScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const route = useRoute<ScreenRouteProp>();
+  const route = useRoute<FollowersRouteProp | FollowingRouteProp>();
   const { userId } = route.params;
   const { user: currentUser } = useAuth();
 
-  const { following, loading, refresh } = useFollowingList(userId);
+  const isFollowersMode = route.name === 'Followers';
+  const followersList = useFollowersList(userId);
+  const followingList = useFollowingList(userId);
+  const { followers, loading: followersLoading, refresh: refreshFollowers } = followersList;
+  const { following, loading: followingLoading, refresh: refreshFollowing } = followingList;
+
+  const users = isFollowersMode ? followers : following;
+  const loading = isFollowersMode ? followersLoading : followingLoading;
+  const refresh = isFollowersMode ? refreshFollowers : refreshFollowing;
+
   const [refreshing, setRefreshing] = useState(false);
   const { handleFollowToggle, followLoadingIds } = useFollowToggle({
     currentUserId: currentUser?.id,
@@ -34,6 +57,7 @@ export default function FollowingScreen() {
   });
 
   const isCurrentUser = currentUser?.id === userId;
+  const emptyText = isFollowersMode ? EMPTY_TEXT.followers : EMPTY_TEXT.following;
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -68,17 +92,15 @@ export default function FollowingScreen() {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="people-outline" size={48} color={COLORS.textSecondary} />
-        <Text style={styles.emptyTitle}>Not Following Anyone</Text>
+        <Text style={styles.emptyTitle}>{emptyText.title}</Text>
         <Text style={styles.emptyText}>
-          {isCurrentUser
-            ? "You aren't following anyone yet"
-            : "This user isn't following anyone yet"}
+          {isCurrentUser ? emptyText.self : emptyText.other}
         </Text>
       </View>
     );
   };
 
-  if (loading && following.length === 0) {
+  if (loading && users.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={COLORS.primary} size="large" />
@@ -89,11 +111,11 @@ export default function FollowingScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={following}
+        data={users}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
-        contentContainerStyle={following.length === 0 ? styles.emptyList : undefined}
+        contentContainerStyle={users.length === 0 ? styles.emptyList : undefined}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         refreshControl={
           <RefreshControl

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Switch,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,8 +25,6 @@ export default function SyncSettingsScreen() {
     triggerSync,
     triggerFullSync,
   } = useSyncContext();
-
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
 
   const isSyncing = syncState === 'syncing';
 
@@ -175,26 +172,6 @@ export default function SyncSettingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Sync Settings */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Settings</Text>
-
-        <View style={styles.settingItem}>
-          <View style={styles.settingTextContainer}>
-            <Text style={styles.settingTitle}>Auto-sync</Text>
-            <Text style={styles.settingSubtitle}>
-              Automatically sync changes when online
-            </Text>
-          </View>
-          <Switch
-            value={autoSyncEnabled}
-            onValueChange={setAutoSyncEnabled}
-            trackColor={{ false: COLORS.border, true: `${COLORS.primary}60` }}
-            thumbColor={autoSyncEnabled ? COLORS.primary : COLORS.textTertiary}
-          />
-        </View>
-      </View>
-
       {/* Sync Info */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Information</Text>
@@ -305,25 +282,6 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   actionSubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  settingTextContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  settingTitle: {
-    fontSize: 16,
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  settingSubtitle: {
     fontSize: 13,
     color: COLORS.textSecondary,
   },

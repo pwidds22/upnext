@@ -665,12 +665,6 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {ratings.length > 6 && (
-            <TouchableOpacity style={styles.seeAllButton}>
-              <Text style={styles.seeAllText}>See All ({ratings.length})</Text>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={styles.section}>
@@ -1011,19 +1005,6 @@ const styles = StyleSheet.create({
   ratingCardTitle: {
     color: COLORS.text,
     fontSize: 13,
-    fontWeight: '500',
-  },
-  seeAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginTop: 8,
-    gap: 4,
-  },
-  seeAllText: {
-    color: COLORS.primary,
-    fontSize: 14,
     fontWeight: '500',
   },
   // Modal styles

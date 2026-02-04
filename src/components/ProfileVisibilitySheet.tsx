@@ -7,6 +7,7 @@ import {
   Modal,
   Switch,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -89,6 +90,7 @@ export default function ProfileVisibilitySheet({
       onClose();
     } catch (e) {
       console.error('Failed to save visibility settings:', e);
+      Alert.alert('Error', 'Failed to save visibility settings. Please try again.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSaving(false);

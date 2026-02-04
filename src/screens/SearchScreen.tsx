@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TMDBShow, TMDBMovie, TrackedShow, TrackedMovie, MediaType, ShowStatus, MovieStatus } from '../types';
+import { TMDBShow, TMDBMovie, TrackedShow, TrackedMovie, ShowStatus, MovieStatus } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import { ratingsService } from '../services/supabase/ratings';

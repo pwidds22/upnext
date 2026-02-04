@@ -574,4 +574,5 @@ export interface ExportData {
   dismissedShows: ExportDismissedItem[];
   dismissedMovies: ExportDismissedItem[];
   ratings?: ExportRating[];
+  warnings?: string[];
 }

@@ -14,11 +14,13 @@ interface UseFollowToggleOptions {
  */
 export function useFollowToggle({ currentUserId, onSuccess }: UseFollowToggleOptions) {
   const [followLoadingIds, setFollowLoadingIds] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   const handleFollowToggle = useCallback(
     async (targetUser: UserWithFollowStatus) => {
       if (!currentUserId) return;
 
+      setError(null);
       setFollowLoadingIds((prev) => new Set([...prev, targetUser.id]));
 
       try {
@@ -31,6 +33,7 @@ export function useFollowToggle({ currentUserId, onSuccess }: UseFollowToggleOpt
         onSuccess?.();
       } catch (e) {
         console.error('Failed to toggle follow:', e);
+        setError(e instanceof Error ? e.message : 'Failed to update follow');
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } finally {
         setFollowLoadingIds((prev) => {
@@ -52,5 +55,6 @@ export function useFollowToggle({ currentUserId, onSuccess }: UseFollowToggleOpt
     handleFollowToggle,
     followLoadingIds,
     isFollowLoading,
+    error,
   };
 }

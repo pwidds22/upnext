@@ -22,8 +22,7 @@ import SignUpScreen from '../screens/auth/SignUpScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import UserSearchScreen from '../screens/UserSearchScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
-import FollowersScreen from '../screens/FollowersScreen';
-import FollowingScreen from '../screens/FollowingScreen';
+import UserListScreen from '../screens/UserListScreen';
 import AboutScreen from '../screens/AboutScreen';
 import SyncSettingsScreen from '../screens/SyncSettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
@@ -204,7 +203,7 @@ export default function AppNavigator() {
         />
         <Stack.Screen
           name="Followers"
-          component={FollowersScreen}
+          component={UserListScreen}
           options={({ route }) => ({
             title: route.params.username
               ? `${route.params.username}'s Followers`
@@ -213,7 +212,7 @@ export default function AppNavigator() {
         />
         <Stack.Screen
           name="Following"
-          component={FollowingScreen}
+          component={UserListScreen}
           options={({ route }) => ({
             title: route.params.username
               ? `${route.params.username} Following`

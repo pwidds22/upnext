@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
@@ -12,7 +11,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { TrackedShow, TrackedMovie, TrackedMedia, RootStackParamList, ShowStatus, MovieStatus, MediaType } from '../types';
+import { TrackedShow, TrackedMovie, TrackedMedia, RootStackParamList, ShowStatus, MovieStatus } from '../types';
 import { storageService } from '../services/storage';
 import ShowPoster from '../components/ShowPoster';
 import { COLORS, STATUS_CONFIG } from '../utils/constants';
@@ -46,6 +45,7 @@ export default function MyShowsScreen() {
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [hideCompleted, setHideCompleted] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -122,6 +122,7 @@ export default function MyShowsScreen() {
 
   const loadData = useCallback(async () => {
     try {
+      setError(null);
       const [allShows, allMovies] = await Promise.all([
         storageService.getAllShows(),
         storageService.getAllMovies(),
@@ -139,6 +140,7 @@ export default function MyShowsScreen() {
       setMovies(allMovies);
     } catch (e) {
       console.error('Failed to load library:', e);
+      setError('Failed to load your library. Pull down to retry.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -356,6 +358,22 @@ export default function MyShowsScreen() {
   );
 
   const renderEmpty = () => {
+    if (error) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={COLORS.error} />
+          <Text style={styles.emptyTitle}>Something Went Wrong</Text>
+          <Text style={styles.emptyText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => { setLoading(true); loadData(); }}
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     const icon = mediaFilter === 'movie' ? 'film-outline' : 'tv-outline';
     const title = mediaFilter === 'movie' ? 'No Movies Yet' : mediaFilter === 'tv' ? 'No Shows Yet' : 'Library Empty';
     const text = mediaFilter === 'movie'
@@ -589,5 +607,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

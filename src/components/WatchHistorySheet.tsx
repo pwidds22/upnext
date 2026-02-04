@@ -7,6 +7,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  Alert,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,6 +56,7 @@ export default function WatchHistorySheet({
       setHistory(data);
     } catch (e) {
       console.error('Failed to load watch history:', e);
+      Alert.alert('Error', 'Failed to load watch history. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -125,6 +127,7 @@ export default function WatchHistorySheet({
       await loadHistory();
     } catch (e) {
       console.error('Failed to save watch:', e);
+      Alert.alert('Error', 'Failed to save watch entry. Please try again.');
     } finally {
       setActionLoading(false);
       setEditingWatchId(null);
@@ -150,6 +153,7 @@ export default function WatchHistorySheet({
       await loadHistory();
     } catch (e) {
       console.error('Failed to remove watch:', e);
+      Alert.alert('Error', 'Failed to remove watch entry. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -163,6 +167,7 @@ export default function WatchHistorySheet({
       await loadHistory();
     } catch (e) {
       console.error('Failed to delete watch:', e);
+      Alert.alert('Error', 'Failed to delete watch entry. Please try again.');
     } finally {
       setActionLoading(false);
     }

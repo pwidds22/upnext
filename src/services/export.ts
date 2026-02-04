@@ -40,6 +40,8 @@ export const exportService = {
     let followers: string[] | undefined;
     let following: string[] | undefined;
 
+    const warnings: string[] = [];
+
     if (userId) {
       // Fetch ratings (cloud-only)
       try {
@@ -56,16 +58,18 @@ export const exportService = {
         }));
       } catch (e) {
         console.error('Failed to fetch ratings for export:', e);
+        warnings.push('Ratings could not be exported (cloud fetch failed)');
       }
 
       // Fetch profile data
       try {
         const profile = await followsService.getUserProfile(userId);
         username = profile?.username ?? undefined;
-        displayName = profile?.display_name ?? undefined;
+        displayName = profile?.displayName ?? undefined;
         bio = profile?.bio ?? undefined;
       } catch (e) {
         console.error('Failed to fetch profile for export:', e);
+        warnings.push('Profile data could not be exported (cloud fetch failed)');
       }
 
       // Fetch follow relationships
@@ -78,6 +82,7 @@ export const exportService = {
         following = followingList.map((f) => f.username || f.id);
       } catch (e) {
         console.error('Failed to fetch follows for export:', e);
+        warnings.push('Follow data could not be exported (cloud fetch failed)');
       }
     }
 
@@ -104,6 +109,7 @@ export const exportService = {
       dismissedShows,
       dismissedMovies,
       ratings,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   },
 
