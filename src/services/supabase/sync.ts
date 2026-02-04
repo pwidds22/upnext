@@ -519,6 +519,7 @@ export const syncService = {
             const movie = this.rowToTrackedMovie(remoteRow);
             await storageService.addMovie(movie);
             await this.removeFromQueueIfExists('tracked_shows', movieQueueId, 'create');
+            await this.removeFromQueueIfExists('tracked_shows', movieQueueId, 'update');
             pulled.shows++;
           }
           conflicts++;
@@ -538,6 +539,7 @@ export const syncService = {
             await storageService.addShow(show);
             await storageService.updateShowSyncStatus(show.tmdbId, 'synced', remoteRow.id);
             await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'create');
+            await this.removeFromQueueIfExists('tracked_shows', remoteRow.tmdb_id.toString(), 'update');
             pulled.shows++;
           }
           conflicts++;
@@ -634,6 +636,7 @@ export const syncService = {
       );
       if (remoteRow.local_id) {
         await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'create');
+        await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'update');
       }
     }
 
@@ -655,6 +658,7 @@ export const syncService = {
       );
       if (remoteRow.local_id) {
         await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'create');
+        await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'update');
       }
     }
 
