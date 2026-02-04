@@ -136,7 +136,6 @@ export default function ActivityItem({ activity, onShowPress, onMoviePress, onUs
       } catch (e) {
         console.error('Failed to fetch user activity:', e);
         Alert.alert('Error', 'Failed to load user activity');
-        setLoadingUserActivity(false);
         return;
       } finally {
         setLoadingUserActivity(false);
