@@ -39,7 +39,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   // Load last sync time on mount
   useEffect(() => {
-    syncService.getLastSyncTime().then(setLastSyncedAt);
+    syncService.getLastSyncTime().then(setLastSyncedAt).catch(() => {});
   }, []);
 
   // Define callbacks before effects that use them

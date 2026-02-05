@@ -33,6 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authService.getSession().then((session) => {
       setSession(session);
       setUser(session?.user ?? null);
+    }).catch((e) => {
+      console.error('Failed to get session:', e);
+    }).finally(() => {
       setIsLoading(false);
     });
 

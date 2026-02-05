@@ -1,32 +1,58 @@
 # UpNext - Session State
 Updated: 2026-02-04 | Branch: main
 
-## Status: All Review Feedback Fixed — Ready for Production Prep
+## Status: BLOCKER — Production Build Black Screen
 
 ### This Session
-- Fixed all 7 issues from previous review feedback (nested transactions, double fetch, error UI, etc.)
-- Ran 2 Claude Web review rounds — both came back clean
-- TypeScript compiles cleanly (zero errors)
+- Completed production prep (env var security, validation, docs)
+- Fixed EAS build failures (provisioning profile, push notifications, package versions)
+- Built and submitted to App Store Connect — **but production build shows black screen**
+- Added ErrorBoundary, loading text, promise `.catch()` fixes — still black screen
+- Sent review handoff to Claude Web for troubleshooting — **awaiting feedback**
 
 ### What Was Completed
-1. **CRITICAL: Fix nested withTransactionAsync** (`src/services/storage.ts`) — Extracted `_addToSyncQueueRaw()` private method. 4 methods (`markEpisodeWatched`, `setReaction`, `dismissShow`, `dismissMovie`) now call raw version inside their transactions. 21 standalone callers unchanged.
-2. **Batch markSeasonWatched** (`src/services/storage.ts`) — Rewrote to wrap entire season in one atomic `withTransactionAsync` instead of 20+ individual transactions per episode. Inlines check-then-insert logic with `_addToSyncQueueRaw`.
-3. **Fix UserListScreen double hook call** (`src/hooks/useFollows.ts`, `src/screens/UserListScreen.tsx`) — Added `enabled` parameter to `useFollowersList`/`useFollowingList`. Only the active list fetches on mount.
-4. **Fix error state pull-to-refresh** (`src/screens/UpNextScreen.tsx`, `src/screens/MyShowsScreen.tsx`) — Wrapped error views in `ScrollView` + `RefreshControl` so pull-to-refresh works in error state.
-5. **Display useFollowToggle error** (`src/screens/UserListScreen.tsx`) — Destructures `error` from hook, shows `Alert.alert` via useEffect.
-6. **Fix inline ItemSeparatorComponent** (`src/screens/UserListScreen.tsx`) — Extracted to stable `const ItemSeparator` after styles declaration.
-7. **Fix ActivityItem silent error + UX** (`src/components/ActivityItem.tsx`) — Added `Alert.alert` on fetch failure, prevented dropdown from opening on error with early return.
+1. **Production prep** — Removed `EXPO_PUBLIC_` prefix from server-only keys in `.env` to prevent bundling into client app. Added dev-mode env var validation in `src/utils/constants.ts`. Updated `.env.example`. Removed stale "API key hardcoded" from docs.
+2. **EAS build fixes** — Regenerated provisioning profile with Push Notifications support. Set up Apple Push Key. Fixed package version mismatches (`expo` 54.0.32→54.0.33, `datetimepicker` 8.6.0→8.4.4). Added `@react-native-community/datetimepicker` config plugin to `app.json`.
+3. **ErrorBoundary** (`src/components/ErrorBoundary.tsx`) — New component wrapping entire app to catch render crashes and display error on screen.
+4. **Unhandled promise fixes** — `src/contexts/AuthContext.tsx` `.catch()/.finally()` on `getSession()`. `src/contexts/SyncContext.tsx` `.catch()` on `getLastSyncTime()`.
+5. **Loading screen text** (`App.tsx`) — Added "Loading..." text to distinguish stuck-loading from crash.
 
 ### Files Modified This Session
-- `src/services/storage.ts` — `_addToSyncQueueRaw`, nested transaction fixes, `markSeasonWatched` rewrite
-- `src/hooks/useFollows.ts` — `enabled` parameter on `useFollowersList`/`useFollowingList`
-- `src/screens/UserListScreen.tsx` — `enabled` flags, follow error alert, `ItemSeparator` extraction
-- `src/screens/UpNextScreen.tsx` — Error view wrapped in `ScrollView` + `RefreshControl`
-- `src/screens/MyShowsScreen.tsx` — Same error view fix
-- `src/components/ActivityItem.tsx` — `Alert.alert` on fetch failure, early return on error
+- `.env` — Removed `EXPO_PUBLIC_` prefix from service role and secret key
+- `.env.example` — Added documented server-only key placeholders
+- `src/utils/constants.ts` — Dev-mode env var validation
+- `CLAUDE.md` — Removed stale "API key hardcoded" known issue
+- `_HANDOFF.md` — Removed stale known issues section
+- `App.tsx` — ErrorBoundary wrapper, loading text
+- `src/components/ErrorBoundary.tsx` — NEW: error boundary component
+- `src/contexts/AuthContext.tsx` — `.catch()/.finally()` on getSession()
+- `src/contexts/SyncContext.tsx` — `.catch()` on getLastSyncTime()
+- `app.json` — Added datetimepicker config plugin
+- `package.json` — Updated expo and datetimepicker versions
+
+### BLOCKER: Production Build Black Screen
+**Symptom:** Pure black screen on device. No spinner, no "Loading..." text, no error boundary.
+**Works in:** Expo Go (dev mode), v1 build from 1/23
+**Broken in:** All production builds from today (builds #2-#5)
+
+**What this means:** The crash happens during module evaluation (before React renders). The ErrorBoundary and loading text never appear.
+
+**Suspected causes (from Claude Web review — awaiting feedback):**
+1. Env vars not bundled in EAS build (`.env` is gitignored — may not be uploaded)
+2. `Linking.createURL('/')` in `src/navigation/linking.ts` behaving differently in standalone build
+3. Hermes bytecode issue with some JS feature
+4. `@react-native-community/datetimepicker` config plugin native crash
+5. Something in 68 commits causing module-level crash
+
+**Next debugging steps:**
+- Incorporate Claude Web feedback
+- Consider binary search (bisect) approach — build at ~34 commits back
+- Check if `.env` is actually included in EAS build archive
+- Try adding `expo-splash-screen` with explicit `hideAsync()` call
 
 ### Next Session Plan (Priority Order)
-1. **Launch prep** — App Store assets, privacy policy, screenshots, metadata
+1. **FIX: Production black screen** — Incorporate Claude Web feedback, debug root cause
+2. **Launch prep** — App Store assets, privacy policy, screenshots, metadata (blocked by #1)
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -46,7 +72,8 @@ Updated: 2026-02-04 | Branch: main
 | 5 | Tech debt pass | DONE |
 | 6 | Fix review feedback (nested transactions + 6 more) | DONE |
 | 7 | Production prep (env var security + validation) | DONE |
-| 8 | Launch prep (app store assets) | **NEXT** |
+| 8 | Fix production black screen | **BLOCKER** |
+| 9 | Launch prep (app store assets) | BLOCKED |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -71,13 +98,14 @@ Updated: 2026-02-04 | Branch: main
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (zero errors)
+- EAS builds succeed but app shows black screen on device
 
 ## Commits This Session
 ```
-e860c43 Fix nested transactions, batch season watched, error UI, double fetch
-92439ff Fix ActivityItem dropdown opening on fetch error
-a2153d5 Remove redundant setLoadingUserActivity in catch block
+f95bc20 Production prep: secure env vars, add validation, update docs
 ```
+Plus uncommitted: ErrorBoundary, promise fixes, package updates, app.json plugin
 
 ## Known Issues
+- **BLOCKER: Production build black screen** (see above)
 - See `TECH_DEBT.md` for full technical debt tracking
