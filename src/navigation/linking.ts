@@ -2,7 +2,14 @@ import * as Linking from 'expo-linking';
 import { LinkingOptions, getStateFromPath } from '@react-navigation/native';
 import { RootStackParamList } from '../types';
 
-const prefix = Linking.createURL('/');
+// Wrap in try-catch to prevent module-level crash in production builds
+// if the native linking module isn't properly configured
+let prefix: string;
+try {
+  prefix = Linking.createURL('/');
+} catch {
+  prefix = 'upnext://';
+}
 
 export const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [prefix, 'upnext://'],

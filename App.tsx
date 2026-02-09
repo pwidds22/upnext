@@ -10,6 +10,7 @@ import { COLORS } from './src/utils/constants';
 
 export default function App() {
   const [isReady, setIsReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -18,6 +19,7 @@ export default function App() {
         await storageService.init();
       } catch (e) {
         console.error('Failed to initialize storage:', e);
+        setInitError(e instanceof Error ? e.message : 'Failed to initialize');
       } finally {
         setIsReady(true);
       }
@@ -31,6 +33,16 @@ export default function App() {
       <View style={styles.loading}>
         <ActivityIndicator color={COLORS.primary} size="large" />
         <Text style={styles.loadingText}>Loading...</Text>
+        <StatusBar style="light" />
+      </View>
+    );
+  }
+
+  if (initError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Startup Error</Text>
+        <Text style={styles.errorMessage}>{initError}</Text>
         <StatusBar style="light" />
       </View>
     );
@@ -59,5 +71,23 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 14,
     marginTop: 12,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    padding: 32,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: COLORS.error,
+    textAlign: 'center',
   },
 });

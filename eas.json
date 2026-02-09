@@ -15,7 +15,12 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "@supabase_url",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "@supabase_anon_key",
+        "EXPO_PUBLIC_TMDB_API_KEY": "@tmdb_api_key"
+      }
     }
   },
   "submit": {

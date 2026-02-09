@@ -91,6 +91,11 @@ try {
 - **DON'T** commit API keys - they should be in environment variables
 - **DON'T** use vague commit messages - be specific about what changed
 
+### Module Initialization
+- **DON'T** call SDK initializers (`createClient()`, etc.) at module top-level - they crash before React can render error UI
+- **DO** use lazy initialization (Proxy pattern) for SDKs requiring configuration
+- **DON'T** rely on `.env` for production - EAS Build requires EAS secrets (see `eas.json`)
+
 ## Common Tasks
 
 ### Adding a New Screen

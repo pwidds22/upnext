@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import 'react-native-url-polyfill/auto';
 
@@ -18,16 +18,71 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
-
-// Check if Supabase is configured
+// Check if Supabase is configured (env vars present)
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseAnonKey);
 };
+
+// Sentinel error for "not configured" state
+const NOT_CONFIGURED_ERROR = { message: 'Supabase is not configured', code: 'NOT_CONFIGURED' };
+
+// Chainable no-op builder for queries when Supabase is not configured.
+// Supports arbitrary chaining (e.g., .select().eq().single()) and resolves
+// to { data: null, error: NOT_CONFIGURED_ERROR } when awaited.
+function createNoOpBuilder(): unknown {
+  const result = { data: null, error: NOT_CONFIGURED_ERROR };
+  const builder = {
+    then: (resolve: (value: typeof result) => void) => resolve(result),
+  };
+  return new Proxy(builder, {
+    get(target, prop) {
+      if (prop === 'then') return target.then;
+      // Any chained method returns the same builder
+      return () => createNoOpBuilder();
+    },
+  });
+}
+
+// No-op auth object matching Supabase auth interface
+const noOpAuth = {
+  getSession: () => Promise.resolve({ data: { session: null }, error: NOT_CONFIGURED_ERROR }),
+  getUser: () => Promise.resolve({ data: { user: null }, error: NOT_CONFIGURED_ERROR }),
+  signUp: () => Promise.resolve({ data: { user: null, session: null }, error: NOT_CONFIGURED_ERROR }),
+  signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: NOT_CONFIGURED_ERROR }),
+  signOut: () => Promise.resolve({ error: NOT_CONFIGURED_ERROR }),
+  resetPasswordForEmail: () => Promise.resolve({ data: {}, error: NOT_CONFIGURED_ERROR }),
+  onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+};
+
+// Lazy-initialize the Supabase client to prevent crash when env vars are missing.
+// createClient() throws "supabaseUrl is required" if URL/key are empty strings,
+// which would crash the app at module evaluation time before React renders.
+let _supabaseClient: SupabaseClient | null = null;
+
+function createSupabaseClient(): SupabaseClient {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      storage: ExpoSecureStoreAdapter,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    // If not configured, return no-op implementations
+    if (!isSupabaseConfigured()) {
+      if (prop === 'auth') return noOpAuth;
+      if (prop === 'from' || prop === 'rpc') return () => createNoOpBuilder();
+      return undefined;
+    }
+
+    // Lazily create real client on first access
+    if (!_supabaseClient) {
+      _supabaseClient = createSupabaseClient();
+    }
+    return _supabaseClient[prop as keyof SupabaseClient];
+  },
+});
