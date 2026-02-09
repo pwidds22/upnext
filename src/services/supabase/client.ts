@@ -18,9 +18,17 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Check if Supabase is configured (env vars present)
+// Check if Supabase is configured (env vars present and URL is valid)
 export const isSupabaseConfigured = (): boolean => {
-  return Boolean(supabaseUrl && supabaseAnonKey);
+  if (!supabaseUrl || !supabaseAnonKey) return false;
+  // Validate that the URL is actually an HTTP/HTTPS URL,
+  // not a placeholder like "@supabase_url" from unresolved EAS secrets
+  try {
+    const url = new URL(supabaseUrl);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
 };
 
 // Sentinel error for "not configured" state
@@ -81,7 +89,15 @@ export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
 
     // Lazily create real client on first access
     if (!_supabaseClient) {
-      _supabaseClient = createSupabaseClient();
+      try {
+        _supabaseClient = createSupabaseClient();
+      } catch (e) {
+        console.error('Failed to initialize Supabase client:', e);
+        // Fall back to no-op mode so the app doesn't crash
+        if (prop === 'auth') return noOpAuth;
+        if (prop === 'from' || prop === 'rpc') return () => createNoOpBuilder();
+        return undefined;
+      }
     }
     return _supabaseClient[prop as keyof SupabaseClient];
   },
