@@ -1,58 +1,37 @@
 # UpNext - Session State
-Updated: 2026-02-04 | Branch: main
+Updated: 2026-02-09 | Branch: main
 
-## Status: BLOCKER — Production Build Black Screen
+## Status: FIXED — Production Black Screen Resolved
 
 ### This Session
-- Completed production prep (env var security, validation, docs)
-- Fixed EAS build failures (provisioning profile, push notifications, package versions)
-- Built and submitted to App Store Connect — **but production build shows black screen**
-- Added ErrorBoundary, loading text, promise `.catch()` fixes — still black screen
-- Sent review handoff to Claude Web for troubleshooting — **awaiting feedback**
+- **FIXED production black screen** — Root cause was `createClient('', '')` throwing at module evaluation time
+- Implemented lazy Proxy pattern for Supabase client initialization
+- Set up EAS environment variables for production builds
+- Submitted new build to TestFlight for testing
 
 ### What Was Completed
-1. **Production prep** — Removed `EXPO_PUBLIC_` prefix from server-only keys in `.env` to prevent bundling into client app. Added dev-mode env var validation in `src/utils/constants.ts`. Updated `.env.example`. Removed stale "API key hardcoded" from docs.
-2. **EAS build fixes** — Regenerated provisioning profile with Push Notifications support. Set up Apple Push Key. Fixed package version mismatches (`expo` 54.0.32→54.0.33, `datetimepicker` 8.6.0→8.4.4). Added `@react-native-community/datetimepicker` config plugin to `app.json`.
-3. **ErrorBoundary** (`src/components/ErrorBoundary.tsx`) — New component wrapping entire app to catch render crashes and display error on screen.
-4. **Unhandled promise fixes** — `src/contexts/AuthContext.tsx` `.catch()/.finally()` on `getSession()`. `src/contexts/SyncContext.tsx` `.catch()` on `getLastSyncTime()`.
-5. **Loading screen text** (`App.tsx`) — Added "Loading..." text to distinguish stuck-loading from crash.
+1. **Lazy Supabase initialization** (`src/services/supabase/client.ts`) — Replaced top-level `createClient()` with a Proxy that defers initialization until first access. When env vars are missing, returns no-op implementations instead of crashing.
+
+2. **Defensive linking fix** (`src/navigation/linking.ts`) — Wrapped `Linking.createURL('/')` in try-catch with fallback to `'upnext://'` to prevent secondary module-level crash.
+
+3. **Init error display** (`App.tsx`) — Added `initError` state to show startup failures that happen before ErrorBoundary can catch them.
+
+4. **EAS env vars** (`eas.json`) — Added `env` section referencing EAS secrets (`@supabase_url`, `@supabase_anon_key`, `@tmdb_api_key`) for production builds.
+
+5. **Anti-pattern documented** (`CLAUDE.md`) — Added "Module Initialization" section warning against top-level SDK initializers.
+
+6. **EAS secrets configured** — Created `supabase_url`, `supabase_anon_key`, `tmdb_api_key` secrets via `eas env:create`.
 
 ### Files Modified This Session
-- `.env` — Removed `EXPO_PUBLIC_` prefix from service role and secret key
-- `.env.example` — Added documented server-only key placeholders
-- `src/utils/constants.ts` — Dev-mode env var validation
-- `CLAUDE.md` — Removed stale "API key hardcoded" known issue
-- `_HANDOFF.md` — Removed stale known issues section
-- `App.tsx` — ErrorBoundary wrapper, loading text
-- `src/components/ErrorBoundary.tsx` — NEW: error boundary component
-- `src/contexts/AuthContext.tsx` — `.catch()/.finally()` on getSession()
-- `src/contexts/SyncContext.tsx` — `.catch()` on getLastSyncTime()
-- `app.json` — Added datetimepicker config plugin
-- `package.json` — Updated expo and datetimepicker versions
-
-### BLOCKER: Production Build Black Screen
-**Symptom:** Pure black screen on device. No spinner, no "Loading..." text, no error boundary.
-**Works in:** Expo Go (dev mode), v1 build from 1/23
-**Broken in:** All production builds from today (builds #2-#5)
-
-**What this means:** The crash happens during module evaluation (before React renders). The ErrorBoundary and loading text never appear.
-
-**Suspected causes (from Claude Web review — awaiting feedback):**
-1. Env vars not bundled in EAS build (`.env` is gitignored — may not be uploaded)
-2. `Linking.createURL('/')` in `src/navigation/linking.ts` behaving differently in standalone build
-3. Hermes bytecode issue with some JS feature
-4. `@react-native-community/datetimepicker` config plugin native crash
-5. Something in 68 commits causing module-level crash
-
-**Next debugging steps:**
-- Incorporate Claude Web feedback
-- Consider binary search (bisect) approach — build at ~34 commits back
-- Check if `.env` is actually included in EAS build archive
-- Try adding `expo-splash-screen` with explicit `hideAsync()` call
+- `src/services/supabase/client.ts` — Lazy Proxy initialization, no-op fallbacks
+- `src/navigation/linking.ts` — Try-catch wrapper on createURL()
+- `App.tsx` — initError state for startup failures
+- `eas.json` — EAS secret references for production env vars
+- `CLAUDE.md` — Module initialization anti-pattern
 
 ### Next Session Plan (Priority Order)
-1. **FIX: Production black screen** — Incorporate Claude Web feedback, debug root cause
-2. **Launch prep** — App Store assets, privacy policy, screenshots, metadata (blocked by #1)
+1. **Verify TestFlight build works** — Test the new build on device
+2. **Launch prep** — App Store assets, privacy policy, screenshots, metadata
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -72,8 +51,9 @@ Updated: 2026-02-04 | Branch: main
 | 5 | Tech debt pass | DONE |
 | 6 | Fix review feedback (nested transactions + 6 more) | DONE |
 | 7 | Production prep (env var security + validation) | DONE |
-| 8 | Fix production black screen | **BLOCKER** |
-| 9 | Launch prep (app store assets) | BLOCKED |
+| 8 | Fix production black screen | **DONE** |
+| 9 | Verify TestFlight build | **TESTING** |
+| 10 | Launch prep (app store assets) | PENDING |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -98,14 +78,12 @@ Updated: 2026-02-04 | Branch: main
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (zero errors)
-- EAS builds succeed but app shows black screen on device
+- New production build submitted to TestFlight
 
 ## Commits This Session
 ```
-f95bc20 Production prep: secure env vars, add validation, update docs
+d521169 Fix production black screen: lazy Supabase init + EAS env vars
 ```
-Plus uncommitted: ErrorBoundary, promise fixes, package updates, app.json plugin
 
 ## Known Issues
-- **BLOCKER: Production build black screen** (see above)
 - See `TECH_DEBT.md` for full technical debt tracking
