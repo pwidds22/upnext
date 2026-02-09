@@ -9,52 +9,52 @@ import {
 } from '../types';
 import { TMDB_API_KEY, TMDB_BASE_URL, DEFAULT_COUNTRY_CODE } from '../utils/constants';
 
+// Check if TMDB API key is configured (not empty, not a placeholder)
+export const isTmdbConfigured = (): boolean => {
+  // Must be non-empty and not an unresolved EAS secret placeholder
+  return Boolean(TMDB_API_KEY && TMDB_API_KEY.length > 10 && !TMDB_API_KEY.startsWith('@'));
+};
+
 class TMDBService {
   private headers = {
     Accept: 'application/json',
     Authorization: `Bearer ${TMDB_API_KEY}`,
   };
 
+  // Validate config and fetch with error handling
+  private async fetchWithValidation<T>(url: string, context: string): Promise<T> {
+    if (!isTmdbConfigured()) {
+      throw new Error('TMDB API key not configured');
+    }
+
+    const response = await fetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      throw new Error(`${context}: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
   // Search for TV shows
   async searchShows(query: string, page: number = 1): Promise<TMDBShow[]> {
     if (!query.trim()) return [];
 
     const url = `${TMDB_BASE_URL}/search/tv?query=${encodeURIComponent(query)}&page=${page}&include_adult=false`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Search failed: ${response.status}`);
-    }
-
-    const data: TMDBSearchResponse = await response.json();
+    const data = await this.fetchWithValidation<TMDBSearchResponse>(url, 'Search failed');
     return data.results;
   }
 
   // Get show details
   async getShowDetails(id: number): Promise<TMDBShow> {
     const url = `${TMDB_BASE_URL}/tv/${id}`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get show details: ${response.status}`);
-    }
-
-    return response.json();
+    return this.fetchWithValidation<TMDBShow>(url, 'Failed to get show details');
   }
 
   // Get season with episodes
   async getSeason(showId: number, seasonNumber: number): Promise<TMDBSeason> {
     const url = `${TMDB_BASE_URL}/tv/${showId}/season/${seasonNumber}`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get season: ${response.status}`);
-    }
-
-    return response.json();
+    return this.fetchWithValidation<TMDBSeason>(url, 'Failed to get season');
   }
 
   // Get all seasons for a show
@@ -77,19 +77,17 @@ class TMDBService {
     countryCode: string = DEFAULT_COUNTRY_CODE
   ): Promise<TMDBCountryProviders | null> {
     const url = `${TMDB_BASE_URL}/tv/${showId}/watch/providers`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get watch providers: ${response.status}`);
-    }
-
-    const data: TMDBWatchProvidersResponse = await response.json();
+    const data = await this.fetchWithValidation<TMDBWatchProvidersResponse>(
+      url,
+      'Failed to get watch providers'
+    );
     return data.results?.[countryCode] || null;
   }
 
   // Get trending TV shows
   async getTrending(timeWindow: 'day' | 'week' = 'week', pages: number = 1): Promise<TMDBShow[]> {
+    if (!isTmdbConfigured()) return [];
+
     const results: TMDBShow[] = [];
 
     for (let page = 1; page <= pages; page++) {
@@ -115,6 +113,8 @@ class TMDBService {
 
   // Get popular TV shows
   async getPopular(pages: number = 1): Promise<TMDBShow[]> {
+    if (!isTmdbConfigured()) return [];
+
     const results: TMDBShow[] = [];
 
     for (let page = 1; page <= pages; page++) {
@@ -140,6 +140,8 @@ class TMDBService {
 
   // Get top rated TV shows
   async getTopRated(pages: number = 1): Promise<TMDBShow[]> {
+    if (!isTmdbConfigured()) return [];
+
     const results: TMDBShow[] = [];
 
     for (let page = 1; page <= pages; page++) {
@@ -165,7 +167,7 @@ class TMDBService {
 
   // Discover TV shows by genre (OR logic - matches ANY of the genres)
   async discoverByGenres(genreIds: number[], pages: number = 1): Promise<TMDBShow[]> {
-    if (genreIds.length === 0) return [];
+    if (!isTmdbConfigured() || genreIds.length === 0) return [];
 
     // Calculate date 15 years ago to filter out older shows
     const fifteenYearsAgo = new Date();
@@ -211,28 +213,14 @@ class TMDBService {
     if (!query.trim()) return [];
 
     const url = `${TMDB_BASE_URL}/search/movie?query=${encodeURIComponent(query)}&page=${page}&include_adult=false`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Movie search failed: ${response.status}`);
-    }
-
-    const data: TMDBMovieSearchResponse = await response.json();
+    const data = await this.fetchWithValidation<TMDBMovieSearchResponse>(url, 'Movie search failed');
     return data.results;
   }
 
   // Get movie details
   async getMovieDetails(id: number): Promise<TMDBMovie> {
     const url = `${TMDB_BASE_URL}/movie/${id}`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get movie details: ${response.status}`);
-    }
-
-    return response.json();
+    return this.fetchWithValidation<TMDBMovie>(url, 'Failed to get movie details');
   }
 
   // Get movie watch providers (streaming services)
@@ -241,19 +229,17 @@ class TMDBService {
     countryCode: string = DEFAULT_COUNTRY_CODE
   ): Promise<TMDBCountryProviders | null> {
     const url = `${TMDB_BASE_URL}/movie/${movieId}/watch/providers`;
-
-    const response = await fetch(url, { headers: this.headers });
-
-    if (!response.ok) {
-      throw new Error(`Failed to get movie watch providers: ${response.status}`);
-    }
-
-    const data: TMDBWatchProvidersResponse = await response.json();
+    const data = await this.fetchWithValidation<TMDBWatchProvidersResponse>(
+      url,
+      'Failed to get movie watch providers'
+    );
     return data.results?.[countryCode] || null;
   }
 
   // Get trending movies
   async getTrendingMovies(timeWindow: 'day' | 'week' = 'week', pages: number = 1): Promise<TMDBMovie[]> {
+    if (!isTmdbConfigured()) return [];
+
     const results: TMDBMovie[] = [];
 
     for (let page = 1; page <= pages; page++) {
@@ -279,6 +265,8 @@ class TMDBService {
 
   // Get popular movies
   async getPopularMovies(pages: number = 1): Promise<TMDBMovie[]> {
+    if (!isTmdbConfigured()) return [];
+
     const results: TMDBMovie[] = [];
 
     for (let page = 1; page <= pages; page++) {
@@ -304,6 +292,8 @@ class TMDBService {
 
   // Get top rated movies
   async getTopRatedMovies(pages: number = 1): Promise<TMDBMovie[]> {
+    if (!isTmdbConfigured()) return [];
+
     const results: TMDBMovie[] = [];
 
     for (let page = 1; page <= pages; page++) {
@@ -329,7 +319,7 @@ class TMDBService {
 
   // Discover movies by genre (OR logic - matches ANY of the genres)
   async discoverMoviesByGenres(genreIds: number[], pages: number = 1): Promise<TMDBMovie[]> {
-    if (genreIds.length === 0) return [];
+    if (!isTmdbConfigured() || genreIds.length === 0) return [];
 
     // Calculate date 15 years ago to filter out older movies
     const fifteenYearsAgo = new Date();
