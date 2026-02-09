@@ -1,37 +1,40 @@
 # UpNext - Session State
 Updated: 2026-02-09 | Branch: main
 
-## Status: FIXED — Production Black Screen Resolved
+## Status: PRODUCTION BUILD WORKING — TestFlight Build 9 Verified
 
 ### This Session
-- **FIXED production black screen** — Root cause was `createClient('', '')` throwing at module evaluation time
-- Implemented lazy Proxy pattern for Supabase client initialization
-- Set up EAS environment variables for production builds
-- Submitted new build to TestFlight for testing
+- **Fixed production crashes** — URL validation for Supabase, TMDB API key validation
+- **Fixed EAS env var resolution** — Renamed secrets to `EXPO_PUBLIC_*` format
+- **TestFlight Build 9 verified working** — All features functional
 
 ### What Was Completed
-1. **Lazy Supabase initialization** (`src/services/supabase/client.ts`) — Replaced top-level `createClient()` with a Proxy that defers initialization until first access. When env vars are missing, returns no-op implementations instead of crashing.
+1. **Merged URL validation branch** (`claude/debug-app-loading-1dLdE`) — Added `new URL()` validation in `isSupabaseConfigured()` to catch placeholder values like `@supabase_url`.
 
-2. **Defensive linking fix** (`src/navigation/linking.ts`) — Wrapped `Linking.createURL('/')` in try-catch with fallback to `'upnext://'` to prevent secondary module-level crash.
+2. **Added try-catch around createSupabaseClient()** (`src/services/supabase/client.ts:92-100`) — Falls back to no-op mode if client creation fails for any reason.
 
-3. **Init error display** (`App.tsx`) — Added `initError` state to show startup failures that happen before ErrorBoundary can catch them.
+3. **Added TMDB API key validation** (`src/services/tmdb.ts:12-16`) — New `isTmdbConfigured()` function checks for empty, short, or placeholder values.
 
-4. **EAS env vars** (`eas.json`) — Added `env` section referencing EAS secrets (`@supabase_url`, `@supabase_anon_key`, `@tmdb_api_key`) for production builds.
+4. **Added fetchWithValidation helper** (`src/services/tmdb.ts:25-37`) — Validates config before each API call, throws clear error if not configured.
 
-5. **Anti-pattern documented** (`CLAUDE.md`) — Added "Module Initialization" section warning against top-level SDK initializers.
-
-6. **EAS secrets configured** — Created `supabase_url`, `supabase_anon_key`, `tmdb_api_key` secrets via `eas env:create`.
+5. **Fixed EAS env var naming** — Renamed secrets from `supabase_url` → `EXPO_PUBLIC_SUPABASE_URL` etc. Removed `@secret` mapping from `eas.json`.
 
 ### Files Modified This Session
-- `src/services/supabase/client.ts` — Lazy Proxy initialization, no-op fallbacks
-- `src/navigation/linking.ts` — Try-catch wrapper on createURL()
-- `App.tsx` — initError state for startup failures
-- `eas.json` — EAS secret references for production env vars
-- `CLAUDE.md` — Module initialization anti-pattern
+- `src/services/supabase/client.ts` — URL validation + try-catch
+- `src/services/tmdb.ts` — `isTmdbConfigured()` + `fetchWithValidation()`
+- `eas.json` — Removed env mapping section
 
-### Next Session Plan (Priority Order)
-1. **Verify TestFlight build works** — Test the new build on device
-2. **Launch prep** — App Store assets, privacy policy, screenshots, metadata
+### Review Feedback (Next Session)
+Claude Web review found 6 issues to fix:
+
+| # | Priority | Issue | File |
+|---|----------|-------|------|
+| 1 | **High** | Missing `signInWithOAuth` in noOpAuth — Apple sign-in crashes | `client.ts:55-63` |
+| 2 | Medium | `isSupabaseConfigured()` re-parses URL on every property access — should cache | `client.ts:84` |
+| 3 | Medium | No-op builder `.then` doesn't fully conform to thenable protocol | `client.ts:43` |
+| 4 | Medium | Returns `undefined` for unknown Supabase properties (storage, functions, etc.) | `client.ts:87` |
+| 5 | Low | Inconsistent error behavior — some TMDB methods throw, others return `[]` | `tmdb.ts` |
+| 6 | Low | TMDB pagination methods duplicate fetch+error handling 8 times | `tmdb.ts:88-166` |
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -51,9 +54,10 @@ Updated: 2026-02-09 | Branch: main
 | 5 | Tech debt pass | DONE |
 | 6 | Fix review feedback (nested transactions + 6 more) | DONE |
 | 7 | Production prep (env var security + validation) | DONE |
-| 8 | Fix production black screen | **DONE** |
-| 9 | Verify TestFlight build | **TESTING** |
-| 10 | Launch prep (app store assets) | PENDING |
+| 8 | Fix production black screen | DONE |
+| 9 | Verify TestFlight build | **DONE** |
+| 10 | Fix review feedback (6 issues above) | **NEXT** |
+| 11 | Launch prep (app store assets) | PENDING |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -78,12 +82,15 @@ Updated: 2026-02-09 | Branch: main
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (zero errors)
-- New production build submitted to TestFlight
+- **Build 9** on TestFlight (working)
 
 ## Commits This Session
 ```
-d521169 Fix production black screen: lazy Supabase init + EAS env vars
+d377234 Remove env mapping from eas.json - use direct EXPO_PUBLIC_* names
+45a5c39 Harden env var validation to prevent production crashes
+5b921b3 Fix crash on launch: validate Supabase URL is valid HTTP(S) before use
 ```
 
 ## Known Issues
 - See `TECH_DEBT.md` for full technical debt tracking
+- See Review Feedback section above for next session's fixes
