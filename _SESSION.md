@@ -37,6 +37,54 @@ Updated: 2026-02-16 | Branch: main
 - `src/screens/auth/SignInScreen.tsx` — Apple + Google buttons
 - `src/screens/auth/SignUpScreen.tsx` — Apple button
 
+## Pre-Launch Roadmap
+
+### Before Launch (Priority Order)
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 1 | Fix 4 critical bugs | DONE | |
+| 2 | Test all fixes | DONE | |
+| 3 | Fix review feedback (3 issues) | DONE | |
+| 4 | Sync engine hardening (5 review rounds) | DONE | |
+| 5 | Tech debt pass | DONE | |
+| 6 | Fix review feedback (nested transactions + 6 more) | DONE | |
+| 7 | Production prep (env var security + validation) | DONE | |
+| 8 | Fix production black screen | DONE | |
+| 9 | Verify TestFlight build | DONE | |
+| 10 | Apple Sign-In (App Store requirement) | DONE | |
+| 11 | Fix profile avatar letter for Apple Sign-In users | **NEXT** | Shows email initial (e.g. "Z" from relay email) instead of username/display name |
+| 12 | Show streaming availability on search page | **NEXT** | Currently only shown when show is in library; also missing for movies entirely |
+| 13 | Google Sign-In (external setup needed) | PENDING | Needs Google Cloud Console setup |
+| 14 | Fix remaining review feedback (5 issues) | PENDING | See deferred review section below |
+| 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
+| 16 | Launch prep (app store assets) | PENDING | |
+
+### Post-Launch (v1.1+)
+| # | Feature | Complexity | Notes |
+|---|---------|------------|-------|
+| 1 | **Widgets** | Medium | iOS home screen widget |
+| 2 | **Watch stats** | Medium | Hours watched, streaks, genre breakdown |
+| 3 | **Apple TV app** | High | Far down the road, after App Store launch |
+
+### Open Questions
+- **Email change for Apple Sign-In users**: Apple provides a private relay email (e.g. z8ry6...@privaterelay.appleid.com). Should we allow users to change their email, or is this not possible/necessary since Apple manages it?
+
+### Bug: Profile Avatar Letter (Apple Sign-In)
+- **Problem**: Profile avatar shows first letter of Apple relay email (e.g. "Z") instead of username or display name
+- **Fix**: Avatar component should derive its letter from `display_name` first, then `username`, then fall back to email
+- **Where to look**: Wherever the profile avatar/initial is rendered (likely in a header or profile component)
+
+### Bug: Streaming Availability Not Shown in Search
+- **Problem**: When users tap a show/movie on the search page, they can't see where to stream it
+- **Current behavior**: Streaming info only shows when the show is already in the user's library
+- **Missing entirely**: Movies don't show streaming availability at all
+- **Fix**: Show streaming/watch providers on the detail screen regardless of whether it's in the library
+
+### Bug: Find People Text Input (Unconfirmed)
+- **Problem**: Beta tester reports they can't enter text on the Find People page
+- **Status**: Not reproducible by developer — needs investigation
+- **Possible causes**: Keyboard avoidance issue, input focus issue, platform-specific bug
+
 ### Review Feedback (Deferred)
 5 remaining issues from previous Claude Web review (issue #1 fixed this session):
 
@@ -53,31 +101,6 @@ Updated: 2026-02-16 | Branch: main
 - Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at`
 - Schema: `tmdb_id` PK vs UNIQUE INDEX contradiction in `tracked_shows`
 - See `TECH_DEBT.md` for full medium/low priority debt
-
-## Pre-Launch Roadmap
-
-### Before Launch
-| # | Task | Status |
-|---|------|--------|
-| 1 | Fix 4 critical bugs | DONE |
-| 2 | Test all fixes | DONE |
-| 3 | Fix review feedback (3 issues) | DONE |
-| 4 | Sync engine hardening (5 review rounds) | DONE |
-| 5 | Tech debt pass | DONE |
-| 6 | Fix review feedback (nested transactions + 6 more) | DONE |
-| 7 | Production prep (env var security + validation) | DONE |
-| 8 | Fix production black screen | DONE |
-| 9 | Verify TestFlight build | DONE |
-| 10 | Apple Sign-In (App Store requirement) | **DONE** |
-| 11 | Google Sign-In (external setup needed) | **NEXT** |
-| 12 | Fix remaining review feedback (5 issues) | PENDING |
-| 13 | Launch prep (app store assets) | PENDING |
-
-### Fast Follow (v1.1)
-| # | Feature | Complexity |
-|---|---------|------------|
-| 1 | **Widgets** | Medium |
-| 2 | **Watch stats** | Medium |
 
 ### Completed Features
 - **Core** — Search, tracking, episodes, sync engine
