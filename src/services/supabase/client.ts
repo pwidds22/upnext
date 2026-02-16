@@ -57,6 +57,8 @@ const noOpAuth = {
   getUser: () => Promise.resolve({ data: { user: null }, error: NOT_CONFIGURED_ERROR }),
   signUp: () => Promise.resolve({ data: { user: null, session: null }, error: NOT_CONFIGURED_ERROR }),
   signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: NOT_CONFIGURED_ERROR }),
+  signInWithOAuth: () => Promise.resolve({ data: { provider: null, url: null }, error: NOT_CONFIGURED_ERROR }),
+  signInWithIdToken: () => Promise.resolve({ data: { user: null, session: null }, error: NOT_CONFIGURED_ERROR }),
   signOut: () => Promise.resolve({ error: NOT_CONFIGURED_ERROR }),
   resetPasswordForEmail: () => Promise.resolve({ data: {}, error: NOT_CONFIGURED_ERROR }),
   onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),

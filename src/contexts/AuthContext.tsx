@@ -11,6 +11,8 @@ interface AuthContextType {
   isConfigured: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, username?: string) => Promise<{ error: string | null }>;
+  signInWithApple: () => Promise<{ error: string | null }>;
+  signInWithGoogleToken: (idToken: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
 }
@@ -60,6 +62,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   }, []);
 
+  const signInWithApple = useCallback(async () => {
+    const { error } = await authService.signInWithApple();
+    return { error: error?.message ?? null };
+  }, []);
+
+  const signInWithGoogleToken = useCallback(async (idToken: string) => {
+    const { error } = await authService.signInWithGoogleToken(idToken);
+    return { error: error?.message ?? null };
+  }, []);
+
   const signOut = useCallback(async () => {
     await authService.signOut();
     // Clear local data to prevent data bleeding between accounts
@@ -79,10 +91,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isConfigured,
       signIn,
       signUp,
+      signInWithApple,
+      signInWithGoogleToken,
       signOut,
       resetPassword,
     }),
-    [user, session, isLoading, isConfigured, signIn, signUp, signOut, resetPassword]
+    [user, session, isLoading, isConfigured, signIn, signUp, signInWithApple, signInWithGoogleToken, signOut, resetPassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

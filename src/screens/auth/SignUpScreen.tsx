@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsernameCheck } from '../../hooks/useUsernameCheck';
 import { COLORS } from '../../utils/constants';
@@ -23,18 +24,27 @@ interface Props {
 }
 
 export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
-  const { signUp } = useAuth();
+  const { signUp, signInWithApple } = useAuth();
   const { checkAvailability, checking: checkingUsername } = useUsernameCheck();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'available' | 'taken'>('idle');
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Check if Apple Sign-In is available (iOS only)
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
+    }
+  }, []);
 
   // Clean up debounce timer on unmount
   useEffect(() => {
@@ -44,6 +54,26 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
       }
     };
   }, []);
+
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    setError(null);
+
+    try {
+      const { error: authError } = await signInWithApple();
+      if (authError) {
+        setError(authError);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onSkip();
+      }
+    } catch (e) {
+      setError('Apple Sign-In failed. Please try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    setAppleLoading(false);
+  };
 
   // Check username availability with debounce
   const checkUsername = useCallback(async (value: string) => {
@@ -173,6 +203,26 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Sign up to sync your shows and connect with friends</Text>
         </View>
+
+        {/* Apple Sign-In Button */}
+        {isAppleAvailable && (
+          <>
+            <View style={styles.socialButtons}>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                cornerRadius={12}
+                style={styles.appleButton}
+                onPress={handleAppleSignIn}
+              />
+            </View>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or sign up with email</Text>
+              <View style={styles.dividerLine} />
+            </View>
+          </>
+        )}
 
         <View style={styles.form}>
           {error && (
@@ -425,5 +475,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  socialButtons: {
+    gap: 12,
+    marginBottom: 8,
+  },
+  appleButton: {
+    height: 50,
+    width: '100%',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.surfaceLight,
+  },
+  dividerText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,20 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfileLookup } from '../../hooks/useProfileLookup';
 import { COLORS } from '../../utils/constants';
+import {
+  GOOGLE_WEB_CLIENT_ID,
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_ANDROID_CLIENT_ID,
+} from '../../services/supabase/auth';
+
+// Required for web browser auth to complete properly
+WebBrowser.maybeCompleteAuthSession();
 
 interface Props {
   onNavigateToSignUp: () => void;
@@ -22,13 +33,86 @@ interface Props {
 }
 
 export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
-  const { signIn } = useAuth();
+  const { signIn, signInWithApple, signInWithGoogleToken } = useAuth();
   const { lookupByUsername } = useProfileLookup();
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(false);
+
+  // Check if Apple Sign-In is available (iOS only)
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
+    }
+  }, []);
+
+  // Google OAuth configuration
+  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const { id_token } = googleResponse.params;
+      if (id_token) {
+        handleGoogleToken(id_token);
+      }
+    } else if (googleResponse?.type === 'error') {
+      setError('Google Sign-In failed');
+      setGoogleLoading(false);
+    }
+  }, [googleResponse]);
+
+  const handleGoogleToken = async (idToken: string) => {
+    try {
+      const { error: authError } = await signInWithGoogleToken(idToken);
+      if (authError) {
+        setError(authError);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onSkip();
+      }
+    } catch (e) {
+      setError('Google Sign-In failed. Please try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    setGoogleLoading(false);
+  };
+
+  const handleAppleSignIn = async () => {
+    setAppleLoading(true);
+    setError(null);
+
+    try {
+      const { error: authError } = await signInWithApple();
+      if (authError) {
+        setError(authError);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onSkip();
+      }
+    } catch (e) {
+      setError('Apple Sign-In failed. Please try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    setAppleLoading(false);
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setError(null);
+    await promptGoogleAsync();
+  };
 
   const handleSignIn = async () => {
     const input = emailOrUsername.trim();
@@ -87,6 +171,45 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to sync your shows across devices</Text>
         </View>
+
+        {/* Social Login Buttons */}
+        <View style={styles.socialButtons}>
+          {isAppleAvailable && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          )}
+
+          {GOOGLE_WEB_CLIENT_ID ? (
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}
+              disabled={!googleRequest || googleLoading}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color="#1f1f1f" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#1f1f1f" />
+                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Divider */}
+        {(isAppleAvailable || GOOGLE_WEB_CLIENT_ID) && (
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+        )}
 
         <View style={styles.form}>
           {error && (
@@ -255,5 +378,42 @@ const styles = StyleSheet.create({
   skipText: {
     color: COLORS.textSecondary,
     fontSize: 15,
+  },
+  socialButtons: {
+    gap: 12,
+    marginBottom: 8,
+  },
+  appleButton: {
+    height: 50,
+    width: '100%',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    height: 50,
+    borderRadius: 12,
+    gap: 10,
+  },
+  googleButtonText: {
+    color: '#1f1f1f',
+    fontSize: 17,
+    fontWeight: '500',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.surfaceLight,
+  },
+  dividerText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
   },
 });

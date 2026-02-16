@@ -1,35 +1,47 @@
 # UpNext - Session State
-Updated: 2026-02-09 | Branch: main
+Updated: 2026-02-16 | Branch: main
 
-## Status: PRODUCTION BUILD WORKING — TestFlight Build 9 Verified
+## Status: APPLE & GOOGLE SIGN-IN IMPLEMENTED — Build 11 on TestFlight
 
 ### This Session
-- **Fixed production crashes** — URL validation for Supabase, TMDB API key validation
-- **Fixed EAS env var resolution** — Renamed secrets to `EXPO_PUBLIC_*` format
-- **TestFlight Build 9 verified working** — All features functional
+- **Implemented Apple Sign-In** — Full native iOS flow using expo-apple-authentication + Supabase signInWithIdToken
+- **Implemented Google Sign-In scaffolding** — Token exchange ready, needs Google Cloud Console setup
+- **Fixed noOpAuth crash risk** — Added signInWithOAuth + signInWithIdToken to no-op auth object
+- **Added social login buttons** — Both SignInScreen and SignUpScreen now show Apple button
+- **Apple Developer Console configured** — Key ID: 3D34TRP685, Sign in with Apple enabled
+- **Supabase Apple provider enabled** — Client ID set, native flow doesn't need secret key
 
 ### What Was Completed
-1. **Merged URL validation branch** (`claude/debug-app-loading-1dLdE`) — Added `new URL()` validation in `isSupabaseConfigured()` to catch placeholder values like `@supabase_url`.
+1. **Installed OAuth dependencies** — `expo-apple-authentication`, `expo-auth-session`, `expo-crypto`, `expo-web-browser`
 
-2. **Added try-catch around createSupabaseClient()** (`src/services/supabase/client.ts:92-100`) — Falls back to no-op mode if client creation fails for any reason.
+2. **Updated app.json** (`app.json:20,42`) — Added `usesAppleSignIn: true` and `expo-apple-authentication` plugin
 
-3. **Added TMDB API key validation** (`src/services/tmdb.ts:12-16`) — New `isTmdbConfigured()` function checks for empty, short, or placeholder values.
+3. **Fixed noOpAuth** (`src/services/supabase/client.ts:60-61`) — Added `signInWithOAuth` and `signInWithIdToken` to prevent crashes when Supabase is not configured
 
-4. **Added fetchWithValidation helper** (`src/services/tmdb.ts:25-37`) — Validates config before each API call, throws clear error if not configured.
+4. **Implemented Apple Sign-In** (`src/services/supabase/auth.ts:78-168`) — Full native flow: availability check → nonce generation → Apple credential request → Supabase token exchange → profile update with display name
 
-5. **Fixed EAS env var naming** — Renamed secrets from `supabase_url` → `EXPO_PUBLIC_SUPABASE_URL` etc. Removed `@secret` mapping from `eas.json`.
+5. **Implemented Google token exchange** (`src/services/supabase/auth.ts:170-191`) — `signInWithGoogleToken()` method exchanges Google ID token with Supabase
+
+6. **Updated AuthContext** (`src/contexts/AuthContext.tsx:14-15,63-71`) — Added `signInWithApple` and `signInWithGoogleToken` to auth context
+
+7. **Updated SignInScreen** (`src/screens/auth/SignInScreen.tsx`) — Added Apple button (iOS), Google button (when configured), "or" divider between social and email login
+
+8. **Updated SignUpScreen** (`src/screens/auth/SignUpScreen.tsx`) — Added Apple "Sign up with Apple" button with "or sign up with email" divider
 
 ### Files Modified This Session
-- `src/services/supabase/client.ts` — URL validation + try-catch
-- `src/services/tmdb.ts` — `isTmdbConfigured()` + `fetchWithValidation()`
-- `eas.json` — Removed env mapping section
+- `package.json` / `package-lock.json` — Added 4 OAuth packages
+- `app.json` — `usesAppleSignIn: true` + plugin
+- `src/services/supabase/client.ts` — noOpAuth OAuth methods
+- `src/services/supabase/auth.ts` — Apple Sign-In flow + Google token exchange + Google client ID exports
+- `src/contexts/AuthContext.tsx` — OAuth context methods
+- `src/screens/auth/SignInScreen.tsx` — Apple + Google buttons
+- `src/screens/auth/SignUpScreen.tsx` — Apple button
 
-### Review Feedback (Next Session)
-Claude Web review found 6 issues to fix:
+### Review Feedback (Deferred)
+5 remaining issues from previous Claude Web review (issue #1 fixed this session):
 
 | # | Priority | Issue | File |
 |---|----------|-------|------|
-| 1 | **High** | Missing `signInWithOAuth` in noOpAuth — Apple sign-in crashes | `client.ts:55-63` |
 | 2 | Medium | `isSupabaseConfigured()` re-parses URL on every property access — should cache | `client.ts:84` |
 | 3 | Medium | No-op builder `.then` doesn't fully conform to thenable protocol | `client.ts:43` |
 | 4 | Medium | Returns `undefined` for unknown Supabase properties (storage, functions, etc.) | `client.ts:87` |
@@ -55,9 +67,11 @@ Claude Web review found 6 issues to fix:
 | 6 | Fix review feedback (nested transactions + 6 more) | DONE |
 | 7 | Production prep (env var security + validation) | DONE |
 | 8 | Fix production black screen | DONE |
-| 9 | Verify TestFlight build | **DONE** |
-| 10 | Fix review feedback (6 issues above) | **NEXT** |
-| 11 | Launch prep (app store assets) | PENDING |
+| 9 | Verify TestFlight build | DONE |
+| 10 | Apple Sign-In (App Store requirement) | **DONE** |
+| 11 | Google Sign-In (external setup needed) | **NEXT** |
+| 12 | Fix remaining review feedback (5 issues) | PENDING |
+| 13 | Launch prep (app store assets) | PENDING |
 
 ### Fast Follow (v1.1)
 | # | Feature | Complexity |
@@ -67,7 +81,7 @@ Claude Web review found 6 issues to fix:
 
 ### Completed Features
 - **Core** — Search, tracking, episodes, sync engine
-- **Auth** — Signup, signin (email or username)
+- **Auth** — Signup, signin (email or username), Apple Sign-In
 - **Social** — Follow system, activity feed, friend ratings
 - **Ratings** — 5-star system with half-star toggle, episode reactions
 - **Recommendations** — Trending + personalized with dismiss feature
@@ -82,15 +96,12 @@ Claude Web review found 6 issues to fix:
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (zero errors)
-- **Build 9** on TestFlight (working)
+- **Build 11** on TestFlight (Apple Sign-In working)
 
-## Commits This Session
-```
-d377234 Remove env mapping from eas.json - use direct EXPO_PUBLIC_* names
-45a5c39 Harden env var validation to prevent production crashes
-5b921b3 Fix crash on launch: validate Supabase URL is valid HTTP(S) before use
-```
+## External Config Notes
+- **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
+- **Google Sign-In**: Needs Google Cloud Console setup + env vars: `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`
 
 ## Known Issues
 - See `TECH_DEBT.md` for full technical debt tracking
-- See Review Feedback section above for next session's fixes
+- See Review Feedback section above for deferred fixes
