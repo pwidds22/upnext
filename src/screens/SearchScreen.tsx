@@ -92,14 +92,16 @@ export default function SearchScreen() {
 
   // Fetch streaming providers when show/movie modal opens
   useEffect(() => {
-    if (!selectedShow) { setShowProviders(null); return; }
+    setShowProviders(null);
+    if (!selectedShow || trackedShowIds.has(selectedShow.id)) return;
     tmdbService.getWatchProviders(selectedShow.id).then(setShowProviders).catch(() => {});
-  }, [selectedShow]);
+  }, [selectedShow, trackedShowIds]);
 
   useEffect(() => {
-    if (!selectedMovie) { setMovieProviders(null); return; }
+    setMovieProviders(null);
+    if (!selectedMovie || trackedMovieIds.has(selectedMovie.id)) return;
     tmdbService.getMovieWatchProviders(selectedMovie.id).then(setMovieProviders).catch(() => {});
-  }, [selectedMovie]);
+  }, [selectedMovie, trackedMovieIds]);
 
   const handleAddShow = useCallback(async (show: TMDBShow, status: ShowStatus, rating: number) => {
     setAddingShow(true);
