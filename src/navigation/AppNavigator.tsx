@@ -1,13 +1,14 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TouchableOpacity, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RootStackParamList, MainTabParamList, AuthStackParamList } from '../types';
+import { RootStackParamList, MainTabParamList, AuthStackParamList, UserProfile } from '../types';
 import { COLORS } from '../utils/constants';
 import { useAuth } from '../contexts/AuthContext';
+import { followsService } from '../services/supabase/follows';
 import { linking } from './linking';
 
 // Screens
@@ -67,6 +68,15 @@ const DarkTheme = {
 
 function ProfileButton({ navigation }: { navigation: any }) {
   const { user } = useAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    followsService.getUserProfile(user.id).then(setProfile).catch(() => {});
+  }, [user]);
 
   return (
     <TouchableOpacity
@@ -76,7 +86,7 @@ function ProfileButton({ navigation }: { navigation: any }) {
       {user ? (
         <View style={styles.avatarContainer}>
           <Text style={styles.avatarText}>
-            {user.email?.[0].toUpperCase() || 'U'}
+            {(profile?.displayName?.[0] || profile?.username?.[0] || user.email?.[0] || 'U').toUpperCase()}
           </Text>
         </View>
       ) : (
