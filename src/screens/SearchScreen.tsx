@@ -94,13 +94,21 @@ export default function SearchScreen() {
   useEffect(() => {
     setShowProviders(null);
     if (!selectedShow || trackedShowIds.has(selectedShow.id)) return;
-    tmdbService.getWatchProviders(selectedShow.id).then(setShowProviders).catch(() => {});
+    let cancelled = false;
+    tmdbService.getWatchProviders(selectedShow.id)
+      .then((providers) => { if (!cancelled) setShowProviders(providers); })
+      .catch((e) => console.warn('Failed to fetch show providers:', e));
+    return () => { cancelled = true; };
   }, [selectedShow, trackedShowIds]);
 
   useEffect(() => {
     setMovieProviders(null);
     if (!selectedMovie || trackedMovieIds.has(selectedMovie.id)) return;
-    tmdbService.getMovieWatchProviders(selectedMovie.id).then(setMovieProviders).catch(() => {});
+    let cancelled = false;
+    tmdbService.getMovieWatchProviders(selectedMovie.id)
+      .then((providers) => { if (!cancelled) setMovieProviders(providers); })
+      .catch((e) => console.warn('Failed to fetch movie providers:', e));
+    return () => { cancelled = true; };
   }, [selectedMovie, trackedMovieIds]);
 
   const handleAddShow = useCallback(async (show: TMDBShow, status: ShowStatus, rating: number) => {

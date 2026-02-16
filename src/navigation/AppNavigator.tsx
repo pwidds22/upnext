@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import React, { useState, useCallback } from 'react';
+import { NavigationContainer, DefaultTheme, useFocusEffect } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TouchableOpacity, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
@@ -70,13 +70,12 @@ function ProfileButton({ navigation }: { navigation: any }) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  useEffect(() => {
-    if (!user) {
-      setProfile(null);
-      return;
-    }
-    followsService.getUserProfile(user.id).then(setProfile).catch(() => {});
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) { setProfile(null); return; }
+      followsService.getUserProfile(user.id).then(setProfile).catch(() => {});
+    }, [user])
+  );
 
   return (
     <TouchableOpacity
