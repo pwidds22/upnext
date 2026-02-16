@@ -1,41 +1,29 @@
 # UpNext - Session State
 Updated: 2026-02-16 | Branch: main
 
-## Status: APPLE & GOOGLE SIGN-IN IMPLEMENTED — Build 11 on TestFlight
+## Status: AVATAR FIX + STREAMING IN SEARCH — 2 review rounds passed
 
 ### This Session
-- **Implemented Apple Sign-In** — Full native iOS flow using expo-apple-authentication + Supabase signInWithIdToken
-- **Implemented Google Sign-In scaffolding** — Token exchange ready, needs Google Cloud Console setup
-- **Fixed noOpAuth crash risk** — Added signInWithOAuth + signInWithIdToken to no-op auth object
-- **Added social login buttons** — Both SignInScreen and SignUpScreen now show Apple button
-- **Apple Developer Console configured** — Key ID: 3D34TRP685, Sign in with Apple enabled
-- **Supabase Apple provider enabled** — Client ID set, native flow doesn't need secret key
+- **Fixed profile avatar letter** — Apple Sign-In users now see display name initial instead of relay email initial
+- **Added streaming availability to search** — "Where to Watch" provider pills in both show and movie add modals
+- **Two Claude Web review rounds** — Fixed race conditions, stale state, added useFocusEffect
 
 ### What Was Completed
-1. **Installed OAuth dependencies** — `expo-apple-authentication`, `expo-auth-session`, `expo-crypto`, `expo-web-browser`
+1. **Fixed avatar initial** (`src/navigation/AppNavigator.tsx:68-95`) — ProfileButton fetches user profile via `followsService.getUserProfile()`, uses `displayName > username > email > 'U'` fallback chain. Uses `useFocusEffect` to re-fetch on tab focus (updates after profile edit).
 
-2. **Updated app.json** (`app.json:20,42`) — Added `usesAppleSignIn: true` and `expo-apple-authentication` plugin
-
-3. **Fixed noOpAuth** (`src/services/supabase/client.ts:60-61`) — Added `signInWithOAuth` and `signInWithIdToken` to prevent crashes when Supabase is not configured
-
-4. **Implemented Apple Sign-In** (`src/services/supabase/auth.ts:78-168`) — Full native flow: availability check → nonce generation → Apple credential request → Supabase token exchange → profile update with display name
-
-5. **Implemented Google token exchange** (`src/services/supabase/auth.ts:170-191`) — `signInWithGoogleToken()` method exchanges Google ID token with Supabase
-
-6. **Updated AuthContext** (`src/contexts/AuthContext.tsx:14-15,63-71`) — Added `signInWithApple` and `signInWithGoogleToken` to auth context
-
-7. **Updated SignInScreen** (`src/screens/auth/SignInScreen.tsx`) — Added Apple button (iOS), Google button (when configured), "or" divider between social and email login
-
-8. **Updated SignUpScreen** (`src/screens/auth/SignUpScreen.tsx`) — Added Apple "Sign up with Apple" button with "or sign up with email" divider
+2. **Added streaming providers to search modals** (`src/screens/SearchScreen.tsx:59-60,92-110,610-621,717-728,1033-1063`) — Fetches from existing `tmdbService.getWatchProviders()` / `getMovieWatchProviders()` when modal opens. Shows flatrate providers as pills. Includes cancelled flag for race condition guard, skips fetch for already-tracked items.
 
 ### Files Modified This Session
-- `package.json` / `package-lock.json` — Added 4 OAuth packages
-- `app.json` — `usesAppleSignIn: true` + plugin
-- `src/services/supabase/client.ts` — noOpAuth OAuth methods
-- `src/services/supabase/auth.ts` — Apple Sign-In flow + Google token exchange + Google client ID exports
-- `src/contexts/AuthContext.tsx` — OAuth context methods
-- `src/screens/auth/SignInScreen.tsx` — Apple + Google buttons
-- `src/screens/auth/SignUpScreen.tsx` — Apple button
+- `src/navigation/AppNavigator.tsx` — ProfileButton profile fetch + useFocusEffect
+- `src/screens/SearchScreen.tsx` — Provider state, fetch effects, "Where to Watch" UI in both modals
+- `_SESSION.md` — Session notes
+
+### Commits This Session
+- `04f3897` — Fix profile avatar showing Apple relay email initial instead of display name
+- `12cc134` — Show streaming availability in search modals for shows and movies
+- `d2fb6ec` — Fix review feedback: clear stale providers, skip fetch for tracked items
+- `64c5c90` — Update session notes: avatar fix and streaming in search done
+- `c62ae1d` — Fix review feedback: race condition guard, useFocusEffect for avatar, console.warn
 
 ## Pre-Launch Roadmap
 
@@ -52,10 +40,10 @@ Updated: 2026-02-16 | Branch: main
 | 8 | Fix production black screen | DONE | |
 | 9 | Verify TestFlight build | DONE | |
 | 10 | Apple Sign-In (App Store requirement) | DONE | |
-| 11 | Fix profile avatar letter for Apple Sign-In users | DONE | ProfileButton now fetches profile; follow-up: move profile to AuthContext |
-| 12 | Show streaming availability on search page | DONE | "Where to Watch" in both search modals |
+| 11 | Fix profile avatar letter for Apple Sign-In users | DONE | useFocusEffect + profile fetch |
+| 12 | Show streaming availability on search page | DONE | Both modals, with race condition guard |
 | 13 | Google Sign-In (external setup needed) | PENDING | Needs Google Cloud Console setup |
-| 14 | Fix remaining review feedback (5 issues) | PENDING | See deferred review section below |
+| 14 | Fix remaining review feedback (7 issues) | PENDING | See deferred review section below |
 | 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
 | 16 | Launch prep (app store assets) | PENDING | |
 
@@ -69,24 +57,13 @@ Updated: 2026-02-16 | Branch: main
 ### Open Questions
 - **Email change for Apple Sign-In users**: Apple provides a private relay email (e.g. z8ry6...@privaterelay.appleid.com). Should we allow users to change their email, or is this not possible/necessary since Apple manages it?
 
-### Bug: Profile Avatar Letter (Apple Sign-In)
-- **Problem**: Profile avatar shows first letter of Apple relay email (e.g. "Z") instead of username or display name
-- **Fix**: Avatar component should derive its letter from `display_name` first, then `username`, then fall back to email
-- **Where to look**: Wherever the profile avatar/initial is rendered (likely in a header or profile component)
-
-### Bug: Streaming Availability Not Shown in Search
-- **Problem**: When users tap a show/movie on the search page, they can't see where to stream it
-- **Current behavior**: Streaming info only shows when the show is already in the user's library
-- **Missing entirely**: Movies don't show streaming availability at all
-- **Fix**: Show streaming/watch providers on the detail screen regardless of whether it's in the library
-
 ### Bug: Find People Text Input (Unconfirmed)
 - **Problem**: Beta tester reports they can't enter text on the Find People page
 - **Status**: Not reproducible by developer — needs investigation
 - **Possible causes**: Keyboard avoidance issue, input focus issue, platform-specific bug
 
 ### Review Feedback (Deferred)
-5 remaining issues from previous Claude Web review (issue #1 fixed this session):
+7 remaining issues from Claude Web reviews:
 
 | # | Priority | Issue | File |
 |---|----------|-------|------|
