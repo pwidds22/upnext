@@ -52,8 +52,8 @@ Updated: 2026-02-16 | Branch: main
 | 8 | Fix production black screen | DONE | |
 | 9 | Verify TestFlight build | DONE | |
 | 10 | Apple Sign-In (App Store requirement) | DONE | |
-| 11 | Fix profile avatar letter for Apple Sign-In users | **NEXT** | Shows email initial (e.g. "Z" from relay email) instead of username/display name |
-| 12 | Show streaming availability on search page | **NEXT** | Currently only shown when show is in library; also missing for movies entirely |
+| 11 | Fix profile avatar letter for Apple Sign-In users | DONE | ProfileButton now fetches profile; follow-up: move profile to AuthContext |
+| 12 | Show streaming availability on search page | DONE | "Where to Watch" in both search modals |
 | 13 | Google Sign-In (external setup needed) | PENDING | Needs Google Cloud Console setup |
 | 14 | Fix remaining review feedback (5 issues) | PENDING | See deferred review section below |
 | 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
@@ -95,6 +95,7 @@ Updated: 2026-02-16 | Branch: main
 | 4 | Medium | Returns `undefined` for unknown Supabase properties (storage, functions, etc.) | `client.ts:87` |
 | 5 | Low | Inconsistent error behavior — some TMDB methods throw, others return `[]` | `tmdb.ts` |
 | 6 | Low | TMDB pagination methods duplicate fetch+error handling 8 times | `tmdb.ts:88-166` |
+| 7 | Medium | Move user profile to AuthContext (stale avatar after profile edit) | `AuthContext.tsx`, `AppNavigator.tsx` |
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
