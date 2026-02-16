@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { TMDBShow, TMDBMovie, TrackedShow, TrackedMovie, ShowStatus, MovieStatus } from '../types';
+import { TMDBShow, TMDBMovie, TrackedShow, TrackedMovie, ShowStatus, MovieStatus, TMDBCountryProviders } from '../types';
 import { tmdbService } from '../services/tmdb';
 import { storageService } from '../services/storage';
 import { ratingsService } from '../services/supabase/ratings';
@@ -56,6 +56,8 @@ export default function SearchScreen() {
   const [selectedShowStatus, setSelectedShowStatus] = useState<ShowStatus>('watchlist');
   const [selectedMovieStatus, setSelectedMovieStatus] = useState<MovieStatus>('watchlist');
   const [modalRating, setModalRating] = useState<number>(0);
+  const [showProviders, setShowProviders] = useState<TMDBCountryProviders | null>(null);
+  const [movieProviders, setMovieProviders] = useState<TMDBCountryProviders | null>(null);
 
   // TV show recommendations (pass trackedIds to filter out shows user already has)
   const { trending, forYou, topRated, loading: recsLoading, dismissShow } = useRecommendations(trackedShowIds);
@@ -87,6 +89,17 @@ export default function SearchScreen() {
     }
     loadTracked();
   }, []);
+
+  // Fetch streaming providers when show/movie modal opens
+  useEffect(() => {
+    if (!selectedShow) { setShowProviders(null); return; }
+    tmdbService.getWatchProviders(selectedShow.id).then(setShowProviders).catch(() => {});
+  }, [selectedShow]);
+
+  useEffect(() => {
+    if (!selectedMovie) { setMovieProviders(null); return; }
+    tmdbService.getMovieWatchProviders(selectedMovie.id).then(setMovieProviders).catch(() => {});
+  }, [selectedMovie]);
 
   const handleAddShow = useCallback(async (show: TMDBShow, status: ShowStatus, rating: number) => {
     setAddingShow(true);
@@ -607,6 +620,19 @@ export default function SearchScreen() {
                 <Text style={styles.modalOverview}>{selectedShow.overview}</Text>
               )}
 
+              {showProviders?.flatrate && showProviders.flatrate.length > 0 && (
+                <View style={styles.providersSection}>
+                  <Text style={styles.providersTitle}>Where to Watch</Text>
+                  <View style={styles.providersList}>
+                    {showProviders.flatrate.map((provider) => (
+                      <View key={provider.provider_id} style={styles.providerPill}>
+                        <Text style={styles.providerName}>{provider.provider_name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               {trackedShowIds.has(selectedShow.id) ? (
                 <View style={styles.alreadyTracked}>
                   <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
@@ -712,6 +738,19 @@ export default function SearchScreen() {
 
               {selectedMovie.overview && (
                 <Text style={styles.modalOverview}>{selectedMovie.overview}</Text>
+              )}
+
+              {movieProviders?.flatrate && movieProviders.flatrate.length > 0 && (
+                <View style={styles.providersSection}>
+                  <Text style={styles.providersTitle}>Where to Watch</Text>
+                  <View style={styles.providersList}>
+                    {movieProviders.flatrate.map((provider) => (
+                      <View key={provider.provider_id} style={styles.providerPill}>
+                        <Text style={styles.providerName}>{provider.provider_name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
               )}
 
               {trackedMovieIds.has(selectedMovie.id) ? (
@@ -1029,5 +1068,36 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 16,
     alignItems: 'center',
+  },
+  providersSection: {
+    width: '100%',
+    marginTop: 8,
+    gap: 8,
+  },
+  providersTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  providersList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  providerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  providerName: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '500',
   },
 });
