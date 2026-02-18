@@ -13,10 +13,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUsernameCheck } from '../../hooks/useUsernameCheck';
 import { COLORS } from '../../utils/constants';
 import { validateUsername, cleanUsername, USERNAME_MIN_LENGTH } from '../../utils/validation';
+import {
+  GOOGLE_WEB_CLIENT_ID,
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_ANDROID_CLIENT_ID,
+} from '../../services/supabase/auth';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface Props {
   onNavigateToSignIn: () => void;
@@ -24,7 +33,7 @@ interface Props {
 }
 
 export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
-  const { signUp, signInWithApple } = useAuth();
+  const { signUp, signInWithApple, signInWithGoogleToken } = useAuth();
   const { checkAvailability, checking: checkingUsername } = useUsernameCheck();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -32,6 +41,7 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'available' | 'taken'>('idle');
   const [success, setSuccess] = useState(false);
@@ -45,6 +55,43 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
       AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
     }
   }, []);
+
+  // Google OAuth configuration
+  const [googleRequest, googleResponse, promptGoogleAsync] = Google.useAuthRequest({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response
+  useEffect(() => {
+    if (googleResponse?.type === 'success') {
+      const { id_token } = googleResponse.params;
+      if (id_token) {
+        handleGoogleToken(id_token);
+      }
+    } else if (googleResponse?.type === 'error') {
+      setError('Google Sign-Up failed');
+      setGoogleLoading(false);
+    }
+  }, [googleResponse]);
+
+  const handleGoogleToken = async (idToken: string) => {
+    try {
+      const { error: authError } = await signInWithGoogleToken(idToken);
+      if (authError) {
+        setError(authError);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onSkip();
+      }
+    } catch (e) {
+      setError('Google Sign-Up failed. Please try again.');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    setGoogleLoading(false);
+  };
 
   // Clean up debounce timer on unmount
   useEffect(() => {
@@ -204,24 +251,42 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
           <Text style={styles.subtitle}>Sign up to sync your shows and connect with friends</Text>
         </View>
 
-        {/* Apple Sign-In Button */}
-        {isAppleAvailable && (
-          <>
-            <View style={styles.socialButtons}>
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
-                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                cornerRadius={12}
-                style={styles.appleButton}
-                onPress={handleAppleSignIn}
-              />
-            </View>
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or sign up with email</Text>
-              <View style={styles.dividerLine} />
-            </View>
-          </>
+        {/* Social Sign-Up Buttons */}
+        <View style={styles.socialButtons}>
+          {isAppleAvailable && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={handleAppleSignIn}
+            />
+          )}
+
+          {GOOGLE_WEB_CLIENT_ID ? (
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => { setGoogleLoading(true); setError(null); promptGoogleAsync(); }}
+              disabled={!googleRequest || googleLoading}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color="#1f1f1f" />
+              ) : (
+                <>
+                  <Ionicons name="logo-google" size={20} color="#1f1f1f" />
+                  <Text style={styles.googleButtonText}>Sign up with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {(isAppleAvailable || GOOGLE_WEB_CLIENT_ID) && (
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or sign up with email</Text>
+            <View style={styles.dividerLine} />
+          </View>
         )}
 
         <View style={styles.form}>
@@ -483,6 +548,20 @@ const styles = StyleSheet.create({
   appleButton: {
     height: 50,
     width: '100%',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    height: 50,
+    borderRadius: 12,
+    gap: 10,
+  },
+  googleButtonText: {
+    color: '#1f1f1f',
+    fontSize: 17,
+    fontWeight: '500',
   },
   divider: {
     flexDirection: 'row',

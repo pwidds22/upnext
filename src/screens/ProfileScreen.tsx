@@ -306,7 +306,7 @@ interface RatingWithShowInfo extends UserRatingRow {
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { user, isConfigured, signOut } = useAuth();
+  const { user, isConfigured, signOut, refreshProfile: refreshAuthProfile } = useAuth();
   const [authScreen, setAuthScreen] = useState<'signIn' | 'signUp' | null>(null);
   const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
@@ -693,6 +693,7 @@ export default function ProfileScreen() {
           onSave={(updated) => {
             setProfile(updated);
             refreshProfile();
+            refreshAuthProfile();
           }}
         />
 

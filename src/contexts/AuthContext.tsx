@@ -3,10 +3,13 @@ import type { User, Session } from '@supabase/supabase-js';
 import { authService } from '../services/supabase/auth';
 import { isSupabaseConfigured } from '../services/supabase/client';
 import { storageService } from '../services/storage';
+import { followsService } from '../services/supabase/follows';
+import type { UserProfile } from '../types';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  profile: UserProfile | null;
   isLoading: boolean;
   isConfigured: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -15,6 +18,7 @@ interface AuthContextType {
   signInWithGoogleToken: (idToken: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,8 +26,28 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const isConfigured = isSupabaseConfigured();
+
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    try {
+      const data = await followsService.getUserProfile(user.id);
+      setProfile(data);
+    } catch (e) {
+      console.error('Failed to refresh profile:', e);
+    }
+  }, [user]);
+
+  // Load profile when user changes
+  useEffect(() => {
+    if (user) {
+      refreshProfile();
+    } else {
+      setProfile(null);
+    }
+  }, [user, refreshProfile]);
 
   useEffect(() => {
     if (!isConfigured) {
@@ -35,8 +59,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authService.getSession().then((session) => {
       setSession(session);
       setUser(session?.user ?? null);
-    }).catch((e) => {
-      console.error('Failed to get session:', e);
+    }).catch(async (e) => {
+      console.warn('Failed to get session:', e);
+      // Clear stale session (e.g. expired/revoked refresh token)
+      try {
+        await authService.signOut();
+      } catch { /* ignore signOut errors during cleanup */ }
+      setSession(null);
+      setUser(null);
     }).finally(() => {
       setIsLoading(false);
     });
@@ -74,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await authService.signOut();
+    setProfile(null);
     // Clear local data to prevent data bleeding between accounts
     await storageService.clearAllData();
   }, []);
@@ -87,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       session,
+      profile,
       isLoading,
       isConfigured,
       signIn,
@@ -95,8 +127,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogleToken,
       signOut,
       resetPassword,
+      refreshProfile,
     }),
-    [user, session, isLoading, isConfigured, signIn, signUp, signInWithApple, signInWithGoogleToken, signOut, resetPassword]
+    [user, session, profile, isLoading, isConfigured, signIn, signUp, signInWithApple, signInWithGoogleToken, signOut, resetPassword, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

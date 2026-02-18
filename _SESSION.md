@@ -1,29 +1,56 @@
 # UpNext - Session State
-Updated: 2026-02-16 | Branch: main
+Updated: 2026-02-17 | Branch: main
 
-## Status: AVATAR FIX + STREAMING IN SEARCH — 2 review rounds passed
+## Status: Review feedback done + Google Sign-In IN PROGRESS (blocked on Expo Go)
 
 ### This Session
-- **Fixed profile avatar letter** — Apple Sign-In users now see display name initial instead of relay email initial
-- **Added streaming availability to search** — "Where to Watch" provider pills in both show and movie add modals
-- **Two Claude Web review rounds** — Fixed race conditions, stale state, added useFocusEffect
+- **Fixed 6 deferred review feedback issues** from previous Claude Web reviews
+- Supabase client proxy improvements (caching, thenable, unknown properties)
+- TMDB service refactor (extracted `fetchPaginated` helper, ~160 lines removed)
+- Profile lifted to AuthContext (fixes stale avatar properly)
+- **Google Sign-In code complete** — buttons on both screens, OAuth flow wired up
+- **Google Cloud Console configured** — OAuth consent screen published, iOS + Web clients created
+- **Stale refresh token fix** — AuthContext clears invalid sessions on startup
+- **BLOCKED**: Google Sign-In can't be tested in Expo Go (bundle ID mismatch)
 
 ### What Was Completed
-1. **Fixed avatar initial** (`src/navigation/AppNavigator.tsx:68-95`) — ProfileButton fetches user profile via `followsService.getUserProfile()`, uses `displayName > username > email > 'U'` fallback chain. Uses `useFocusEffect` to re-fetch on tab focus (updates after profile edit).
+1. **Cached `isSupabaseConfigured()`** (`src/services/supabase/client.ts:23-33`) — IIFE computes result once at module init.
 
-2. **Added streaming providers to search modals** (`src/screens/SearchScreen.tsx:59-60,92-110,610-621,717-728,1033-1063`) — Fetches from existing `tmdbService.getWatchProviders()` / `getMovieWatchProviders()` when modal opens. Shows flatrate providers as pills. Includes cancelled flag for race condition guard, skips fetch for already-tracked items.
+2. **Fixed no-op builder thenable** (`src/services/supabase/client.ts:41-54`) — Backed by `Promise.resolve()` with `.then/.catch/.finally` forwarding.
+
+3. **Unknown Supabase properties return chainable no-op** (`src/services/supabase/client.ts:92,104`) — `supabase.storage`, `.functions`, `.realtime` now return chainable no-op proxy.
+
+4. **Extracted `fetchPaginated<T>()` helper** (`src/services/tmdb.ts:88-116`) — 8 pagination methods reduced to one-liners.
+
+5. **Profile in AuthContext** (`src/contexts/AuthContext.tsx:29,33-50`) — `profile` and `refreshProfile()` on context.
+
+6. **ProfileButton simplified** (`src/navigation/AppNavigator.tsx:69`) — Just `const { user, profile } = useAuth()`.
+
+7. **ProfileScreen wired up** (`src/screens/ProfileScreen.tsx:309,696`) — Calls `refreshAuthProfile()` after edit.
+
+8. **Google Sign-In button on SignUpScreen** (`src/screens/auth/SignUpScreen.tsx:59-94,219-234`) — Full OAuth flow matching SignInScreen pattern.
+
+9. **Stale refresh token handling** (`src/contexts/AuthContext.tsx:62-69`) — Catches invalid refresh token errors on startup, clears session gracefully.
+
+10. **Google env vars added** (`.env:9-11`) — Web + iOS client IDs configured, Android empty.
+
+### What's In Progress — Google Sign-In
+- **Code is done** — Both SignInScreen and SignUpScreen have Google buttons with full OAuth flow
+- **Google Cloud Console is done** — OAuth consent screen published (production), scopes added (openid, email, profile)
+- **Supabase Google provider configured** — Web client ID + secret set in Supabase dashboard
+- **BLOCKER**: `expo-auth-session/providers/google` requires `iosClientId` on iOS, but Expo Go's bundle ID (`host.exp.Exponent`) doesn't match the configured iOS OAuth client bundle ID (`com.pwidd.upnext`). Error: `Client Id property 'iosClientId' must be defined to use Google auth on this platform.`
+- **Fix needed**: Build a **development build** (`npx expo run:ios` or `eas build --profile development`) instead of using Expo Go. The iOS client ID is correctly configured — it just needs to run in an app with the right bundle ID.
 
 ### Files Modified This Session
-- `src/navigation/AppNavigator.tsx` — ProfileButton profile fetch + useFocusEffect
-- `src/screens/SearchScreen.tsx` — Provider state, fetch effects, "Where to Watch" UI in both modals
+- `src/services/supabase/client.ts` — Cached config check, thenable fix, unknown property handling
+- `src/services/tmdb.ts` — `fetchPaginated` helper, 8 methods refactored
+- `src/contexts/AuthContext.tsx` — Profile state + refreshProfile + stale token handling
+- `src/navigation/AppNavigator.tsx` — Simplified ProfileButton
+- `src/screens/ProfileScreen.tsx` — Context refresh after profile edit
+- `src/screens/auth/SignInScreen.tsx` — Google OAuth (already had it, no changes needed)
+- `src/screens/auth/SignUpScreen.tsx` — Added Google Sign-In button + OAuth flow
+- `.env` — Google Sign-In client IDs added
 - `_SESSION.md` — Session notes
-
-### Commits This Session
-- `04f3897` — Fix profile avatar showing Apple relay email initial instead of display name
-- `12cc134` — Show streaming availability in search modals for shows and movies
-- `d2fb6ec` — Fix review feedback: clear stale providers, skip fetch for tracked items
-- `64c5c90` — Update session notes: avatar fix and streaming in search done
-- `c62ae1d` — Fix review feedback: race condition guard, useFocusEffect for avatar, console.warn
 
 ## Pre-Launch Roadmap
 
@@ -42,8 +69,8 @@ Updated: 2026-02-16 | Branch: main
 | 10 | Apple Sign-In (App Store requirement) | DONE | |
 | 11 | Fix profile avatar letter for Apple Sign-In users | DONE | useFocusEffect + profile fetch |
 | 12 | Show streaming availability on search page | DONE | Both modals, with race condition guard |
-| 13 | Google Sign-In (external setup needed) | PENDING | Needs Google Cloud Console setup |
-| 14 | Fix remaining review feedback (7 issues) | PENDING | See deferred review section below |
+| 13 | Google Sign-In | IN PROGRESS | Code done, needs dev build to test |
+| 14 | Fix remaining review feedback (6 issues) | DONE | Cached config, thenable, unknown props, fetchPaginated, profile in context |
 | 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
 | 16 | Launch prep (app store assets) | PENDING | |
 
@@ -54,6 +81,21 @@ Updated: 2026-02-16 | Branch: main
 | 2 | **Watch stats** | Medium | Hours watched, streaks, genre breakdown |
 | 3 | **Apple TV app** | High | Far down the road, after App Store launch |
 
+### Next Session — Google Sign-In Testing
+1. **Create a development build** — either `npx expo run:ios` (local) or `eas build --profile development --platform ios` (cloud). This gives an app with the correct bundle ID (`com.pwidd.upnext`).
+2. **Test Google Sign-In** on the dev build — should work since all OAuth config is correct.
+3. **Add EAS secrets** for production: `eas secret:create --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value "..." --scope project` (and same for iOS client ID).
+4. **Build new TestFlight** with Google Sign-In included.
+5. **Android Google credential** (optional, can defer) — needs SHA-1 from `eas credentials -p android`, then create Android OAuth client in Google Cloud Console.
+
+### Google Cloud Console Status
+- **Project**: UpNext (895548176925)
+- **OAuth consent screen**: Published (production), External
+- **Scopes**: openid, email, profile (non-sensitive, no verification needed)
+- **Clients**: UpNext Web (web app), UpNext iOS (iOS app)
+- **Redirect URIs on Web client**: `https://aqzbfqkimrndyuukkozn.supabase.co/auth/v1/callback`, `https://auth.expo.io/@pwidds/upnext`
+- **Google Play Developer Account**: Created (personal)
+
 ### Open Questions
 - **Email change for Apple Sign-In users**: Apple provides a private relay email (e.g. z8ry6...@privaterelay.appleid.com). Should we allow users to change their email, or is this not possible/necessary since Apple manages it?
 
@@ -62,17 +104,17 @@ Updated: 2026-02-16 | Branch: main
 - **Status**: Not reproducible by developer — needs investigation
 - **Possible causes**: Keyboard avoidance issue, input focus issue, platform-specific bug
 
-### Review Feedback (Deferred)
-7 remaining issues from Claude Web reviews:
+### Review Feedback (Resolved)
+All 6 deferred issues from Claude Web reviews have been fixed:
 
-| # | Priority | Issue | File |
-|---|----------|-------|------|
-| 2 | Medium | `isSupabaseConfigured()` re-parses URL on every property access — should cache | `client.ts:84` |
-| 3 | Medium | No-op builder `.then` doesn't fully conform to thenable protocol | `client.ts:43` |
-| 4 | Medium | Returns `undefined` for unknown Supabase properties (storage, functions, etc.) | `client.ts:87` |
-| 5 | Low | Inconsistent error behavior — some TMDB methods throw, others return `[]` | `tmdb.ts` |
-| 6 | Low | TMDB pagination methods duplicate fetch+error handling 8 times | `tmdb.ts:88-166` |
-| 7 | Medium | Move user profile to AuthContext (stale avatar after profile edit) | `AuthContext.tsx`, `AppNavigator.tsx` |
+| # | Priority | Issue | Status |
+|---|----------|-------|--------|
+| 2 | Medium | `isSupabaseConfigured()` re-parses URL on every property access | DONE — cached via IIFE |
+| 3 | Medium | No-op builder `.then` doesn't fully conform to thenable protocol | DONE — backed by Promise.resolve() |
+| 4 | Medium | Returns `undefined` for unknown Supabase properties | DONE — returns chainable no-op proxy |
+| 5 | Low | Inconsistent error behavior — some TMDB methods throw, others return `[]` | DONE — documented split, extracted helper |
+| 6 | Low | TMDB pagination methods duplicate fetch+error handling 8 times | DONE — extracted fetchPaginated<T>() |
+| 7 | Medium | Move user profile to AuthContext (stale avatar after profile edit) | DONE — profile in context |
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -82,7 +124,7 @@ Updated: 2026-02-16 | Branch: main
 
 ### Completed Features
 - **Core** — Search, tracking, episodes, sync engine
-- **Auth** — Signup, signin (email or username), Apple Sign-In
+- **Auth** — Signup, signin (email or username), Apple Sign-In, Google Sign-In (code done)
 - **Social** — Follow system, activity feed, friend ratings
 - **Ratings** — 5-star system with half-star toggle, episode reactions
 - **Recommendations** — Trending + personalized with dismiss feature
@@ -101,7 +143,8 @@ Updated: 2026-02-16 | Branch: main
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
-- **Google Sign-In**: Needs Google Cloud Console setup + env vars: `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`, `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`
+- **Google Sign-In**: Configured — Web + iOS client IDs in `.env`, Supabase Google provider enabled
+- **Google Play**: Developer account created (personal, $25)
 
 ## Known Issues
 - See `TECH_DEBT.md` for full technical debt tracking

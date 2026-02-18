@@ -18,18 +18,19 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// Check if Supabase is configured (env vars present and URL is valid)
-export const isSupabaseConfigured = (): boolean => {
+// Check if Supabase is configured (env vars present and URL is valid).
+// Cached at module init — env vars are set at build time and never change at runtime.
+const _isConfigured: boolean = (() => {
   if (!supabaseUrl || !supabaseAnonKey) return false;
-  // Validate that the URL is actually an HTTP/HTTPS URL,
-  // not a placeholder like "@supabase_url" from unresolved EAS secrets
   try {
     const url = new URL(supabaseUrl);
     return url.protocol === 'https:' || url.protocol === 'http:';
   } catch {
     return false;
   }
-};
+})();
+
+export const isSupabaseConfigured = (): boolean => _isConfigured;
 
 // Sentinel error for "not configured" state
 const NOT_CONFIGURED_ERROR = { message: 'Supabase is not configured', code: 'NOT_CONFIGURED' };
@@ -39,13 +40,14 @@ const NOT_CONFIGURED_ERROR = { message: 'Supabase is not configured', code: 'NOT
 // to { data: null, error: NOT_CONFIGURED_ERROR } when awaited.
 function createNoOpBuilder(): unknown {
   const result = { data: null, error: NOT_CONFIGURED_ERROR };
-  const builder = {
-    then: (resolve: (value: typeof result) => void) => resolve(result),
-  };
-  return new Proxy(builder, {
+  const promise = Promise.resolve(result);
+
+  return new Proxy(promise, {
     get(target, prop) {
-      if (prop === 'then') return target.then;
-      // Any chained method returns the same builder
+      if (prop === 'then' || prop === 'catch' || prop === 'finally') {
+        return (target as any)[prop].bind(target);
+      }
+      // Any chained method returns a new no-op builder
       return () => createNoOpBuilder();
     },
   });
@@ -86,7 +88,8 @@ export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
     if (!isSupabaseConfigured()) {
       if (prop === 'auth') return noOpAuth;
       if (prop === 'from' || prop === 'rpc') return () => createNoOpBuilder();
-      return undefined;
+      // Return chainable no-op for unknown properties (storage, functions, realtime, etc.)
+      return new Proxy({}, { get() { return () => createNoOpBuilder(); } });
     }
 
     // Lazily create real client on first access
@@ -98,7 +101,7 @@ export const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
         // Fall back to no-op mode so the app doesn't crash
         if (prop === 'auth') return noOpAuth;
         if (prop === 'from' || prop === 'rpc') return () => createNoOpBuilder();
-        return undefined;
+        return new Proxy({}, { get() { return () => createNoOpBuilder(); } });
       }
     }
     return _supabaseClient[prop as keyof SupabaseClient];
