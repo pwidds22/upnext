@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -112,7 +114,10 @@ export default function UserSearchScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={COLORS.textSecondary} />
@@ -125,6 +130,7 @@ export default function UserSearchScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
+          autoFocus
         />
         {query.length > 0 && (
           <TouchableOpacity onPress={() => setQuery('')}>
@@ -148,9 +154,10 @@ export default function UserSearchScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={results.length === 0 ? styles.emptyList : undefined}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
