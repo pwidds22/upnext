@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { TMDBEpisode, EpisodeReactionType } from '../types';
-import { COLORS, getStillUrl, getCountdownText, hasAiredPacific, formatAirDate } from '../utils/constants';
+import { COLORS, getStillUrl, getCountdownText, getDaysUntil, hasAiredPacific, formatAirDate } from '../utils/constants';
 import EpisodeReactionPicker from './EpisodeReactionPicker';
 
 interface EpisodeRowProps {
@@ -93,7 +93,12 @@ export default function EpisodeRow({
           </Text>
 
           {isUpcoming && countdown && (
-            <Text style={styles.countdown}>{countdown}</Text>
+            <Text style={styles.countdown}>
+              {countdown}
+              {episode.air_date && (getDaysUntil(episode.air_date) ?? 30) < 30 && (
+                <Text style={styles.countdownDate}> · {formatAirDate(episode.air_date)}</Text>
+              )}
+            </Text>
           )}
           {!isUpcoming && episode.air_date && (
             <Text style={styles.airDate}>{formatAirDate(episode.air_date)}</Text>
@@ -225,6 +230,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.blue,
     fontWeight: '500',
+  },
+  countdownDate: {
+    color: COLORS.textTertiary,
+    fontWeight: '400',
   },
   airDate: {
     fontSize: 12,

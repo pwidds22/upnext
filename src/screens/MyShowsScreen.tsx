@@ -14,8 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TrackedShow, TrackedMovie, TrackedMedia, RootStackParamList, ShowStatus, MovieStatus } from '../types';
 import { storageService } from '../services/storage';
+import { tmdbService } from '../services/tmdb';
 import ShowPoster from '../components/ShowPoster';
-import { COLORS, STATUS_CONFIG } from '../utils/constants';
+import { COLORS, STATUS_CONFIG, hasAiredPacific } from '../utils/constants';
 
 const LIBRARY_FILTER_KEY = '@upnext_library_filter';
 const HIDE_COMPLETED_KEY = '@upnext_hide_completed';
@@ -121,7 +122,7 @@ export default function MyShowsScreen() {
     });
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (skipBackgroundRefresh = false) => {
     try {
       setError(null);
       const [allShows, allMovies] = await Promise.all([
@@ -139,6 +140,37 @@ export default function MyShowsScreen() {
 
       setShows(showsWithProgress);
       setMovies(allMovies);
+
+      // Background refresh for shows with stale aired episode counts
+      if (!skipBackgroundRefresh) {
+        const staleShows = showsWithProgress.filter((s) => {
+          const total = s.airedEpisodes ?? s.totalEpisodes;
+          return s.watchedCount > total && s.totalSeasons > 0;
+        });
+
+        if (staleShows.length > 0) {
+          Promise.all(
+            staleShows.map(async (show) => {
+              try {
+                const seasons = await tmdbService.getAllSeasons(show.tmdbId, show.totalSeasons);
+                let airedCount = 0;
+                for (const season of seasons) {
+                  if (season.episodes) {
+                    for (const ep of season.episodes) {
+                      if (hasAiredPacific(ep.air_date)) airedCount++;
+                    }
+                  }
+                }
+                if (airedCount > 0) {
+                  await storageService.updateAiredEpisodes(show.tmdbId, airedCount);
+                }
+              } catch {
+                // Silent — will fix on next load
+              }
+            })
+          ).then(() => loadData(true));
+        }
+      }
     } catch (e) {
       console.error('Failed to load library:', e);
       setError('Failed to load your library. Pull down to retry.');
@@ -278,7 +310,8 @@ export default function MyShowsScreen() {
 
       // TV Show
       const show = item as ShowWithProgress;
-      const displayTotal = show.airedEpisodes ?? show.totalEpisodes;
+      const rawTotal = show.airedEpisodes ?? show.totalEpisodes;
+      const displayTotal = Math.max(rawTotal, show.watchedCount);
       const progress = displayTotal > 0 ? show.watchedCount / displayTotal : 0;
       const progressText =
         displayTotal > 0

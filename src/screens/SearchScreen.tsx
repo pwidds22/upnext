@@ -138,9 +138,11 @@ export default function SearchScreen() {
       if (status === 'completed' && numSeasons > 0) {
         try {
           const seasons = await tmdbService.getAllSeasons(show.id, numSeasons);
+          let totalAiredCount = 0;
           for (const season of seasons) {
             if (season.episodes) {
               const airedEpisodes = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
+              totalAiredCount += airedEpisodes.length;
               if (airedEpisodes.length > 0) {
                 await storageService.markSeasonWatched(
                   show.id,
@@ -153,6 +155,9 @@ export default function SearchScreen() {
                 );
               }
             }
+          }
+          if (totalAiredCount > 0) {
+            await storageService.updateAiredEpisodes(show.id, totalAiredCount);
           }
         } catch (markError) {
           console.error('Failed to auto-mark episodes:', markError);

@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../utils/constants';
 
@@ -39,6 +40,7 @@ export default function NotificationsScreen() {
   const [settings, setSettings] = useState<NotificationSettings>(defaultSettings);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sendingTest, setSendingTest] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -121,6 +123,45 @@ export default function NotificationsScreen() {
   const setReminderTime = (time: NotificationSettings['reminderTime']) => {
     const newSettings = { ...settings, reminderTime: time };
     saveSettings(newSettings);
+  };
+
+  const sendTestNotification = async () => {
+    if (!Device.isDevice) {
+      Alert.alert('Not Available', 'Push notifications are not available on simulators.');
+      return;
+    }
+
+    if (!hasPermission) {
+      Alert.alert('Permission Required', 'Please enable notifications first.');
+      return;
+    }
+
+    setSendingTest(true);
+    try {
+      // Ensure notifications show in foreground
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+        }),
+      });
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📺 New Episodes Today!',
+          body: 'The Bear S4E3 and Severance S2E8 are airing today. Time to watch!',
+          sound: true,
+        },
+        trigger: null, // Send immediately
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to send test notification.');
+    } finally {
+      setSendingTest(false);
+    }
   };
 
   if (loading) {
@@ -227,6 +268,27 @@ export default function NotificationsScreen() {
             )}
           </TouchableOpacity>
         ))}
+      </View>
+
+      {/* Test Notification */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Testing</Text>
+
+        <TouchableOpacity
+          style={[styles.testButton, sendingTest && styles.testButtonDisabled]}
+          onPress={sendTestNotification}
+          disabled={sendingTest}
+        >
+          <Ionicons name="notifications-outline" size={22} color={COLORS.primary} />
+          <View style={styles.testButtonTextContainer}>
+            <Text style={styles.testButtonTitle}>
+              {sendingTest ? 'Sending...' : 'Send Test Notification'}
+            </Text>
+            <Text style={styles.testButtonSubtitle}>
+              Sends a sample notification to verify everything works
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {/* Help Text */}
@@ -367,6 +429,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   timeOptionTime: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    marginTop: 8,
+    gap: 12,
+  },
+  testButtonDisabled: {
+    opacity: 0.5,
+  },
+  testButtonTextContainer: {
+    flex: 1,
+  },
+  testButtonTitle: {
+    fontSize: 16,
+    color: COLORS.primary,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  testButtonSubtitle: {
     fontSize: 13,
     color: COLORS.textSecondary,
   },

@@ -22,6 +22,7 @@ import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
 import { useDataExport } from '../hooks/useDataExport';
 import { storageService } from '../services/storage';
+import { tmdbService } from '../services/tmdb';
 import { useFollowCounts } from '../hooks/useFollows';
 import { useProfileVisibility } from '../hooks/useProfileVisibility';
 import { COLORS } from '../utils/constants';
@@ -338,15 +339,20 @@ export default function ProfileScreen() {
       try {
         const userRatings = await ratingsService.getUserShowRatings(user.id);
 
-        // Enrich with show info from local storage
+        // Enrich with show info from local storage, falling back to TMDB
         const enrichedRatings: RatingWithShowInfo[] = await Promise.all(
           userRatings.map(async (rating) => {
             const show = await storageService.getShow(rating.tmdb_id);
-            return {
-              ...rating,
-              showTitle: show?.title,
-              posterPath: show?.posterPath,
-            };
+            if (show) {
+              return { ...rating, showTitle: show.title, posterPath: show.posterPath };
+            }
+            // Show not in local storage — fetch from TMDB
+            try {
+              const tmdbShow = await tmdbService.getShowDetails(rating.tmdb_id);
+              return { ...rating, showTitle: tmdbShow.name, posterPath: tmdbShow.poster_path };
+            } catch {
+              return { ...rating, showTitle: undefined, posterPath: undefined };
+            }
           })
         );
 

@@ -17,7 +17,7 @@ import { RootStackParamList, TrackedShow, UpNextEpisode } from '../types';
 import { storageService } from '../services/storage';
 import { tmdbService } from '../services/tmdb';
 import ShowPoster from '../components/ShowPoster';
-import { COLORS, formatEpisodeCode, getCountdownText, hasAiredPacific } from '../utils/constants';
+import { COLORS, formatEpisodeCode, getCountdownText, getDaysUntil, formatAirDate, hasAiredPacific } from '../utils/constants';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -213,6 +213,9 @@ export default function UpNextScreen() {
             {showCountdown && displayText && (
               <Text style={[styles.countdown, !item.airDate && styles.dateTba]}>
                 {displayText}
+                {item.airDate && (getDaysUntil(item.airDate) ?? 30) < 30 && (
+                  <Text style={styles.countdownDate}> · {formatAirDate(item.airDate)}</Text>
+                )}
               </Text>
             )}
           </View>
@@ -372,6 +375,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.blue,
     marginTop: 2,
+  },
+  countdownDate: {
+    color: COLORS.textTertiary,
+    fontWeight: '400',
   },
   dateTba: {
     color: COLORS.textSecondary,

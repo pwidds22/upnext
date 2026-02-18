@@ -1,16 +1,24 @@
 # UpNext - Session State
-Updated: 2026-02-17 | Branch: main
+Updated: 2026-02-18 | Branch: main
 
-## Status: Build 12 on TestFlight — Google Sign-In verified, 4 new beta feedback items logged
+## Status: Build 12 on TestFlight — Fixed 2 bugs, 2 UX improvements (#16-19)
 
 ### This Session
-- **Google Sign-In tested and working** — dev build confirmed signup + signin via Google OAuth
-- **Apple Sign-In re-verified** — still working on dev build
-- **EAS secrets configured** — Google client IDs added to development + production environments
-- **Installed `expo-dev-client`** (`package.json`) — required for development builds
-- **Dev build created** — `eas build --profile development --platform ios` with ad-hoc distribution
-- **Build 12 submitted to TestFlight** — production build with Google Sign-In included
-- **4 new beta feedback items logged** — stale data on ratings/library, air date display, notification testing
+- **Fixed Bug #16: Ratings "Show #12345"** — Added TMDB fallback in ProfileScreen when show not in local SQLite
+- **Fixed Bug #17: Library wrong episode count (5/4)** — Three-part fix:
+  - Display clamp: `Math.max(rawTotal, watchedCount)` prevents N/M where N>M
+  - Background refresh: stale shows auto-refresh aired episodes from TMDB
+  - Prevention: store `airedEpisodes` when adding completed shows
+- **Task #18: Air dates alongside countdown** — Upcoming episodes now show "Tomorrow · Wed, Feb 19" instead of just "Tomorrow". Applied to both EpisodeRow and UpNextScreen.
+- **Task #19: Test notification button** — Added "Send Test Notification" button to NotificationsScreen. Sends a sample notification immediately with haptic feedback.
+
+### Files Modified This Session
+- `src/screens/ProfileScreen.tsx` — TMDB fallback for rating enrichment
+- `src/screens/MyShowsScreen.tsx` — Display clamp + background refresh for stale aired episodes
+- `src/screens/SearchScreen.tsx` — Store airedEpisodes at add time for completed shows
+- `src/components/EpisodeRow.tsx` — Show air date alongside countdown for upcoming episodes
+- `src/screens/UpNextScreen.tsx` — Show air date alongside countdown in Coming Soon section
+- `src/screens/NotificationsScreen.tsx` — Send Test Notification button with permission checks
 
 ### What Was Completed
 1. **Cached `isSupabaseConfigured()`** (`src/services/supabase/client.ts:23-33`) — IIFE computes result once at module init.
@@ -70,10 +78,10 @@ Updated: 2026-02-17 | Branch: main
 | 13 | Google Sign-In | DONE | Tested on dev build, TestFlight building |
 | 14 | Fix remaining review feedback (6 issues) | DONE | Cached config, thenable, unknown props, fetchPaginated, profile in context |
 | 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
-| 16 | My Ratings shows "Show #12345" instead of names on first load | PENDING | Fixes itself after navigating around — stale/missing cache |
-| 17 | Library shows wrong episode count (e.g. 5/4) until tapped | PENDING | Data doesn't update until user clicks into the show |
-| 18 | Show air date alongside "in 4 days" / "tomorrow" countdown | PENDING | UX improvement for season episode list |
-| 19 | Add a way to test notifications without waiting for a real episode | PENDING | Needs test/debug trigger |
+| 16 | My Ratings shows "Show #12345" instead of names on first load | DONE | TMDB fallback when show not in local SQLite |
+| 17 | Library shows wrong episode count (e.g. 5/4) until tapped | DONE | Display clamp + background refresh + store at add time |
+| 18 | Show air date alongside "in 4 days" / "tomorrow" countdown | DONE | Both EpisodeRow and UpNextScreen |
+| 19 | Add a way to test notifications without waiting for a real episode | DONE | Test button on NotificationsScreen |
 | 20 | Launch prep (app store assets) | PENDING | | |
 
 ### Post-Launch (v1.1+)
@@ -84,12 +92,10 @@ Updated: 2026-02-17 | Branch: main
 | 3 | **Apple TV app** | High | Far down the road, after App Store launch |
 
 ### Next Up
-1. **Fix stale data bugs** — Ratings show "Show #..." and library shows wrong episode counts on first load; data only updates after tapping in. Likely a cache/fetch timing issue.
-2. **Show air date alongside countdown** — Episode list says "in 4 days" but should also show the actual date
-3. **Notification testing** — Add a way to trigger a test notification without waiting for a real episode drop
-4. **Investigate Find People text input bug** — beta tester report, not yet reproduced
-5. **Launch prep** — App Store screenshots, description, metadata
-6. **Android Google credential** (optional) — needs SHA-1 from `eas credentials -p android`, then create Android OAuth client in Google Cloud Console
+1. **Run /review** — Claude Web review was down this session; run review next session before committing further
+2. **Investigate Find People text input bug** — beta tester report, not yet reproduced
+3. **Launch prep** — App Store screenshots, description, metadata
+4. **Android Google credential** (optional) — needs SHA-1 from `eas credentials -p android`, then create Android OAuth client in Google Cloud Console
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
