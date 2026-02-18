@@ -1,17 +1,16 @@
 # UpNext - Session State
 Updated: 2026-02-17 | Branch: main
 
-## Status: Review feedback done + Google Sign-In IN PROGRESS (blocked on Expo Go)
+## Status: Build 12 on TestFlight — Google Sign-In verified, 4 new beta feedback items logged
 
 ### This Session
-- **Fixed 6 deferred review feedback issues** from previous Claude Web reviews
-- Supabase client proxy improvements (caching, thenable, unknown properties)
-- TMDB service refactor (extracted `fetchPaginated` helper, ~160 lines removed)
-- Profile lifted to AuthContext (fixes stale avatar properly)
-- **Google Sign-In code complete** — buttons on both screens, OAuth flow wired up
-- **Google Cloud Console configured** — OAuth consent screen published, iOS + Web clients created
-- **Stale refresh token fix** — AuthContext clears invalid sessions on startup
-- **BLOCKED**: Google Sign-In can't be tested in Expo Go (bundle ID mismatch)
+- **Google Sign-In tested and working** — dev build confirmed signup + signin via Google OAuth
+- **Apple Sign-In re-verified** — still working on dev build
+- **EAS secrets configured** — Google client IDs added to development + production environments
+- **Installed `expo-dev-client`** (`package.json`) — required for development builds
+- **Dev build created** — `eas build --profile development --platform ios` with ad-hoc distribution
+- **Build 12 submitted to TestFlight** — production build with Google Sign-In included
+- **4 new beta feedback items logged** — stale data on ratings/library, air date display, notification testing
 
 ### What Was Completed
 1. **Cached `isSupabaseConfigured()`** (`src/services/supabase/client.ts:23-33`) — IIFE computes result once at module init.
@@ -34,12 +33,11 @@ Updated: 2026-02-17 | Branch: main
 
 10. **Google env vars added** (`.env:9-11`) — Web + iOS client IDs configured, Android empty.
 
-### What's In Progress — Google Sign-In
-- **Code is done** — Both SignInScreen and SignUpScreen have Google buttons with full OAuth flow
-- **Google Cloud Console is done** — OAuth consent screen published (production), scopes added (openid, email, profile)
-- **Supabase Google provider configured** — Web client ID + secret set in Supabase dashboard
-- **BLOCKER**: `expo-auth-session/providers/google` requires `iosClientId` on iOS, but Expo Go's bundle ID (`host.exp.Exponent`) doesn't match the configured iOS OAuth client bundle ID (`com.pwidd.upnext`). Error: `Client Id property 'iosClientId' must be defined to use Google auth on this platform.`
-- **Fix needed**: Build a **development build** (`npx expo run:ios` or `eas build --profile development`) instead of using Expo Go. The iOS client ID is correctly configured — it just needs to run in an app with the right bundle ID.
+### Google Sign-In — COMPLETE
+- **Tested and working** on dev build — both Sign In and Sign Up screens
+- **Apple Sign-In also re-verified** on dev build
+- **EAS secrets set** for development + production environments
+- **`expo-dev-client` installed** (required for dev builds)
 
 ### Files Modified This Session
 - `src/services/supabase/client.ts` — Cached config check, thenable fix, unknown property handling
@@ -69,10 +67,14 @@ Updated: 2026-02-17 | Branch: main
 | 10 | Apple Sign-In (App Store requirement) | DONE | |
 | 11 | Fix profile avatar letter for Apple Sign-In users | DONE | useFocusEffect + profile fetch |
 | 12 | Show streaming availability on search page | DONE | Both modals, with race condition guard |
-| 13 | Google Sign-In | IN PROGRESS | Code done, needs dev build to test |
+| 13 | Google Sign-In | DONE | Tested on dev build, TestFlight building |
 | 14 | Fix remaining review feedback (6 issues) | DONE | Cached config, thenable, unknown props, fetchPaginated, profile in context |
 | 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
-| 16 | Launch prep (app store assets) | PENDING | |
+| 16 | My Ratings shows "Show #12345" instead of names on first load | PENDING | Fixes itself after navigating around — stale/missing cache |
+| 17 | Library shows wrong episode count (e.g. 5/4) until tapped | PENDING | Data doesn't update until user clicks into the show |
+| 18 | Show air date alongside "in 4 days" / "tomorrow" countdown | PENDING | UX improvement for season episode list |
+| 19 | Add a way to test notifications without waiting for a real episode | PENDING | Needs test/debug trigger |
+| 20 | Launch prep (app store assets) | PENDING | | |
 
 ### Post-Launch (v1.1+)
 | # | Feature | Complexity | Notes |
@@ -81,12 +83,13 @@ Updated: 2026-02-17 | Branch: main
 | 2 | **Watch stats** | Medium | Hours watched, streaks, genre breakdown |
 | 3 | **Apple TV app** | High | Far down the road, after App Store launch |
 
-### Next Session — Google Sign-In Testing
-1. **Create a development build** — either `npx expo run:ios` (local) or `eas build --profile development --platform ios` (cloud). This gives an app with the correct bundle ID (`com.pwidd.upnext`).
-2. **Test Google Sign-In** on the dev build — should work since all OAuth config is correct.
-3. **Add EAS secrets** for production: `eas secret:create --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value "..." --scope project` (and same for iOS client ID).
-4. **Build new TestFlight** with Google Sign-In included.
-5. **Android Google credential** (optional, can defer) — needs SHA-1 from `eas credentials -p android`, then create Android OAuth client in Google Cloud Console.
+### Next Up
+1. **Fix stale data bugs** — Ratings show "Show #..." and library shows wrong episode counts on first load; data only updates after tapping in. Likely a cache/fetch timing issue.
+2. **Show air date alongside countdown** — Episode list says "in 4 days" but should also show the actual date
+3. **Notification testing** — Add a way to trigger a test notification without waiting for a real episode drop
+4. **Investigate Find People text input bug** — beta tester report, not yet reproduced
+5. **Launch prep** — App Store screenshots, description, metadata
+6. **Android Google credential** (optional) — needs SHA-1 from `eas credentials -p android`, then create Android OAuth client in Google Cloud Console
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
@@ -139,7 +142,7 @@ All 6 deferred issues from Claude Web reviews have been fixed:
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (zero errors)
-- **Build 11** on TestFlight (Apple Sign-In working)
+- **Build 12** on TestFlight (Google Sign-In + Apple Sign-In working)
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
