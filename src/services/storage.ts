@@ -183,6 +183,39 @@ class StorageService {
     } catch {
       // Index already exists, ignore error
     }
+
+    // Bug #22 fix: Deduplicate episode/movie watch history
+    // Duplicates were created by sync pulling back records and re-inserting with new IDs
+    await this.deduplicateWatchHistory();
+  }
+
+  // Remove duplicate watch history records (keeps the oldest record per unique watch)
+  private async deduplicateWatchHistory(): Promise<void> {
+    if (!this.db) return;
+
+    // Deduplicate episode watch history: keep oldest record per (show, season, episode, watched_at)
+    const epDupes = await this.db.runAsync(`
+      DELETE FROM episode_watch_history
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM episode_watch_history
+        GROUP BY show_tmdb_id, season_number, episode_number, watched_at
+      )
+    `);
+    if (epDupes.changes > 0) {
+      console.log(`[Storage] Cleaned up ${epDupes.changes} duplicate episode watch history records`);
+    }
+
+    // Deduplicate movie watch history: keep oldest record per (movie, watched_at)
+    const movieDupes = await this.db.runAsync(`
+      DELETE FROM movie_watch_history
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM movie_watch_history
+        GROUP BY movie_tmdb_id, watched_at
+      )
+    `);
+    if (movieDupes.changes > 0) {
+      console.log(`[Storage] Cleaned up ${movieDupes.changes} duplicate movie watch history records`);
+    }
   }
 
   // Tracked Shows
@@ -1427,6 +1460,41 @@ class StorageService {
     return id;
   }
 
+  // Import a watch from cloud sync (preserves original ID, no sync queue)
+  async importEpisodeWatchHistory(
+    id: string,
+    showTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number,
+    watchedAt: string,
+    episodeTitle?: string,
+    remoteId?: string
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Check if this exact ID already exists locally
+    const existing = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM episode_watch_history WHERE id = ?',
+      [id]
+    );
+    if (existing) return;
+
+    // Also check by content to prevent duplicates when local_id is null on remote
+    const existingContent = await this.db!.getFirstAsync<{ id: string }>(
+      `SELECT id FROM episode_watch_history
+       WHERE show_tmdb_id = ? AND season_number = ? AND episode_number = ? AND watched_at = ?`,
+      [showTmdbId, seasonNumber, episodeNumber, watchedAt]
+    );
+    if (existingContent) return;
+
+    await this.db!.runAsync(
+      `INSERT INTO episode_watch_history
+       (id, show_tmdb_id, season_number, episode_number, watched_at, episode_title, sync_status, remote_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'synced', ?)`,
+      [id, showTmdbId, seasonNumber, episodeNumber, watchedAt, episodeTitle ?? null, remoteId ?? null]
+    );
+  }
+
   // Get all watches for a specific episode
   async getEpisodeWatchHistory(
     showTmdbId: number,
@@ -1658,6 +1726,37 @@ class StorageService {
     });
 
     return id;
+  }
+
+  // Import a watch from cloud sync (preserves original ID, no sync queue)
+  async importMovieWatchHistory(
+    id: string,
+    movieTmdbId: number,
+    watchedAt: string,
+    remoteId?: string
+  ): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Check if this exact ID already exists locally
+    const existing = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM movie_watch_history WHERE id = ?',
+      [id]
+    );
+    if (existing) return;
+
+    // Also check by content to prevent duplicates when local_id is null on remote
+    const existingContent = await this.db!.getFirstAsync<{ id: string }>(
+      'SELECT id FROM movie_watch_history WHERE movie_tmdb_id = ? AND watched_at = ?',
+      [movieTmdbId, watchedAt]
+    );
+    if (existingContent) return;
+
+    await this.db!.runAsync(
+      `INSERT INTO movie_watch_history
+       (id, movie_tmdb_id, watched_at, sync_status, remote_id)
+       VALUES (?, ?, ?, 'synced', ?)`,
+      [id, movieTmdbId, watchedAt, remoteId ?? null]
+    );
   }
 
   // Get all watches for a specific movie

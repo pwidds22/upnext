@@ -135,8 +135,8 @@ export const episodeWatchHistoryService = {
     return data ?? [];
   },
 
-  // Insert a new watch (no upsert - always creates new record)
-  async insertWatch(userId: string, watch: EpisodeWatchHistory): Promise<UserEpisodeWatchHistoryRow> {
+  // Insert a new watch (skips duplicates via unique index)
+  async insertWatch(userId: string, watch: EpisodeWatchHistory): Promise<UserEpisodeWatchHistoryRow | null> {
     const row = toEpisodeSupabaseRow(userId, watch);
 
     const { data, error } = await supabase
@@ -145,23 +145,22 @@ export const episodeWatchHistoryService = {
       .select()
       .single();
 
+    // 23505 = unique_violation — record already exists, skip silently
+    if (error && error.code === '23505') return null;
     if (error) throw error;
     return data;
   },
 
-  // Batch insert watches
+  // Batch insert watches (inserts one by one to skip duplicates gracefully)
   async insertWatches(userId: string, watches: EpisodeWatchHistory[]): Promise<UserEpisodeWatchHistoryRow[]> {
     if (watches.length === 0) return [];
 
-    const rows = watches.map((w) => toEpisodeSupabaseRow(userId, w));
-
-    const { data, error } = await supabase
-      .from('user_episode_watch_history')
-      .insert(rows)
-      .select();
-
-    if (error) throw error;
-    return data ?? [];
+    const results: UserEpisodeWatchHistoryRow[] = [];
+    for (const w of watches) {
+      const result = await this.insertWatch(userId, w);
+      if (result) results.push(result);
+    }
+    return results;
   },
 
   // Soft delete a specific watch by remote ID
@@ -279,8 +278,8 @@ export const movieWatchHistoryService = {
     return data ?? [];
   },
 
-  // Insert a new watch
-  async insertWatch(userId: string, watch: MovieWatchHistory): Promise<UserMovieWatchHistoryRow> {
+  // Insert a new watch (skips duplicates via unique index)
+  async insertWatch(userId: string, watch: MovieWatchHistory): Promise<UserMovieWatchHistoryRow | null> {
     const row = toMovieSupabaseRow(userId, watch);
 
     const { data, error } = await supabase
@@ -289,23 +288,22 @@ export const movieWatchHistoryService = {
       .select()
       .single();
 
+    // 23505 = unique_violation — record already exists, skip silently
+    if (error && error.code === '23505') return null;
     if (error) throw error;
     return data;
   },
 
-  // Batch insert watches
+  // Batch insert watches (inserts one by one to skip duplicates gracefully)
   async insertWatches(userId: string, watches: MovieWatchHistory[]): Promise<UserMovieWatchHistoryRow[]> {
     if (watches.length === 0) return [];
 
-    const rows = watches.map((w) => toMovieSupabaseRow(userId, w));
-
-    const { data, error } = await supabase
-      .from('user_movie_watch_history')
-      .insert(rows)
-      .select();
-
-    if (error) throw error;
-    return data ?? [];
+    const results: UserMovieWatchHistoryRow[] = [];
+    for (const w of watches) {
+      const result = await this.insertWatch(userId, w);
+      if (result) results.push(result);
+    }
+    return results;
   },
 
   // Soft delete a specific watch by remote ID

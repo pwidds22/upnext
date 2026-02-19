@@ -367,15 +367,17 @@ export const syncService = {
         await episodeWatchHistoryService.insertWatches(userId, epHistoryToPush);
       }
 
-      // Pull remote-only episode watch history
+      // Pull remote-only episode watch history (import without re-queuing to sync)
       for (const remoteWatch of remoteEpHistory) {
         if (!localEpHistoryIds.has(remoteWatch.id)) {
-          await storageService.addEpisodeWatchHistory(
+          await storageService.importEpisodeWatchHistory(
+            remoteWatch.id,
             remoteWatch.showTmdbId,
             remoteWatch.seasonNumber,
             remoteWatch.episodeNumber,
             remoteWatch.watchedAt,
-            remoteWatch.episodeTitle
+            remoteWatch.episodeTitle,
+            remoteWatch.remoteId
           );
         }
       }
@@ -396,12 +398,14 @@ export const syncService = {
         await movieWatchHistoryService.insertWatches(userId, movieHistoryToPush);
       }
 
-      // Pull remote-only movie watch history
+      // Pull remote-only movie watch history (import without re-queuing to sync)
       for (const remoteWatch of remoteMovieHistory) {
         if (!localMovieHistoryIds.has(remoteWatch.id)) {
-          await storageService.addMovieWatchHistory(
+          await storageService.importMovieWatchHistory(
+            remoteWatch.id,
             remoteWatch.movieTmdbId,
-            remoteWatch.watchedAt
+            remoteWatch.watchedAt,
+            remoteWatch.remoteId
           );
         }
       }
@@ -637,12 +641,16 @@ export const syncService = {
         continue;
       }
 
-      await storageService.addEpisodeWatchHistory(
+      // Use import method to avoid re-queuing to sync and to dedup by local_id
+      const localId = remoteRow.local_id ?? `${remoteRow.tmdb_show_id}-${remoteRow.season_number}-${remoteRow.episode_number}-${Date.now()}`;
+      await storageService.importEpisodeWatchHistory(
+        localId,
         remoteRow.tmdb_show_id,
         remoteRow.season_number,
         remoteRow.episode_number,
         remoteRow.watched_at,
-        remoteRow.episode_title ?? undefined
+        remoteRow.episode_title ?? undefined,
+        remoteRow.id
       );
       if (remoteRow.local_id) {
         await this.removeFromQueueIfExists('episode_watch_history', remoteRow.local_id, 'create');
@@ -664,9 +672,13 @@ export const syncService = {
         continue;
       }
 
-      await storageService.addMovieWatchHistory(
+      // Use import method to avoid re-queuing to sync and to dedup by local_id
+      const localId = remoteRow.local_id ?? `movie-${remoteRow.tmdb_movie_id}-${Date.now()}`;
+      await storageService.importMovieWatchHistory(
+        localId,
         remoteRow.tmdb_movie_id,
-        remoteRow.watched_at
+        remoteRow.watched_at,
+        remoteRow.id
       );
       if (remoteRow.local_id) {
         await this.removeFromQueueIfExists('movie_watch_history', remoteRow.local_id, 'create');
