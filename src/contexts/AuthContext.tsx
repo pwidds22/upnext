@@ -18,7 +18,7 @@ interface AuthContextType {
   signInWithGoogleToken: (idToken: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (userId?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,10 +30,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const isConfigured = isSupabaseConfigured();
 
-  const refreshProfile = useCallback(async () => {
-    if (!user) return;
+  const refreshProfile = useCallback(async (userId?: string) => {
+    const id = userId || user?.id;
+    if (!id) return;
     try {
-      const data = await followsService.getUserProfile(user.id);
+      const data = await followsService.getUserProfile(id);
       setProfile(data);
     } catch (e) {
       console.error('Failed to refresh profile:', e);
@@ -88,9 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, username?: string) => {
-    const { error } = await authService.signUp(email, password, username);
+    const { user: newUser, error } = await authService.signUp(email, password, username);
+    if (!error && newUser) {
+      // Refresh profile after signUp completes — the automatic refresh from
+      // onAuthStateChange races with the profile update and loads stale data
+      await refreshProfile(newUser.id);
+    }
     return { error: error?.message ?? null };
-  }, []);
+  }, [refreshProfile]);
 
   const signInWithApple = useCallback(async () => {
     const { error } = await authService.signInWithApple();
