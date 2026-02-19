@@ -1,62 +1,42 @@
 # UpNext - Session State
 Updated: 2026-02-18 | Branch: main
 
-## Status: Build 12 on TestFlight — Fixed 2 bugs, 2 UX improvements (#16-19)
+## Status: Build 13 building — 2 bug fixes, App Store Connect setup in progress
 
 ### This Session
-- **Fixed Bug #16: Ratings "Show #12345"** — Added TMDB fallback in ProfileScreen when show not in local SQLite
-- **Fixed Bug #17: Library wrong episode count (5/4)** — Three-part fix:
-  - Display clamp: `Math.max(rawTotal, watchedCount)` prevents N/M where N>M
-  - Background refresh: stale shows auto-refresh aired episodes from TMDB
-  - Prevention: store `airedEpisodes` when adding completed shows
-- **Task #18: Air dates alongside countdown** — Upcoming episodes now show "Tomorrow · Wed, Feb 19" instead of just "Tomorrow". Applied to both EpisodeRow and UpNextScreen.
-- **Task #19: Test notification button** — Added "Send Test Notification" button to NotificationsScreen. Sends a sample notification immediately with haptic feedback.
+- **Fixed Bug #15: Find People text input** (`src/screens/UserSearchScreen.tsx`) — Added KeyboardAvoidingView, autoFocus, keyboardDismissMode. Reviewed by Claude Web: PASS.
+- **Fixed Bug #21: Signup profile race condition** (`src/contexts/AuthContext.tsx`) — After signup, profile showed email prefix ("testing") instead of chosen username. Root cause: `onAuthStateChange` fired `refreshProfile()` before profile update completed. Fix: explicit `refreshProfile(newUser.id)` after `authService.signUp()` returns.
+- **App Store Connect setup** (via Claude Web extension):
+  - Privacy Policy + Support pages created on Notion
+  - App Information, Pricing, Privacy, Version info all configured
+  - Remaining: App name (taken), screenshots, test account credentials, export compliance, marketing URL cleanup
 
 ### Files Modified This Session
-- `src/screens/ProfileScreen.tsx` — TMDB fallback for rating enrichment
-- `src/screens/MyShowsScreen.tsx` — Display clamp + background refresh for stale aired episodes
-- `src/screens/SearchScreen.tsx` — Store airedEpisodes at add time for completed shows
-- `src/components/EpisodeRow.tsx` — Show air date alongside countdown for upcoming episodes
-- `src/screens/UpNextScreen.tsx` — Show air date alongside countdown in Coming Soon section
-- `src/screens/NotificationsScreen.tsx` — Send Test Notification button with permission checks
+- `src/screens/UserSearchScreen.tsx` — KeyboardAvoidingView + autoFocus + keyboardDismissMode
+- `src/contexts/AuthContext.tsx` — `refreshProfile(userId?)` param + post-signup refresh
 
-### What Was Completed
-1. **Cached `isSupabaseConfigured()`** (`src/services/supabase/client.ts:23-33`) — IIFE computes result once at module init.
+### CRITICAL BUG: Episode Watch Count Multiplying (#22)
+- **Problem**: Marking an episode as watched once causes the watch count to keep growing (e.g., shows 12 watches for an episode only watched once). Watch history shows the same date/time duplicated many times.
+- **Severity**: HIGH — corrupts user data, makes rewatch tracking unreliable
+- **Reproduction**: Add new shows to library, mark episodes as watched. Watch count keeps incrementing on its own.
+- **Likely areas to investigate**:
+  - `src/services/storage.ts` — SQLite watch history insert logic (check for duplicate inserts)
+  - `src/services/supabase/` — Cloud sync may be re-inserting watch records on each sync cycle
+  - Sync engine — bidirectional sync could be creating duplicates (local→cloud→local loop)
+  - Check if `INSERT OR REPLACE` anti-pattern is involved (see CLAUDE.md anti-patterns)
+  - Check unique constraints on watch_history table
+- **Priority**: Must fix before App Store submission — this is user-facing data corruption
 
-2. **Fixed no-op builder thenable** (`src/services/supabase/client.ts:41-54`) — Backed by `Promise.resolve()` with `.then/.catch/.finally` forwarding.
-
-3. **Unknown Supabase properties return chainable no-op** (`src/services/supabase/client.ts:92,104`) — `supabase.storage`, `.functions`, `.realtime` now return chainable no-op proxy.
-
-4. **Extracted `fetchPaginated<T>()` helper** (`src/services/tmdb.ts:88-116`) — 8 pagination methods reduced to one-liners.
-
-5. **Profile in AuthContext** (`src/contexts/AuthContext.tsx:29,33-50`) — `profile` and `refreshProfile()` on context.
-
-6. **ProfileButton simplified** (`src/navigation/AppNavigator.tsx:69`) — Just `const { user, profile } = useAuth()`.
-
-7. **ProfileScreen wired up** (`src/screens/ProfileScreen.tsx:309,696`) — Calls `refreshAuthProfile()` after edit.
-
-8. **Google Sign-In button on SignUpScreen** (`src/screens/auth/SignUpScreen.tsx:59-94,219-234`) — Full OAuth flow matching SignInScreen pattern.
-
-9. **Stale refresh token handling** (`src/contexts/AuthContext.tsx:62-69`) — Catches invalid refresh token errors on startup, clears session gracefully.
-
-10. **Google env vars added** (`.env:9-11`) — Web + iOS client IDs configured, Android empty.
-
-### Google Sign-In — COMPLETE
-- **Tested and working** on dev build — both Sign In and Sign Up screens
-- **Apple Sign-In also re-verified** on dev build
-- **EAS secrets set** for development + production environments
-- **`expo-dev-client` installed** (required for dev builds)
-
-### Files Modified This Session
-- `src/services/supabase/client.ts` — Cached config check, thenable fix, unknown property handling
-- `src/services/tmdb.ts` — `fetchPaginated` helper, 8 methods refactored
-- `src/contexts/AuthContext.tsx` — Profile state + refreshProfile + stale token handling
-- `src/navigation/AppNavigator.tsx` — Simplified ProfileButton
-- `src/screens/ProfileScreen.tsx` — Context refresh after profile edit
-- `src/screens/auth/SignInScreen.tsx` — Google OAuth (already had it, no changes needed)
-- `src/screens/auth/SignUpScreen.tsx` — Added Google Sign-In button + OAuth flow
-- `.env` — Google Sign-In client IDs added
-- `_SESSION.md` — Session notes
+### Next Session Priority Order
+1. **Fix episode watch count multiplying bug (#22)** — CRITICAL, blocks launch
+2. **App Store Connect remaining items**:
+   - Resolve app name ("UpNext" is taken — try "UpNext: TV Tracker" or alternatives)
+   - Clear marketing URL (still shows fake upnext.app)
+   - Add test account credentials (test@test.com / test1234)
+   - Confirm export compliance (no encryption)
+   - Screenshots
+3. **Create test account** — test@test.com / test1234 for Apple reviewer
+4. **Submit for review** once build 13 is verified
 
 ## Pre-Launch Roadmap
 
@@ -77,12 +57,14 @@ Updated: 2026-02-18 | Branch: main
 | 12 | Show streaming availability on search page | DONE | Both modals, with race condition guard |
 | 13 | Google Sign-In | DONE | Tested on dev build, TestFlight building |
 | 14 | Fix remaining review feedback (6 issues) | DONE | Cached config, thenable, unknown props, fetchPaginated, profile in context |
-| 15 | Investigate: Find People text input not working | PENDING | Beta tester report, not reproducible yet |
+| 15 | Fix Find People text input (KeyboardAvoidingView) | DONE | Defensive fix: KAV + autoFocus + keyboardDismissMode |
 | 16 | My Ratings shows "Show #12345" instead of names on first load | DONE | TMDB fallback when show not in local SQLite |
 | 17 | Library shows wrong episode count (e.g. 5/4) until tapped | DONE | Display clamp + background refresh + store at add time |
 | 18 | Show air date alongside "in 4 days" / "tomorrow" countdown | DONE | Both EpisodeRow and UpNextScreen |
 | 19 | Add a way to test notifications without waiting for a real episode | DONE | Test button on NotificationsScreen |
-| 20 | Launch prep (app store assets) | PENDING | | |
+| 20 | Launch prep (app store assets) | IN PROGRESS | App Store Connect mostly configured |
+| 21 | Fix signup profile showing email prefix | DONE | Race condition: refreshProfile after signUp |
+| 22 | Fix episode watch count multiplying | PENDING | CRITICAL — watch history duplicating |
 
 ### Post-Launch (v1.1+)
 | # | Feature | Complexity | Notes |
@@ -91,11 +73,15 @@ Updated: 2026-02-18 | Branch: main
 | 2 | **Watch stats** | Medium | Hours watched, streaks, genre breakdown |
 | 3 | **Apple TV app** | High | Far down the road, after App Store launch |
 
-### Next Up
-1. **Run /review** — Claude Web review was down this session; run review next session before committing further
-2. **Investigate Find People text input bug** — beta tester report, not yet reproduced
-3. **Launch prep** — App Store screenshots, description, metadata
-4. **Android Google credential** (optional) — needs SHA-1 from `eas credentials -p android`, then create Android OAuth client in Google Cloud Console
+### App Store Connect Status
+- **Privacy Policy**: Notion page (published, URL set in ASC)
+- **Support Page**: Notion page (published, URL set in ASC)
+- **Description, Keywords, Promo Text**: Written and saved
+- **Age Rating**: 4+ configured
+- **Pricing**: Free, all territories
+- **App Privacy**: 4 data types declared
+- **Build**: Build 12 selected (Build 13 building with latest fixes)
+- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
@@ -106,24 +92,7 @@ Updated: 2026-02-18 | Branch: main
 - **Google Play Developer Account**: Created (personal)
 
 ### Open Questions
-- **Email change for Apple Sign-In users**: Apple provides a private relay email (e.g. z8ry6...@privaterelay.appleid.com). Should we allow users to change their email, or is this not possible/necessary since Apple manages it?
-
-### Bug: Find People Text Input (Unconfirmed)
-- **Problem**: Beta tester reports they can't enter text on the Find People page
-- **Status**: Not reproducible by developer — needs investigation
-- **Possible causes**: Keyboard avoidance issue, input focus issue, platform-specific bug
-
-### Review Feedback (Resolved)
-All 6 deferred issues from Claude Web reviews have been fixed:
-
-| # | Priority | Issue | Status |
-|---|----------|-------|--------|
-| 2 | Medium | `isSupabaseConfigured()` re-parses URL on every property access | DONE — cached via IIFE |
-| 3 | Medium | No-op builder `.then` doesn't fully conform to thenable protocol | DONE — backed by Promise.resolve() |
-| 4 | Medium | Returns `undefined` for unknown Supabase properties | DONE — returns chainable no-op proxy |
-| 5 | Low | Inconsistent error behavior — some TMDB methods throw, others return `[]` | DONE — documented split, extracted helper |
-| 6 | Low | TMDB pagination methods duplicate fetch+error handling 8 times | DONE — extracted fetchPaginated<T>() |
-| 7 | Medium | Move user profile to AuthContext (stale avatar after profile edit) | DONE — profile in context |
+- **Email change for Apple Sign-In users**: Apple provides a private relay email. Allow users to change, or not necessary?
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -133,7 +102,7 @@ All 6 deferred issues from Claude Web reviews have been fixed:
 
 ### Completed Features
 - **Core** — Search, tracking, episodes, sync engine
-- **Auth** — Signup, signin (email or username), Apple Sign-In, Google Sign-In (code done)
+- **Auth** — Signup, signin (email or username), Apple Sign-In, Google Sign-In
 - **Social** — Follow system, activity feed, friend ratings
 - **Ratings** — 5-star system with half-star toggle, episode reactions
 - **Recommendations** — Trending + personalized with dismiss feature
@@ -148,6 +117,7 @@ All 6 deferred issues from Claude Web reviews have been fixed:
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (zero errors)
+- **Build 13** building (signup fix + Find People fix)
 - **Build 12** on TestFlight (Google Sign-In + Apple Sign-In working)
 
 ## External Config Notes
@@ -156,5 +126,5 @@ All 6 deferred issues from Claude Web reviews have been fixed:
 - **Google Play**: Developer account created (personal, $25)
 
 ## Known Issues
+- **CRITICAL: Episode watch count multiplying** — see Bug #22 above
 - See `TECH_DEBT.md` for full technical debt tracking
-- See Review Feedback section above for deferred fixes
