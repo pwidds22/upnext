@@ -1,34 +1,26 @@
 # UpNext - Session State
-Updated: 2026-02-18 | Branch: main
+Updated: 2026-02-19 | Branch: main
 
-## Status: Build 13 building — 2 bug fixes, App Store Connect setup in progress
+## Status: Bug #22 fixed — all critical bugs resolved, ready for Build 14
 
 ### This Session
-- **Fixed Bug #15: Find People text input** (`src/screens/UserSearchScreen.tsx`) — Added KeyboardAvoidingView, autoFocus, keyboardDismissMode. Reviewed by Claude Web: PASS.
-- **Fixed Bug #21: Signup profile race condition** (`src/contexts/AuthContext.tsx`) — After signup, profile showed email prefix ("testing") instead of chosen username. Root cause: `onAuthStateChange` fired `refreshProfile()` before profile update completed. Fix: explicit `refreshProfile(newUser.id)` after `authService.signUp()` returns.
-- **App Store Connect setup** (via Claude Web extension):
-  - Privacy Policy + Support pages created on Notion
-  - App Information, Pricing, Privacy, Version info all configured
-  - Remaining: App name (taken), screenshots, test account credentials, export compliance, marketing URL cleanup
+- **Fixed Bug #22: Episode watch count multiplying** — CRITICAL bug where marking an episode watched once caused the count to grow to 14x due to a sync feedback loop. Root cause: `pullChanges` called `addEpisodeWatchHistory()` which generated new IDs and re-queued to sync, creating push→pull→insert→push cycles.
+  - Added `importEpisodeWatchHistory()` and `importMovieWatchHistory()` to `src/services/storage.ts` — preserve original IDs, check for duplicates by both ID and content, don't re-queue to sync
+  - Added `deduplicateWatchHistory()` to `src/services/storage.ts` — runs on app init, cleans up existing local duplicates
+  - Updated 4 sync pull paths in `src/services/supabase/sync.ts` to use `import*` methods instead of `add*`
+  - Updated `insertWatch`/`insertWatches` in `src/services/supabase/watchHistory.ts` to catch `23505` unique violations
+  - Cleaned 1,328 duplicate rows in Supabase (1,807 → 479), added 4 unique indexes
+  - Created `supabase/migrations/015_fix_watch_history_duplicates.sql` (already applied via MCP)
+  - Reviewed by Claude Web: **PASS** — one medium finding (null local_id content dedup) fixed
 
 ### Files Modified This Session
-- `src/screens/UserSearchScreen.tsx` — KeyboardAvoidingView + autoFocus + keyboardDismissMode
-- `src/contexts/AuthContext.tsx` — `refreshProfile(userId?)` param + post-signup refresh
-
-### CRITICAL BUG: Episode Watch Count Multiplying (#22)
-- **Problem**: Marking an episode as watched once causes the watch count to keep growing (e.g., shows 12 watches for an episode only watched once). Watch history shows the same date/time duplicated many times.
-- **Severity**: HIGH — corrupts user data, makes rewatch tracking unreliable
-- **Reproduction**: Add new shows to library, mark episodes as watched. Watch count keeps incrementing on its own.
-- **Likely areas to investigate**:
-  - `src/services/storage.ts` — SQLite watch history insert logic (check for duplicate inserts)
-  - `src/services/supabase/` — Cloud sync may be re-inserting watch records on each sync cycle
-  - Sync engine — bidirectional sync could be creating duplicates (local→cloud→local loop)
-  - Check if `INSERT OR REPLACE` anti-pattern is involved (see CLAUDE.md anti-patterns)
-  - Check unique constraints on watch_history table
-- **Priority**: Must fix before App Store submission — this is user-facing data corruption
+- `src/services/storage.ts` — `importEpisodeWatchHistory()`, `importMovieWatchHistory()`, `deduplicateWatchHistory()`
+- `src/services/supabase/sync.ts` — 4 sync pull paths use import methods
+- `src/services/supabase/watchHistory.ts` — `insertWatch` catches 23505, `insertWatches` sequential
+- `supabase/migrations/015_fix_watch_history_duplicates.sql` — Supabase cleanup + unique indexes (already applied)
 
 ### Next Session Priority Order
-1. **Fix episode watch count multiplying bug (#22)** — CRITICAL, blocks launch
+1. **Build 14** — Create new EAS build with Bug #22 fix, verify on TestFlight
 2. **App Store Connect remaining items**:
    - Resolve app name ("UpNext" is taken — try "UpNext: TV Tracker" or alternatives)
    - Clear marketing URL (still shows fake upnext.app)
@@ -36,7 +28,7 @@ Updated: 2026-02-18 | Branch: main
    - Confirm export compliance (no encryption)
    - Screenshots
 3. **Create test account** — test@test.com / test1234 for Apple reviewer
-4. **Submit for review** once build 13 is verified
+4. **Submit for review** once build 14 is verified
 
 ## Pre-Launch Roadmap
 
@@ -64,7 +56,7 @@ Updated: 2026-02-18 | Branch: main
 | 19 | Add a way to test notifications without waiting for a real episode | DONE | Test button on NotificationsScreen |
 | 20 | Launch prep (app store assets) | IN PROGRESS | App Store Connect mostly configured |
 | 21 | Fix signup profile showing email prefix | DONE | Race condition: refreshProfile after signUp |
-| 22 | Fix episode watch count multiplying | PENDING | CRITICAL — watch history duplicating |
+| 22 | Fix episode watch count multiplying | DONE | Sync feedback loop, cleaned 1328 Supabase dupes |
 
 ### Post-Launch (v1.1+)
 | # | Feature | Complexity | Notes |
@@ -80,7 +72,7 @@ Updated: 2026-02-18 | Branch: main
 - **Age Rating**: 4+ configured
 - **Pricing**: Free, all territories
 - **App Privacy**: 4 data types declared
-- **Build**: Build 12 selected (Build 13 building with latest fixes)
+- **Build**: Build 13 on TestFlight (Build 14 needed with Bug #22 fix)
 - **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
 
 ### Google Cloud Console Status
@@ -98,6 +90,7 @@ Updated: 2026-02-18 | Branch: main
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
 - Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at`
 - Schema: `tmdb_id` PK vs UNIQUE INDEX contradiction in `tracked_shows`
+- `deduplicateWatchHistory` runs on every init (cheap at current scale, add migration flag later)
 - See `TECH_DEBT.md` for full medium/low priority debt
 
 ### Completed Features
@@ -116,9 +109,9 @@ Updated: 2026-02-18 | Branch: main
 ## Build Info
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
-- TypeScript compiles cleanly (zero errors)
-- **Build 13** building (signup fix + Find People fix)
-- **Build 12** on TestFlight (Google Sign-In + Apple Sign-In working)
+- TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
+- **Build 14** needed (Bug #22 fix)
+- **Build 13** on TestFlight (signup fix + Find People fix)
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
@@ -126,5 +119,4 @@ Updated: 2026-02-18 | Branch: main
 - **Google Play**: Developer account created (personal, $25)
 
 ## Known Issues
-- **CRITICAL: Episode watch count multiplying** — see Bug #22 above
 - See `TECH_DEBT.md` for full technical debt tracking
