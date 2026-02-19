@@ -1,34 +1,31 @@
 # UpNext - Session State
 Updated: 2026-02-19 | Branch: main
 
-## Status: Bug #22 fixed — all critical bugs resolved, ready for Build 14
+## Status: Build 14 complete — ready for TestFlight submit and App Store prep
 
 ### This Session
-- **Fixed Bug #22: Episode watch count multiplying** — CRITICAL bug where marking an episode watched once caused the count to grow to 14x due to a sync feedback loop. Root cause: `pullChanges` called `addEpisodeWatchHistory()` which generated new IDs and re-queued to sync, creating push→pull→insert→push cycles.
-  - Added `importEpisodeWatchHistory()` and `importMovieWatchHistory()` to `src/services/storage.ts` — preserve original IDs, check for duplicates by both ID and content, don't re-queue to sync
-  - Added `deduplicateWatchHistory()` to `src/services/storage.ts` — runs on app init, cleans up existing local duplicates
-  - Updated 4 sync pull paths in `src/services/supabase/sync.ts` to use `import*` methods instead of `add*`
-  - Updated `insertWatch`/`insertWatches` in `src/services/supabase/watchHistory.ts` to catch `23505` unique violations
-  - Cleaned 1,328 duplicate rows in Supabase (1,807 → 479), added 4 unique indexes
-  - Created `supabase/migrations/015_fix_watch_history_duplicates.sql` (already applied via MCP)
-  - Reviewed by Claude Web: **PASS** — one medium finding (null local_id content dedup) fixed
+- **Build 14 created on EAS** — iOS production build with all 22 bug fixes including Bug #22 (watch history dedup)
+  - Build number auto-incremented 13 → 14
+  - EAS build: https://expo.dev/accounts/pwidds/projects/upnext/builds/100b49df-fb48-49a8-811a-c8fd560a1ea8
+  - IPA artifact: https://expo.dev/artifacts/eas/2YUJASUYrdNAtUWc5SZ63Y.ipa
+  - Pre-build checks passed: expo-doctor 17/17, git clean, TS clean (pre-existing NotificationsScreen type error only)
+- **TestFlight submit needs `ascAppId`** — `eas submit --platform ios --latest` fails in non-interactive mode without it. Add `ascAppId` to `eas.json` submit profile for future non-interactive submits.
+- **Build credits at 97%** for this month — be mindful of additional builds
 
 ### Files Modified This Session
-- `src/services/storage.ts` — `importEpisodeWatchHistory()`, `importMovieWatchHistory()`, `deduplicateWatchHistory()`
-- `src/services/supabase/sync.ts` — 4 sync pull paths use import methods
-- `src/services/supabase/watchHistory.ts` — `insertWatch` catches 23505, `insertWatches` sequential
-- `supabase/migrations/015_fix_watch_history_duplicates.sql` — Supabase cleanup + unique indexes (already applied)
+- No code changes — this was a build-only session
 
 ### Next Session Priority Order
-1. **Build 14** — Create new EAS build with Bug #22 fix, verify on TestFlight
-2. **App Store Connect remaining items**:
+1. **Submit Build 14 to TestFlight** — Run `eas submit --platform ios --latest` in interactive terminal (needs Apple auth). Then add `ascAppId` to `eas.json` for future submits.
+2. **Verify Build 14 on TestFlight** — Install, test Bug #22 fix (watch count stays at 1), smoke test all features
+3. **App Store Connect remaining items**:
    - Resolve app name ("UpNext" is taken — try "UpNext: TV Tracker" or alternatives)
    - Clear marketing URL (still shows fake upnext.app)
    - Add test account credentials (test@test.com / test1234)
    - Confirm export compliance (no encryption)
    - Screenshots
-3. **Create test account** — test@test.com / test1234 for Apple reviewer
-4. **Submit for review** once build 14 is verified
+4. **Create test account** — test@test.com / test1234 for Apple reviewer
+5. **Submit for review** once build 14 is verified
 
 ## Pre-Launch Roadmap
 
@@ -72,8 +69,8 @@ Updated: 2026-02-19 | Branch: main
 - **Age Rating**: 4+ configured
 - **Pricing**: Free, all territories
 - **App Privacy**: 4 data types declared
-- **Build**: Build 13 on TestFlight (Build 14 needed with Bug #22 fix)
-- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
+- **Build**: Build 14 built on EAS, pending TestFlight submit
+- **Still needs**: TestFlight submit, app name resolution, screenshots, test account, export compliance, marketing URL cleanup
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
@@ -110,8 +107,8 @@ Updated: 2026-02-19 | Branch: main
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
-- **Build 14** needed (Bug #22 fix)
-- **Build 13** on TestFlight (signup fix + Find People fix)
+- **Build 14** built on EAS (all 22 fixes), pending TestFlight submit
+- **Build 13** currently on TestFlight
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
