@@ -26,6 +26,7 @@ import UserListScreen from '../screens/UserListScreen';
 import AboutScreen from '../screens/AboutScreen';
 import SyncSettingsScreen from '../screens/SyncSettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import ImportScreen from '../screens/ImportScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -233,6 +234,11 @@ export default function AppNavigator() {
           name="Notifications"
           component={NotificationsScreen}
           options={{ title: 'Notifications' }}
+        />
+        <Stack.Screen
+          name="Import"
+          component={ImportScreen}
+          options={{ title: 'Import Data' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

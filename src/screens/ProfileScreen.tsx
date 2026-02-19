@@ -626,6 +626,15 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
+            onPress={() => navigation.navigate('Import')}
+          >
+            <Ionicons name="cloud-upload-outline" size={22} color={COLORS.text} />
+            <Text style={styles.menuItemText}>Import Data</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
             onPress={handleExportData}
             disabled={isExporting}
           >

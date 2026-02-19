@@ -1,32 +1,59 @@
 # UpNext - Session State
 Updated: 2026-02-19 | Branch: main
 
-## Status: Build 14 on TestFlight — ready for verification and App Store prep
+## Status: Phase 1 (Import Infrastructure) COMPLETE — reviewed and fixes applied
 
 ### This Session
-- **Build 14 created on EAS and submitted to TestFlight** — iOS production build with all 22 bug fixes including Bug #22 (watch history dedup)
-  - Build number auto-incremented 13 → 14
-  - EAS build: https://expo.dev/accounts/pwidds/projects/upnext/builds/100b49df-fb48-49a8-811a-c8fd560a1ea8
-  - Submission: https://expo.dev/accounts/pwidds/projects/upnext/submissions/bb4159b4-504a-4f31-87eb-c7604ee270b5
-  - Pre-build checks passed: expo-doctor 17/17, git clean, TS clean (pre-existing NotificationsScreen type error only)
-- **Added `ascAppId` to `eas.json`** — `6758222275`, enables non-interactive `eas submit` going forward
-- **Added build discipline anti-pattern to `CLAUDE.md`** — batch fixes, don't build after every single fix
-- **Build credits at 97%** for this month — be mindful of additional builds
+- **Phase 1: Import Infrastructure — COMPLETE**
+  - Built full plugin-based import framework with NormalizedImportData common format
+  - 5 import source parsers: UpNext JSON, Trakt, TV Time (CSV + JSON eras), SIMKL, Letterboxd
+  - TMDB ID resolver with persistent SQLite cache + resolution chain (IMDB → TVDB → title search)
+  - Import UI screen with progress bar, results view, unresolved items display
+  - Navigation integration (ProfileScreen → Import Data menu item)
+  - Installed expo-document-picker and jszip dependencies
+- **Claude Web review completed — 10 fixes applied across 7 files:**
+  - Fixed INSERT OR REPLACE anti-pattern in tmdbIdResolver.ts
+  - Added fetchWithTimeout (15s) to all network calls
+  - Added max retry limits (3) to prevent infinite loops
+  - Fixed Season 0 being dropped (isNaN check instead of falsy check)
+  - Fixed timezone bug in TV Time date parsing (Date.UTC)
+  - Removed input mutation in import orchestrator
+  - Added date format validation in Letterboxd parser
+  - Honest ratings skip message (not yet implemented)
+  - Array.isArray() guards in UpNext JSON parser
+  - Simplified importEpisode to avoid TOCTOU race condition
+- TypeScript compiles cleanly (pre-existing NotificationsScreen type error only)
+
+### Files Created This Session
+- `src/services/tmdbIdResolver.ts` — ID mapping cache + TMDB resolution chain
+- `src/services/import.ts` — Main import orchestrator
+- `src/services/importSources/upnextJson.ts` — UpNext JSON export parser
+- `src/services/importSources/trakt.ts` — Trakt API import (OAuth)
+- `src/services/importSources/tvtime.ts` — TV Time CSV + JSON parser
+- `src/services/importSources/simkl.ts` — SIMKL API import (OAuth)
+- `src/services/importSources/letterboxd.ts` — Letterboxd CSV parser
+- `src/screens/ImportScreen.tsx` — Import UI screen
 
 ### Files Modified This Session
-- `eas.json` — Added `ascAppId: "6758222275"` to submit profile
-- `CLAUDE.md` — Added "Builds" anti-pattern section (batch fixes, check credits)
+- `src/types/index.ts` — Added ~117 lines of import types + Import route
+- `src/navigation/AppNavigator.tsx` — Added ImportScreen route
+- `src/screens/ProfileScreen.tsx` — Added "Import Data" menu item
+- `package.json` — Added expo-document-picker, jszip
 
 ### Next Session Priority Order
-1. **Verify Build 14 on TestFlight** — Install, test Bug #22 fix (watch count stays at 1), smoke test all features
-2. **App Store Connect remaining items**:
-   - Resolve app name ("UpNext" is taken — try "UpNext: TV Tracker" or alternatives)
-   - Clear marketing URL (still shows fake upnext.app)
-   - Add test account credentials (test@test.com / test1234)
-   - Confirm export compliance (no encryption)
-   - Screenshots
-3. **Create test account** — test@test.com / test1234 for Apple reviewer
-4. **Submit for review** once build 14 is verified
+1. **Phase 2: Stats Dashboard** — Hero premium feature (#1 conversion driver)
+2. **Phase 3: RevenueCat + Subscriptions** — Can be built in parallel with Phase 2
+3. **Phase 4: Paywall + Reverse Trial** — Requires Phase 3
+4. **Phase 5: Feature Gating** — Requires Phase 2 + 3
+5. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
+6. **Phase 7: Launch Prep** — Requires all above
+
+### Import-Specific Remaining Work
+- Trakt OAuth flow (needs TRAKT_CLIENT_ID env var)
+- SIMKL OAuth flow (needs SIMKL_CLIENT_ID env var)
+- Manual resolution UI (tap unresolved items to search/pick TMDB match)
+- Generic CSV import source (column mapping UI)
+- Ratings import (currently skipped with user message)
 
 ## Pre-Launch Roadmap
 
