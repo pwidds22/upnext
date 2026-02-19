@@ -91,6 +91,12 @@ try {
 - **DON'T** commit API keys - they should be in environment variables
 - **DON'T** use vague commit messages - be specific about what changed
 
+### Builds
+- **DON'T** create an EAS build after every single fix — batch fixes together and build once
+- **DO** accumulate multiple fixes/features per session, then build at the end
+- **DO** check build credit usage before building (`eas build` shows remaining credits)
+- EAS free tier has limited monthly build credits — treat each build as precious
+
 ### Module Initialization
 - **DON'T** call SDK initializers (`createClient()`, etc.) at module top-level - they crash before React can render error UI
 - **DO** use lazy initialization (Proxy pattern) for SDKs requiring configuration

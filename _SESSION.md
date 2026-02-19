@@ -1,31 +1,32 @@
 # UpNext - Session State
 Updated: 2026-02-19 | Branch: main
 
-## Status: Build 14 complete — ready for TestFlight submit and App Store prep
+## Status: Build 14 on TestFlight — ready for verification and App Store prep
 
 ### This Session
-- **Build 14 created on EAS** — iOS production build with all 22 bug fixes including Bug #22 (watch history dedup)
+- **Build 14 created on EAS and submitted to TestFlight** — iOS production build with all 22 bug fixes including Bug #22 (watch history dedup)
   - Build number auto-incremented 13 → 14
   - EAS build: https://expo.dev/accounts/pwidds/projects/upnext/builds/100b49df-fb48-49a8-811a-c8fd560a1ea8
-  - IPA artifact: https://expo.dev/artifacts/eas/2YUJASUYrdNAtUWc5SZ63Y.ipa
+  - Submission: https://expo.dev/accounts/pwidds/projects/upnext/submissions/bb4159b4-504a-4f31-87eb-c7604ee270b5
   - Pre-build checks passed: expo-doctor 17/17, git clean, TS clean (pre-existing NotificationsScreen type error only)
-- **TestFlight submit needs `ascAppId`** — `eas submit --platform ios --latest` fails in non-interactive mode without it. Add `ascAppId` to `eas.json` submit profile for future non-interactive submits.
+- **Added `ascAppId` to `eas.json`** — `6758222275`, enables non-interactive `eas submit` going forward
+- **Added build discipline anti-pattern to `CLAUDE.md`** — batch fixes, don't build after every single fix
 - **Build credits at 97%** for this month — be mindful of additional builds
 
 ### Files Modified This Session
-- No code changes — this was a build-only session
+- `eas.json` — Added `ascAppId: "6758222275"` to submit profile
+- `CLAUDE.md` — Added "Builds" anti-pattern section (batch fixes, check credits)
 
 ### Next Session Priority Order
-1. **Submit Build 14 to TestFlight** — Run `eas submit --platform ios --latest` in interactive terminal (needs Apple auth). Then add `ascAppId` to `eas.json` for future submits.
-2. **Verify Build 14 on TestFlight** — Install, test Bug #22 fix (watch count stays at 1), smoke test all features
-3. **App Store Connect remaining items**:
+1. **Verify Build 14 on TestFlight** — Install, test Bug #22 fix (watch count stays at 1), smoke test all features
+2. **App Store Connect remaining items**:
    - Resolve app name ("UpNext" is taken — try "UpNext: TV Tracker" or alternatives)
    - Clear marketing URL (still shows fake upnext.app)
    - Add test account credentials (test@test.com / test1234)
    - Confirm export compliance (no encryption)
    - Screenshots
-4. **Create test account** — test@test.com / test1234 for Apple reviewer
-5. **Submit for review** once build 14 is verified
+3. **Create test account** — test@test.com / test1234 for Apple reviewer
+4. **Submit for review** once build 14 is verified
 
 ## Pre-Launch Roadmap
 
@@ -69,8 +70,8 @@ Updated: 2026-02-19 | Branch: main
 - **Age Rating**: 4+ configured
 - **Pricing**: Free, all territories
 - **App Privacy**: 4 data types declared
-- **Build**: Build 14 built on EAS, pending TestFlight submit
-- **Still needs**: TestFlight submit, app name resolution, screenshots, test account, export compliance, marketing URL cleanup
+- **Build**: Build 14 submitted to TestFlight (ASC App ID: 6758222275)
+- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
@@ -107,8 +108,8 @@ Updated: 2026-02-19 | Branch: main
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
-- **Build 14** built on EAS (all 22 fixes), pending TestFlight submit
-- **Build 13** currently on TestFlight
+- **Build 14** on TestFlight (all 22 fixes)
+- **ASC App ID**: 6758222275
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
