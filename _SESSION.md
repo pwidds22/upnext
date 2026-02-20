@@ -1,53 +1,55 @@
 # UpNext - Session State
-Updated: 2026-02-19 | Branch: main
+Updated: 2026-02-20 | Branch: main
 
-## Status: Phase 3 (RevenueCat + Subscriptions) COMPLETE — code ready, needs dev build + ASC products
+## Status: Phase 4 (Paywall) COMPLETE — ASC products configured, dev build in progress
 
 ### This Session
-- **Phase 3: RevenueCat + Subscriptions — COMPLETE**
-  - Installed `react-native-purchases` SDK + Expo plugin
-  - Created subscription service (`src/services/subscription.ts`) with lazy SDK init, offline cache (AsyncStorage 7-day TTL), graceful degradation when unconfigured
-  - Created SubscriptionContext (`src/contexts/SubscriptionContext.tsx`) exposing `isPremium`, subscription state, restore purchases
-  - Wired up StatsScreen: replaced hardcoded `isPremium = true` with real `useSubscription()` hook
-  - Added `onUnlock` callbacks on all 4 LockedSection instances → navigates to Paywall modal
-  - Created placeholder PaywallScreen with feature list + restore purchases button
-  - Added "Upgrade to Premium" menu item in ProfileScreen (Account section, after My Stats)
-  - Added subscription types to `types/index.ts` (SubscriptionPlan, SubscriptionState, CachedPremiumStatus)
-  - RevenueCat test API key configured in `.env`: `test_TxZGwckdvmNGBzSQcqkuIGmyrRA`
+- **ASC Products + RevenueCat Dashboard — COMPLETE** (done via Claude Web extension)
+  - Created subscription group "UpNext Premium" in App Store Connect
+  - Monthly: $1.99/month + 14-day free trial (founding price)
+  - Annual: $14.99/year + 14-day free trial (founding price)
+  - Lifetime: $49.99 non-consumable (founding price)
+  - IAP Key ID: `A3VL7TXUCZ`, Issuer ID: `1faf4cae-0970-419b-a0c1-377f6e9a19af`
+  - RevenueCat: `premium` entitlement, `default` offering with 3 packages (`$rc_monthly`, `$rc_annual`, `$rc_lifetime`)
+  - App Store Server Notifications: Production + Sandbox URLs set to RevenueCat webhook (V2)
+  - P8 key uploaded to RevenueCat, showing "Valid credentials"
+  - Production API key created in RevenueCat (needs to replace test key in `.env`)
+- **Phase 4: Real Paywall Screen — COMPLETE**
+  - Rewrote `src/screens/PaywallScreen.tsx` from placeholder to full purchase UI
+  - Fetches real offerings from RevenueCat on mount
+  - 3 plan cards (Monthly, Annual, Lifetime) with localized prices from App Store
+  - Annual pre-selected with "BEST VALUE" badge, per-month equivalent, savings %
+  - Dynamic CTA: "Start Free Trial" when trial available, "Purchase" for lifetime
+  - Purchase flow with loading state, auto-dismisses on success
+  - Silent handling of user cancel (PURCHASE_CANCELLED_ERROR)
+  - Graceful fallback when offerings fail to load (retry button)
+  - Trial disclaimer text for Apple compliance
+  - Legal links (Terms of Service, Privacy Policy)
+  - Restore purchases button
+- **Build fix**: Removed invalid `react-native-purchases` config plugin from `app.json` (v9 doesn't ship one)
 - TypeScript compiles cleanly (pre-existing NotificationsScreen type error only)
 
-### Files Created This Session
-- `src/services/subscription.ts` — RevenueCat SDK wrapper (lazy import, configure, identify, checkPremiumStatus, restorePurchases, offline cache)
-- `src/contexts/SubscriptionContext.tsx` — React context (isPremium, plan, periodType, trial state, restore, auto-refresh on auth/foreground/listener)
-- `src/screens/PaywallScreen.tsx` — Placeholder paywall (feature list, restore purchases, premium check)
-
 ### Files Modified This Session
-- `package.json` — Added `react-native-purchases`
-- `app.json` — Added `react-native-purchases` plugin
-- `.env` / `.env.example` — Added `EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY` / `EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY`
-- `src/utils/constants.ts` — Added RevenueCat key to dev warning block
-- `src/types/index.ts` — Added subscription types + `Paywall` nav param
-- `App.tsx` — Added `SubscriptionProvider` to provider tree (inside SyncProvider)
-- `src/screens/StatsScreen.tsx` — Replaced `isPremium = true` with `useSubscription()`, added `handleUnlock` → Paywall navigation
-- `src/navigation/AppNavigator.tsx` — Added PaywallScreen route (modal presentation)
-- `src/screens/ProfileScreen.tsx` — Added PremiumMenuItem component with trial badge
+- `src/screens/PaywallScreen.tsx` — Complete rewrite: placeholder → real paywall with offerings, plan cards, purchase flow
+- `app.json` — Removed invalid `react-native-purchases` plugin entry
 
 ### Next Session Priority Order
-1. **App Store Connect: Create subscription products** — Monthly ($2.99), Annual ($24.99), Lifetime ($79.99)
-2. **RevenueCat dashboard: Create entitlement + offering** — `premium` entitlement, `default` offering, attach ASC products
-3. **New dev build** — `react-native-purchases` requires native build (batch with any other native changes)
-4. **Phase 4: Paywall + Reverse Trial** — Replace placeholder PaywallScreen with real purchase UI
-5. **Phase 5: Feature Gating** — Gate export, advanced notifications beyond Stats
-6. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
-7. **Phase 7: Launch Prep** — Requires all above
+1. **Update `.env` with production RevenueCat API key** — Replace `test_TxZGwckdvmNGBzSQcqkuIGmyrRA` with production `appl_xxx` key
+2. **Test paywall on dev build** — Verify offerings load, plan cards show real prices, sandbox purchase works
+3. **Phase 5: Feature Gating** — Gate data export, advanced notifications beyond Stats
+4. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
+5. **Phase 7: Launch Prep** — Requires all above
 
 ### RevenueCat Status
 - **Account**: Created, "UpNext" project exists
-- **Test API key**: `test_TxZGwckdvmNGBzSQcqkuIGmyrRA` (in `.env`)
-- **Production API keys**: Not yet created (need ASC products first)
-- **Entitlement**: Not yet created (need `premium` entitlement in dashboard)
-- **Offerings**: Not yet created (need `default` offering with products)
-- **ASC Products**: Not yet created (need subscription group + 3 products)
+- **Test API key**: `test_TxZGwckdvmNGBzSQcqkuIGmyrRA` (currently in `.env`)
+- **Production API key**: Created (Feb 20, 2026) — needs to be swapped into `.env` and EAS secrets
+- **Entitlement**: `premium` — created with 3 products attached
+- **Offerings**: `default` — with `$rc_monthly`, `$rc_annual`, `$rc_lifetime` packages
+- **ASC Products**: All 3 created with founding prices ($1.99/$14.99/$49.99)
+- **Server Notifications**: Production + Sandbox URLs configured (V2)
+- **P8 key**: Uploaded, valid credentials
+- **Shared secret**: Entered (legacy StoreKit 1, optional since P8 key handles StoreKit 2)
 
 ### Stats-Specific Remaining Work
 - Genres breakdown (deferred — needs genre_ids column + backfill)
@@ -93,8 +95,8 @@ Updated: 2026-02-19 | Branch: main
 |---|-------|--------|-------|
 | 1 | Import Infrastructure | DONE | 5 sources, TMDB resolver, import UI |
 | 2 | Stats Dashboard | DONE | 10 sections, charts, premium gating ready |
-| 3 | RevenueCat + Subscriptions | DONE | SDK installed, service + context + paywall placeholder, needs ASC products + dev build |
-| 4 | Paywall + Reverse Trial | TODO | Requires Phase 3 products |
+| 3 | RevenueCat + Subscriptions | DONE | SDK, service, context, ASC products, RevenueCat dashboard |
+| 4 | Paywall + Reverse Trial | DONE | Real paywall with offerings, plan cards, purchase flow |
 | 5 | Feature Gating | TODO | Requires Phase 2 + 3 |
 | 6 | Onboarding Revamp | TODO | Requires Phase 1 + 4 |
 | 7 | Launch Prep | TODO | Requires all above |
@@ -113,7 +115,9 @@ Updated: 2026-02-19 | Branch: main
 - **Pricing**: Free, all territories
 - **App Privacy**: 4 data types declared
 - **Build**: Build 14 submitted to TestFlight (ASC App ID: 6758222275)
-- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup, subscription products
+- **Subscription Products**: 3 products created (founding prices: $1.99/$14.99/$49.99)
+- **Server Notifications**: V2, production + sandbox URLs set
+- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
@@ -147,7 +151,7 @@ Updated: 2026-02-19 | Branch: main
 - **Settings** — About, Sync Settings, Notifications screens
 - **Import Data** — 5 sources (UpNext JSON, Trakt, TV Time, SIMKL, Letterboxd)
 - **Stats Dashboard** — 10-section analytics with custom charts, premium gating
-- **Subscriptions** — RevenueCat SDK, SubscriptionContext, PaywallScreen placeholder
+- **Subscriptions** — RevenueCat SDK, SubscriptionContext, real PaywallScreen with purchase flow
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
@@ -155,13 +159,14 @@ Updated: 2026-02-19 | Branch: main
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
 - **Build 14** on TestFlight (all 22 fixes)
 - **ASC App ID**: 6758222275
-- **Needs new dev build** for `react-native-purchases` native module
+- **Dev build in progress** — EAS building iOS development profile (includes `react-native-purchases` native module)
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
+- **IAP Key ID**: A3VL7TXUCZ (uploaded to RevenueCat)
 - **Google Sign-In**: Configured — Web + iOS client IDs in `.env`, Supabase Google provider enabled
 - **Google Play**: Developer account created (personal, $25)
-- **RevenueCat**: Test key in `.env`, production keys pending ASC product setup
+- **RevenueCat**: Production key created, test key currently in `.env` (swap before next TestFlight)
 
 ## Known Issues
 - See `TECH_DEBT.md` for full technical debt tracking
