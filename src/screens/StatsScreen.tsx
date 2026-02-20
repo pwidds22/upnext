@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,12 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS } from '../utils/constants';
 import { useStats } from '../hooks/useStats';
+import { useSubscription } from '../contexts/SubscriptionContext';
+import type { RootStackParamList } from '../types';
 import HeroBanner from '../components/stats/HeroBanner';
 import WatchingStreak from '../components/stats/WatchingStreak';
 import LibraryOverview from '../components/stats/LibraryOverview';
@@ -24,10 +28,13 @@ import LockedSection from '../components/stats/LockedSection';
 
 export default function StatsScreen() {
   const { stats, loading, error, refresh } = useStats();
+  const { isPremium } = useSubscription();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [refreshing, setRefreshing] = React.useState(false);
 
-  // TODO: Replace with real premium check from RevenueCat context
-  const isPremium = true;
+  const handleUnlock = useCallback(() => {
+    navigation.navigate('Paywall');
+  }, [navigation]);
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -101,25 +108,25 @@ export default function StatsScreen() {
       )}
 
       {/* PREMIUM: Watch Time Breakdown */}
-      <LockedSection isPremium={isPremium} title="Watch Time">
+      <LockedSection isPremium={isPremium} title="Watch Time" onUnlock={handleUnlock}>
         <WatchTimeBreakdown watchTime={stats.watchTime} />
       </LockedSection>
 
       {/* PREMIUM: Activity Calendar */}
-      <LockedSection isPremium={isPremium} title="Activity">
+      <LockedSection isPremium={isPremium} title="Activity" onUnlock={handleUnlock}>
         <ActivityCalendar data={stats.activityCalendar} />
       </LockedSection>
 
       {/* PREMIUM: Most Watched Shows */}
       {stats.mostWatched.length > 0 && (
-        <LockedSection isPremium={isPremium} title="Most Watched">
+        <LockedSection isPremium={isPremium} title="Most Watched" onUnlock={handleUnlock}>
           <MostWatchedShows shows={stats.mostWatched} />
         </LockedSection>
       )}
 
       {/* PREMIUM: Monthly Trend */}
       {stats.monthlyTrend.length > 0 && (
-        <LockedSection isPremium={isPremium} title="Monthly Trend">
+        <LockedSection isPremium={isPremium} title="Monthly Trend" onUnlock={handleUnlock}>
           <MonthlyTrend data={stats.monthlyTrend} />
         </LockedSection>
       )}

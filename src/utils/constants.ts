@@ -7,6 +7,7 @@ if (__DEV__) {
   if (!process.env.EXPO_PUBLIC_TMDB_API_KEY) missing.push('EXPO_PUBLIC_TMDB_API_KEY');
   if (!process.env.EXPO_PUBLIC_SUPABASE_URL) missing.push('EXPO_PUBLIC_SUPABASE_URL');
   if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) missing.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  if (!process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY) missing.push('EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY');
   if (missing.length > 0) {
     console.warn(
       `Missing environment variables: ${missing.join(', ')}\nCopy .env.example to .env and fill in your keys.`

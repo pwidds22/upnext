@@ -28,6 +28,7 @@ import SyncSettingsScreen from '../screens/SyncSettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ImportScreen from '../screens/ImportScreen';
 import StatsScreen from '../screens/StatsScreen';
+import PaywallScreen from '../screens/PaywallScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -245,6 +246,14 @@ export default function AppNavigator() {
           name="Stats"
           component={StatsScreen}
           options={{ title: 'My Stats' }}
+        />
+        <Stack.Screen
+          name="Paywall"
+          component={PaywallScreen}
+          options={{
+            title: 'UpNext Premium',
+            presentation: 'modal',
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

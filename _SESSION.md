@@ -1,60 +1,56 @@
 # UpNext - Session State
 Updated: 2026-02-19 | Branch: main
 
-## Status: Phase 2 (Stats Dashboard) COMPLETE — tested on device with fixes applied
+## Status: Phase 3 (RevenueCat + Subscriptions) COMPLETE — code ready, needs dev build + ASC products
 
 ### This Session
-- **Phase 2: Stats Dashboard — COMPLETE**
-  - Built full stats dashboard with 10 sections (5 free, 5 premium-locked)
-  - Custom View-based chart components (no chart library): BarChart, HeatmapGrid, SegmentedBar
-  - SQL-first aggregation: all stats computed via COUNT/SUM/GROUP BY in SQLite
-  - Progressive 4-stage loading: hero (~5ms) → library/reactions → streak/streaming/trend → premium sections
-  - 30-second cache TTL via useRef, refresh on screen focus
-  - Runtime estimation: movies use stored runtime, TV shows use COALESCE(runtime, 30) with lazy TMDB backfill
-  - Premium gating: LockedSection component with blur + lock overlay (isPremium hardcoded true for now)
-  - Navigation: Profile → Account → "My Stats" menu item
-- **User feedback applied:**
-  - Episode Reactions now shows "Recent Reactions" with last 5 reacted episodes (show name, episode code, emoji)
-  - Bulk-mark detection: filters out episodes with timestamps within 60s + count > 12 for binge stats
-  - Fastest binge requires watch span > 1 hour to exclude bulk-marked shows
+- **Phase 3: RevenueCat + Subscriptions — COMPLETE**
+  - Installed `react-native-purchases` SDK + Expo plugin
+  - Created subscription service (`src/services/subscription.ts`) with lazy SDK init, offline cache (AsyncStorage 7-day TTL), graceful degradation when unconfigured
+  - Created SubscriptionContext (`src/contexts/SubscriptionContext.tsx`) exposing `isPremium`, subscription state, restore purchases
+  - Wired up StatsScreen: replaced hardcoded `isPremium = true` with real `useSubscription()` hook
+  - Added `onUnlock` callbacks on all 4 LockedSection instances → navigates to Paywall modal
+  - Created placeholder PaywallScreen with feature list + restore purchases button
+  - Added "Upgrade to Premium" menu item in ProfileScreen (Account section, after My Stats)
+  - Added subscription types to `types/index.ts` (SubscriptionPlan, SubscriptionState, CachedPremiumStatus)
+  - RevenueCat test API key configured in `.env`: `test_TxZGwckdvmNGBzSQcqkuIGmyrRA`
 - TypeScript compiles cleanly (pre-existing NotificationsScreen type error only)
 
 ### Files Created This Session
-- `src/screens/StatsScreen.tsx` — Main stats dashboard screen (ScrollView, progressive loading, empty state)
-- `src/hooks/useStats.ts` — Stats computation hook (4-stage progressive loading, 30s cache, backfill trigger)
-- `src/services/statsService.ts` — Stats computation service (all business logic, streak calc, fun facts, backfill)
-- `src/components/stats/StatCard.tsx` — Reusable section card wrapper with icon + title
-- `src/components/stats/HeroBanner.tsx` — 3 hero stats: ~watch time, episodes, movies
-- `src/components/stats/WatchingStreak.tsx` — Current/longest streak + 14-day dot visualization
-- `src/components/stats/LibraryOverview.tsx` — TV/movie status breakdown with SegmentedBar + legend
-- `src/components/stats/ReactionsSummary.tsx` — Good/meh/bad distribution + recent reacted episodes
-- `src/components/stats/StreamingBreakdown.tsx` — "Where You Watch" horizontal bars by provider
-- `src/components/stats/WatchTimeBreakdown.tsx` — This week/month/all-time + busiest day bar chart
-- `src/components/stats/ActivityCalendar.tsx` — GitHub-style 3-month heatmap
-- `src/components/stats/MostWatchedShows.tsx` — Top 5 show leaderboard with poster + completion bar
-- `src/components/stats/MonthlyTrend.tsx` — 12-month bar chart with peak month highlight
-- `src/components/stats/FunFacts.tsx` — Biggest binge, fastest binge, most rewatched (1 free, rest locked)
-- `src/components/stats/LockedSection.tsx` — Premium lock overlay (opacity 0.25 + lock CTA)
-- `src/components/stats/BarChart.tsx` — Reusable vertical bar chart (View-based)
-- `src/components/stats/HeatmapGrid.tsx` — GitHub-style heatmap grid with month/day labels
-- `src/components/stats/SegmentedBar.tsx` — Horizontal proportional bar
+- `src/services/subscription.ts` — RevenueCat SDK wrapper (lazy import, configure, identify, checkPremiumStatus, restorePurchases, offline cache)
+- `src/contexts/SubscriptionContext.tsx` — React context (isPremium, plan, periodType, trial state, restore, auto-refresh on auth/foreground/listener)
+- `src/screens/PaywallScreen.tsx` — Placeholder paywall (feature list, restore purchases, premium check)
 
 ### Files Modified This Session
-- `src/types/index.ts` — Added Stats route + ~86 lines of stat types (HeroStats, StreakStats, StatsData, ReactedEpisode, etc.)
-- `src/navigation/AppNavigator.tsx` — Added StatsScreen route
-- `src/screens/ProfileScreen.tsx` — Added "My Stats" menu item (top of Account section)
-- `src/services/storage.ts` — Added ~20 aggregate query methods for stats (counts, joins, grouping, bulk-mark detection)
+- `package.json` — Added `react-native-purchases`
+- `app.json` — Added `react-native-purchases` plugin
+- `.env` / `.env.example` — Added `EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY` / `EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY`
+- `src/utils/constants.ts` — Added RevenueCat key to dev warning block
+- `src/types/index.ts` — Added subscription types + `Paywall` nav param
+- `App.tsx` — Added `SubscriptionProvider` to provider tree (inside SyncProvider)
+- `src/screens/StatsScreen.tsx` — Replaced `isPremium = true` with `useSubscription()`, added `handleUnlock` → Paywall navigation
+- `src/navigation/AppNavigator.tsx` — Added PaywallScreen route (modal presentation)
+- `src/screens/ProfileScreen.tsx` — Added PremiumMenuItem component with trial badge
 
 ### Next Session Priority Order
-1. **Phase 3: RevenueCat + Subscriptions** — Premium infrastructure
-2. **Phase 4: Paywall + Reverse Trial** — Requires Phase 3
-3. **Phase 5: Feature Gating** — Requires Phase 2 + 3 (Stats already has LockedSection ready)
-4. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
-5. **Phase 7: Launch Prep** — Requires all above
+1. **App Store Connect: Create subscription products** — Monthly ($2.99), Annual ($24.99), Lifetime ($79.99)
+2. **RevenueCat dashboard: Create entitlement + offering** — `premium` entitlement, `default` offering, attach ASC products
+3. **New dev build** — `react-native-purchases` requires native build (batch with any other native changes)
+4. **Phase 4: Paywall + Reverse Trial** — Replace placeholder PaywallScreen with real purchase UI
+5. **Phase 5: Feature Gating** — Gate export, advanced notifications beyond Stats
+6. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
+7. **Phase 7: Launch Prep** — Requires all above
+
+### RevenueCat Status
+- **Account**: Created, "UpNext" project exists
+- **Test API key**: `test_TxZGwckdvmNGBzSQcqkuIGmyrRA` (in `.env`)
+- **Production API keys**: Not yet created (need ASC products first)
+- **Entitlement**: Not yet created (need `premium` entitlement in dashboard)
+- **Offerings**: Not yet created (need `default` offering with products)
+- **ASC Products**: Not yet created (need subscription group + 3 products)
 
 ### Stats-Specific Remaining Work
 - Genres breakdown (deferred — needs genre_ids column + backfill)
-- Wire up isPremium to actual RevenueCat subscription state (Phase 3)
 - Runtime backfill could be more aggressive (currently lazy on stats screen open)
 
 ### Import-Specific Remaining Work (from Phase 1)
@@ -97,8 +93,8 @@ Updated: 2026-02-19 | Branch: main
 |---|-------|--------|-------|
 | 1 | Import Infrastructure | DONE | 5 sources, TMDB resolver, import UI |
 | 2 | Stats Dashboard | DONE | 10 sections, charts, premium gating ready |
-| 3 | RevenueCat + Subscriptions | TODO | Next up |
-| 4 | Paywall + Reverse Trial | TODO | Requires Phase 3 |
+| 3 | RevenueCat + Subscriptions | DONE | SDK installed, service + context + paywall placeholder, needs ASC products + dev build |
+| 4 | Paywall + Reverse Trial | TODO | Requires Phase 3 products |
 | 5 | Feature Gating | TODO | Requires Phase 2 + 3 |
 | 6 | Onboarding Revamp | TODO | Requires Phase 1 + 4 |
 | 7 | Launch Prep | TODO | Requires all above |
@@ -117,7 +113,7 @@ Updated: 2026-02-19 | Branch: main
 - **Pricing**: Free, all territories
 - **App Privacy**: 4 data types declared
 - **Build**: Build 14 submitted to TestFlight (ASC App ID: 6758222275)
-- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
+- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup, subscription products
 
 ### Google Cloud Console Status
 - **Project**: UpNext (895548176925)
@@ -151,6 +147,7 @@ Updated: 2026-02-19 | Branch: main
 - **Settings** — About, Sync Settings, Notifications screens
 - **Import Data** — 5 sources (UpNext JSON, Trakt, TV Time, SIMKL, Letterboxd)
 - **Stats Dashboard** — 10-section analytics with custom charts, premium gating
+- **Subscriptions** — RevenueCat SDK, SubscriptionContext, PaywallScreen placeholder
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
@@ -158,11 +155,13 @@ Updated: 2026-02-19 | Branch: main
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
 - **Build 14** on TestFlight (all 22 fixes)
 - **ASC App ID**: 6758222275
+- **Needs new dev build** for `react-native-purchases` native module
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
 - **Google Sign-In**: Configured — Web + iOS client IDs in `.env`, Supabase Google provider enabled
 - **Google Play**: Developer account created (personal, $25)
+- **RevenueCat**: Test key in `.env`, production keys pending ASC product setup
 
 ## Known Issues
 - See `TECH_DEBT.md` for full technical debt tracking

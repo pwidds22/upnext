@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscription } from '../contexts/SubscriptionContext';
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
 import { useDataExport } from '../hooks/useDataExport';
@@ -303,6 +304,31 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 interface RatingWithShowInfo extends UserRatingRow {
   showTitle?: string;
   posterPath?: string | null;
+}
+
+function PremiumMenuItem() {
+  const navigation = useNavigation<NavigationProp>();
+  const { isPremium, isTrialActive, trialDaysRemaining } = useSubscription();
+
+  return (
+    <TouchableOpacity
+      style={styles.menuItem}
+      onPress={() => navigation.navigate('Paywall')}
+    >
+      <Ionicons
+        name={isPremium ? 'star' : 'star-outline'}
+        size={22}
+        color={isPremium ? COLORS.primary : COLORS.warning}
+      />
+      <Text style={styles.menuItemText}>
+        {isPremium ? 'Premium' : 'Upgrade to Premium'}
+      </Text>
+      {isTrialActive && trialDaysRemaining !== null && (
+        <Text style={styles.trialBadge}>{trialDaysRemaining}d trial</Text>
+      )}
+      <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+    </TouchableOpacity>
+  );
 }
 
 export default function ProfileScreen() {
@@ -606,6 +632,8 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
+          <PremiumMenuItem />
+
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => setEditModalVisible(true)}
@@ -906,6 +934,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.text,
     fontSize: 16,
+  },
+  trialBadge: {
+    color: COLORS.warning,
+    fontSize: 13,
+    fontWeight: '500',
+    marginRight: 4,
   },
   signOutButton: {
     flexDirection: 'row',

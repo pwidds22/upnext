@@ -253,6 +253,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   Import: undefined;
   Stats: undefined;
+  Paywall: undefined;
 };
 
 export type AuthStackParamList = {
@@ -778,4 +779,27 @@ export interface StatsData {
   mostWatched: MostWatchedShow[];
   monthlyTrend: MonthlyTrendItem[];
   funFacts: FunFact[];
+}
+
+// ==================== Subscription Types ====================
+
+export type SubscriptionPlan = 'monthly' | 'annual' | 'lifetime';
+
+export type SubscriptionPeriodType = 'TRIAL' | 'INTRO' | 'NORMAL';
+
+export interface SubscriptionState {
+  isPremium: boolean;
+  isLoading: boolean;
+  plan: SubscriptionPlan | null;
+  periodType: SubscriptionPeriodType | null;
+  expiresDate: string | null;
+  isTrialActive: boolean;
+  trialDaysRemaining: number | null;
+}
+
+export interface CachedPremiumStatus {
+  isPremium: boolean;
+  plan: SubscriptionPlan | null;
+  expiresDate: string | null;
+  checkedAt: string;
 }
