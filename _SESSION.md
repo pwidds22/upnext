@@ -1,54 +1,63 @@
 # UpNext - Session State
 Updated: 2026-02-19 | Branch: main
 
-## Status: Phase 1 (Import Infrastructure) COMPLETE — reviewed and fixes applied
+## Status: Phase 2 (Stats Dashboard) COMPLETE — tested on device with fixes applied
 
 ### This Session
-- **Phase 1: Import Infrastructure — COMPLETE**
-  - Built full plugin-based import framework with NormalizedImportData common format
-  - 5 import source parsers: UpNext JSON, Trakt, TV Time (CSV + JSON eras), SIMKL, Letterboxd
-  - TMDB ID resolver with persistent SQLite cache + resolution chain (IMDB → TVDB → title search)
-  - Import UI screen with progress bar, results view, unresolved items display
-  - Navigation integration (ProfileScreen → Import Data menu item)
-  - Installed expo-document-picker and jszip dependencies
-- **Claude Web review completed — 10 fixes applied across 7 files:**
-  - Fixed INSERT OR REPLACE anti-pattern in tmdbIdResolver.ts
-  - Added fetchWithTimeout (15s) to all network calls
-  - Added max retry limits (3) to prevent infinite loops
-  - Fixed Season 0 being dropped (isNaN check instead of falsy check)
-  - Fixed timezone bug in TV Time date parsing (Date.UTC)
-  - Removed input mutation in import orchestrator
-  - Added date format validation in Letterboxd parser
-  - Honest ratings skip message (not yet implemented)
-  - Array.isArray() guards in UpNext JSON parser
-  - Simplified importEpisode to avoid TOCTOU race condition
+- **Phase 2: Stats Dashboard — COMPLETE**
+  - Built full stats dashboard with 10 sections (5 free, 5 premium-locked)
+  - Custom View-based chart components (no chart library): BarChart, HeatmapGrid, SegmentedBar
+  - SQL-first aggregation: all stats computed via COUNT/SUM/GROUP BY in SQLite
+  - Progressive 4-stage loading: hero (~5ms) → library/reactions → streak/streaming/trend → premium sections
+  - 30-second cache TTL via useRef, refresh on screen focus
+  - Runtime estimation: movies use stored runtime, TV shows use COALESCE(runtime, 30) with lazy TMDB backfill
+  - Premium gating: LockedSection component with blur + lock overlay (isPremium hardcoded true for now)
+  - Navigation: Profile → Account → "My Stats" menu item
+- **User feedback applied:**
+  - Episode Reactions now shows "Recent Reactions" with last 5 reacted episodes (show name, episode code, emoji)
+  - Bulk-mark detection: filters out episodes with timestamps within 60s + count > 12 for binge stats
+  - Fastest binge requires watch span > 1 hour to exclude bulk-marked shows
 - TypeScript compiles cleanly (pre-existing NotificationsScreen type error only)
 
 ### Files Created This Session
-- `src/services/tmdbIdResolver.ts` — ID mapping cache + TMDB resolution chain
-- `src/services/import.ts` — Main import orchestrator
-- `src/services/importSources/upnextJson.ts` — UpNext JSON export parser
-- `src/services/importSources/trakt.ts` — Trakt API import (OAuth)
-- `src/services/importSources/tvtime.ts` — TV Time CSV + JSON parser
-- `src/services/importSources/simkl.ts` — SIMKL API import (OAuth)
-- `src/services/importSources/letterboxd.ts` — Letterboxd CSV parser
-- `src/screens/ImportScreen.tsx` — Import UI screen
+- `src/screens/StatsScreen.tsx` — Main stats dashboard screen (ScrollView, progressive loading, empty state)
+- `src/hooks/useStats.ts` — Stats computation hook (4-stage progressive loading, 30s cache, backfill trigger)
+- `src/services/statsService.ts` — Stats computation service (all business logic, streak calc, fun facts, backfill)
+- `src/components/stats/StatCard.tsx` — Reusable section card wrapper with icon + title
+- `src/components/stats/HeroBanner.tsx` — 3 hero stats: ~watch time, episodes, movies
+- `src/components/stats/WatchingStreak.tsx` — Current/longest streak + 14-day dot visualization
+- `src/components/stats/LibraryOverview.tsx` — TV/movie status breakdown with SegmentedBar + legend
+- `src/components/stats/ReactionsSummary.tsx` — Good/meh/bad distribution + recent reacted episodes
+- `src/components/stats/StreamingBreakdown.tsx` — "Where You Watch" horizontal bars by provider
+- `src/components/stats/WatchTimeBreakdown.tsx` — This week/month/all-time + busiest day bar chart
+- `src/components/stats/ActivityCalendar.tsx` — GitHub-style 3-month heatmap
+- `src/components/stats/MostWatchedShows.tsx` — Top 5 show leaderboard with poster + completion bar
+- `src/components/stats/MonthlyTrend.tsx` — 12-month bar chart with peak month highlight
+- `src/components/stats/FunFacts.tsx` — Biggest binge, fastest binge, most rewatched (1 free, rest locked)
+- `src/components/stats/LockedSection.tsx` — Premium lock overlay (opacity 0.25 + lock CTA)
+- `src/components/stats/BarChart.tsx` — Reusable vertical bar chart (View-based)
+- `src/components/stats/HeatmapGrid.tsx` — GitHub-style heatmap grid with month/day labels
+- `src/components/stats/SegmentedBar.tsx` — Horizontal proportional bar
 
 ### Files Modified This Session
-- `src/types/index.ts` — Added ~117 lines of import types + Import route
-- `src/navigation/AppNavigator.tsx` — Added ImportScreen route
-- `src/screens/ProfileScreen.tsx` — Added "Import Data" menu item
-- `package.json` — Added expo-document-picker, jszip
+- `src/types/index.ts` — Added Stats route + ~86 lines of stat types (HeroStats, StreakStats, StatsData, ReactedEpisode, etc.)
+- `src/navigation/AppNavigator.tsx` — Added StatsScreen route
+- `src/screens/ProfileScreen.tsx` — Added "My Stats" menu item (top of Account section)
+- `src/services/storage.ts` — Added ~20 aggregate query methods for stats (counts, joins, grouping, bulk-mark detection)
 
 ### Next Session Priority Order
-1. **Phase 2: Stats Dashboard** — Hero premium feature (#1 conversion driver)
-2. **Phase 3: RevenueCat + Subscriptions** — Can be built in parallel with Phase 2
-3. **Phase 4: Paywall + Reverse Trial** — Requires Phase 3
-4. **Phase 5: Feature Gating** — Requires Phase 2 + 3
-5. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
-6. **Phase 7: Launch Prep** — Requires all above
+1. **Phase 3: RevenueCat + Subscriptions** — Premium infrastructure
+2. **Phase 4: Paywall + Reverse Trial** — Requires Phase 3
+3. **Phase 5: Feature Gating** — Requires Phase 2 + 3 (Stats already has LockedSection ready)
+4. **Phase 6: Onboarding Revamp** — Requires Phase 1 + 4
+5. **Phase 7: Launch Prep** — Requires all above
 
-### Import-Specific Remaining Work
+### Stats-Specific Remaining Work
+- Genres breakdown (deferred — needs genre_ids column + backfill)
+- Wire up isPremium to actual RevenueCat subscription state (Phase 3)
+- Runtime backfill could be more aggressive (currently lazy on stats screen open)
+
+### Import-Specific Remaining Work (from Phase 1)
 - Trakt OAuth flow (needs TRAKT_CLIENT_ID env var)
 - SIMKL OAuth flow (needs SIMKL_CLIENT_ID env var)
 - Manual resolution UI (tap unresolved items to search/pick TMDB match)
@@ -83,12 +92,22 @@ Updated: 2026-02-19 | Branch: main
 | 21 | Fix signup profile showing email prefix | DONE | Race condition: refreshProfile after signUp |
 | 22 | Fix episode watch count multiplying | DONE | Sync feedback loop, cleaned 1328 Supabase dupes |
 
+### Monetization Phases
+| # | Phase | Status | Notes |
+|---|-------|--------|-------|
+| 1 | Import Infrastructure | DONE | 5 sources, TMDB resolver, import UI |
+| 2 | Stats Dashboard | DONE | 10 sections, charts, premium gating ready |
+| 3 | RevenueCat + Subscriptions | TODO | Next up |
+| 4 | Paywall + Reverse Trial | TODO | Requires Phase 3 |
+| 5 | Feature Gating | TODO | Requires Phase 2 + 3 |
+| 6 | Onboarding Revamp | TODO | Requires Phase 1 + 4 |
+| 7 | Launch Prep | TODO | Requires all above |
+
 ### Post-Launch (v1.1+)
 | # | Feature | Complexity | Notes |
 |---|---------|------------|-------|
 | 1 | **Widgets** | Medium | iOS home screen widget |
-| 2 | **Watch stats** | Medium | Hours watched, streaks, genre breakdown |
-| 3 | **Apple TV app** | High | Far down the road, after App Store launch |
+| 2 | **Apple TV app** | High | Far down the road, after App Store launch |
 
 ### App Store Connect Status
 - **Privacy Policy**: Notion page (published, URL set in ASC)
@@ -130,6 +149,8 @@ Updated: 2026-02-19 | Branch: main
 - **Share Profile** — Deep links, privacy controls, profile stats
 - **Data Export** — JSON export with profile, follows, ratings, warnings
 - **Settings** — About, Sync Settings, Notifications screens
+- **Import Data** — 5 sources (UpNext JSON, Trakt, TV Time, SIMKL, Letterboxd)
+- **Stats Dashboard** — 10-section analytics with custom charts, premium gating
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81

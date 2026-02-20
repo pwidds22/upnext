@@ -149,6 +149,7 @@ export interface TMDBShow {
   genres?: TMDBGenre[];
   networks?: TMDBNetwork[];
   vote_average?: number;
+  episode_run_time?: number[]; // Typical episode runtimes in minutes
 }
 
 export interface TMDBGenre {
@@ -251,6 +252,7 @@ export type RootStackParamList = {
   SyncSettings: undefined;
   Notifications: undefined;
   Import: undefined;
+  Stats: undefined;
 };
 
 export type AuthStackParamList = {
@@ -692,4 +694,88 @@ export interface IdMappingCache {
   tmdbId: number;
   mediaType: MediaType;
   cachedAt: string;
+}
+
+// Stats Dashboard types
+export interface HeroStats {
+  totalEpisodesWatched: number;
+  totalMoviesWatched: number;
+  totalWatchTimeMinutes: number;
+}
+
+export interface StreakStats {
+  currentStreak: number;
+  longestStreak: number;
+  recentDays: boolean[]; // last 14 days, true = watched something
+}
+
+export interface LibraryBreakdownItem {
+  mediaType: MediaType;
+  status: string;
+  count: number;
+}
+
+export interface ReactedEpisode {
+  showTitle: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  episodeTitle: string | null;
+  reaction: 'good' | 'meh' | 'bad';
+}
+
+export interface ReactionsSummary {
+  good: number;
+  meh: number;
+  bad: number;
+  total: number;
+  topEpisodes: ReactedEpisode[];
+}
+
+export interface StreamingBreakdownItem {
+  service: string;
+  count: number;
+}
+
+export interface DayOfWeekCount {
+  day: number; // 0=Sun, 6=Sat
+  count: number;
+}
+
+export interface WatchTimeBreakdown {
+  thisWeekMinutes: number;
+  thisMonthMinutes: number;
+  allTimeMinutes: number;
+  averagePerDayMinutes: number;
+  busiestDayOfWeek: DayOfWeekCount[];
+}
+
+export interface MostWatchedShow {
+  tmdbId: number;
+  title: string;
+  posterPath: string | null;
+  watchedCount: number;
+  totalEpisodes: number;
+}
+
+export interface MonthlyTrendItem {
+  month: string; // "2026-01" format
+  count: number;
+}
+
+export interface FunFact {
+  icon: string;
+  text: string;
+}
+
+export interface StatsData {
+  hero: HeroStats;
+  streak: StreakStats;
+  library: LibraryBreakdownItem[];
+  reactions: ReactionsSummary;
+  streaming: StreamingBreakdownItem[];
+  watchTime: WatchTimeBreakdown;
+  activityCalendar: Map<string, number>; // date string → episode count
+  mostWatched: MostWatchedShow[];
+  monthlyTrend: MonthlyTrendItem[];
+  funFacts: FunFact[];
 }

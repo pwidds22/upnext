@@ -599,6 +599,15 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
+            onPress={() => navigation.navigate('Stats')}
+          >
+            <Ionicons name="stats-chart" size={22} color={COLORS.primary} />
+            <Text style={styles.menuItemText}>My Stats</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
             onPress={() => setEditModalVisible(true)}
           >
             <Ionicons name="person-outline" size={22} color={COLORS.text} />

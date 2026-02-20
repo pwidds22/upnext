@@ -27,6 +27,7 @@ import AboutScreen from '../screens/AboutScreen';
 import SyncSettingsScreen from '../screens/SyncSettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ImportScreen from '../screens/ImportScreen';
+import StatsScreen from '../screens/StatsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -239,6 +240,11 @@ export default function AppNavigator() {
           name="Import"
           component={ImportScreen}
           options={{ title: 'Import Data' }}
+        />
+        <Stack.Screen
+          name="Stats"
+          component={StatsScreen}
+          options={{ title: 'My Stats' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

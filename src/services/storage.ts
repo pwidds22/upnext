@@ -2015,6 +2015,234 @@ class StorageService {
     }));
   }
 
+  // ==================== STATS AGGREGATE QUERIES ====================
+
+  async getStatsTotalEpisodesWatched(): Promise<number> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM watched_episodes');
+    return row?.count ?? 0;
+  }
+
+  async getStatsTotalMoviesWatched(): Promise<number> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ count: number }>('SELECT COUNT(DISTINCT movie_tmdb_id) as count FROM movie_watch_history');
+    return row?.count ?? 0;
+  }
+
+  async getStatsEpisodeWatchTimeMinutes(): Promise<number> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ total: number | null }>(`
+      SELECT SUM(ep_counts.cnt * COALESCE(ts.runtime, 30)) as total
+      FROM (SELECT show_tmdb_id, COUNT(*) as cnt FROM episode_watch_history GROUP BY show_tmdb_id) ep_counts
+      JOIN tracked_shows ts ON ts.tmdb_id = ep_counts.show_tmdb_id
+    `);
+    return row?.total ?? 0;
+  }
+
+  async getStatsMovieWatchTimeMinutes(): Promise<number> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ total: number | null }>(`
+      SELECT SUM(COALESCE(ts.runtime, 90) * mwh.cnt) as total
+      FROM tracked_shows ts
+      JOIN (SELECT movie_tmdb_id, COUNT(*) as cnt FROM movie_watch_history GROUP BY movie_tmdb_id) mwh
+        ON ts.tmdb_id = mwh.movie_tmdb_id
+      WHERE ts.media_type = 'movie'
+    `);
+    return row?.total ?? 0;
+  }
+
+  async getStatsAllWatchDates(): Promise<string[]> {
+    if (!this.db) await this.init();
+    const rows = await this.db!.getAllAsync<{ watch_date: string }>(`
+      SELECT DISTINCT DATE(watched_at) as watch_date FROM episode_watch_history
+      UNION
+      SELECT DISTINCT DATE(watched_at) as watch_date FROM movie_watch_history
+      ORDER BY watch_date DESC
+    `);
+    return rows.map(r => r.watch_date);
+  }
+
+  async getStatsLibraryBreakdown(): Promise<{ media_type: string | null; status: string; count: number }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ media_type: string | null; status: string; count: number }>(
+      'SELECT media_type, status, COUNT(*) as count FROM tracked_shows GROUP BY media_type, status'
+    );
+  }
+
+  async getStatsReactionsSummary(): Promise<{ reaction: string; count: number }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ reaction: string; count: number }>(
+      'SELECT reaction, COUNT(*) as count FROM episode_reactions GROUP BY reaction'
+    );
+  }
+
+  async getStatsStreamingServices(): Promise<string[]> {
+    if (!this.db) await this.init();
+    const rows = await this.db!.getAllAsync<{ streaming_services: string }>(
+      "SELECT streaming_services FROM tracked_shows WHERE streaming_services != '[]' AND streaming_services IS NOT NULL"
+    );
+    return rows.map(r => r.streaming_services);
+  }
+
+  async getStatsEpisodeWatchTimeForPeriod(sinceDateISO: string): Promise<number> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ total: number | null }>(`
+      SELECT SUM(COALESCE(ts.runtime, 30)) as total
+      FROM episode_watch_history ewh
+      JOIN tracked_shows ts ON ts.tmdb_id = ewh.show_tmdb_id
+      WHERE ewh.watched_at >= ?
+    `, [sinceDateISO]);
+    return row?.total ?? 0;
+  }
+
+  async getStatsMovieWatchTimeForPeriod(sinceDateISO: string): Promise<number> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ total: number | null }>(`
+      SELECT SUM(COALESCE(ts.runtime, 90)) as total
+      FROM movie_watch_history mwh
+      JOIN tracked_shows ts ON ts.tmdb_id = mwh.movie_tmdb_id
+      WHERE ts.media_type = 'movie' AND mwh.watched_at >= ?
+    `, [sinceDateISO]);
+    return row?.total ?? 0;
+  }
+
+  async getStatsBusiestDayOfWeek(): Promise<{ dow: number; count: number }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ dow: number; count: number }>(`
+      SELECT dow, SUM(cnt) as count FROM (
+        SELECT CAST(strftime('%w', watched_at) AS INTEGER) as dow, COUNT(*) as cnt
+        FROM episode_watch_history GROUP BY dow
+        UNION ALL
+        SELECT CAST(strftime('%w', watched_at) AS INTEGER) as dow, COUNT(*) as cnt
+        FROM movie_watch_history GROUP BY dow
+      ) GROUP BY dow ORDER BY dow
+    `);
+  }
+
+  async getStatsActivityCalendar(days: number): Promise<{ d: string; count: number }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ d: string; count: number }>(`
+      SELECT d, SUM(cnt) as count FROM (
+        SELECT DATE(watched_at) as d, COUNT(*) as cnt FROM episode_watch_history
+        WHERE watched_at >= DATE('now', '-' || ? || ' days') GROUP BY d
+        UNION ALL
+        SELECT DATE(watched_at) as d, COUNT(*) as cnt FROM movie_watch_history
+        WHERE watched_at >= DATE('now', '-' || ? || ' days') GROUP BY d
+      ) GROUP BY d ORDER BY d
+    `, [days, days]);
+  }
+
+  async getStatsMostWatchedShows(limit: number): Promise<{ show_tmdb_id: number; title: string; poster_path: string | null; total_episodes: number; watched_count: number }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ show_tmdb_id: number; title: string; poster_path: string | null; total_episodes: number; watched_count: number }>(`
+      SELECT ewh.show_tmdb_id, ts.title, ts.poster_path, ts.total_episodes, COUNT(*) as watched_count
+      FROM episode_watch_history ewh
+      JOIN tracked_shows ts ON ts.tmdb_id = ewh.show_tmdb_id
+      GROUP BY ewh.show_tmdb_id ORDER BY watched_count DESC LIMIT ?
+    `, [limit]);
+  }
+
+  async getStatsMonthlyTrend(months: number): Promise<{ month: string; count: number }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ month: string; count: number }>(`
+      SELECT month, SUM(cnt) as count FROM (
+        SELECT strftime('%Y-%m', watched_at) as month, COUNT(*) as cnt
+        FROM episode_watch_history WHERE watched_at >= DATE('now', '-' || ? || ' months')
+        GROUP BY month
+        UNION ALL
+        SELECT strftime('%Y-%m', watched_at) as month, COUNT(*) as cnt
+        FROM movie_watch_history WHERE watched_at >= DATE('now', '-' || ? || ' months')
+        GROUP BY month
+      ) GROUP BY month ORDER BY month
+    `, [months, months]);
+  }
+
+  async getStatsBiggestBingeDay(): Promise<{ d: string; count: number } | null> {
+    if (!this.db) await this.init();
+    // Filter out bulk-marks: only count show-day combos where timestamps are spread
+    // (> 60s between first and last) or where count is small enough to be real
+    return this.db!.getFirstAsync<{ d: string; count: number }>(`
+      SELECT d, SUM(cnt) as count FROM (
+        SELECT DATE(watched_at) as d, COUNT(*) as cnt
+        FROM episode_watch_history
+        GROUP BY d, show_tmdb_id
+        HAVING COUNT(*) <= 12
+           OR (julianday(MAX(watched_at)) - julianday(MIN(watched_at))) * 86400 > 60
+        UNION ALL
+        SELECT DATE(watched_at) as d, COUNT(*) as cnt FROM movie_watch_history GROUP BY d
+      ) GROUP BY d ORDER BY count DESC LIMIT 1
+    `);
+  }
+
+  async getStatsFastestBinge(): Promise<{ show_tmdb_id: number; title: string; eps: number; first: string; last: string }[]> {
+    if (!this.db) await this.init();
+    // Filter: watch span must be > 1 hour to exclude bulk-marks
+    return this.db!.getAllAsync<{ show_tmdb_id: number; title: string; eps: number; first: string; last: string }>(`
+      SELECT ewh.show_tmdb_id, ts.title, COUNT(*) as eps,
+        MIN(ewh.watched_at) as first, MAX(ewh.watched_at) as last
+      FROM episode_watch_history ewh
+      JOIN tracked_shows ts ON ts.tmdb_id = ewh.show_tmdb_id
+      WHERE ts.status = 'completed'
+      GROUP BY ewh.show_tmdb_id
+      HAVING COUNT(*) >= 5
+        AND (julianday(MAX(ewh.watched_at)) - julianday(MIN(ewh.watched_at))) * 24 > 1
+    `);
+  }
+
+  async getStatsTopReactedEpisodes(limit: number): Promise<{ show_tmdb_id: number; show_title: string; season_number: number; episode_number: number; episode_title: string | null; reaction: string }[]> {
+    if (!this.db) await this.init();
+    return this.db!.getAllAsync<{ show_tmdb_id: number; show_title: string; season_number: number; episode_number: number; episode_title: string | null; reaction: string }>(`
+      SELECT er.show_tmdb_id, ts.title as show_title,
+        er.season_number, er.episode_number,
+        we.episode_title, er.reaction
+      FROM episode_reactions er
+      JOIN tracked_shows ts ON ts.tmdb_id = er.show_tmdb_id
+      LEFT JOIN watched_episodes we ON we.show_tmdb_id = er.show_tmdb_id
+        AND we.season_number = er.season_number
+        AND we.episode_number = er.episode_number
+      ORDER BY er.created_at DESC
+      LIMIT ?
+    `, [limit]);
+  }
+
+  async getStatsMostRewatchedShow(): Promise<{ show_tmdb_id: number; title: string; rewatch_count: number } | null> {
+    if (!this.db) await this.init();
+    return this.db!.getFirstAsync<{ show_tmdb_id: number; title: string; rewatch_count: number }>(`
+      SELECT ewh.show_tmdb_id, ts.title,
+        (COUNT(*) - COUNT(DISTINCT ewh.season_number || '-' || ewh.episode_number)) as rewatch_count
+      FROM episode_watch_history ewh
+      JOIN tracked_shows ts ON ts.tmdb_id = ewh.show_tmdb_id
+      GROUP BY ewh.show_tmdb_id
+      HAVING rewatch_count > 0
+      ORDER BY rewatch_count DESC LIMIT 1
+    `);
+  }
+
+  async getStatsFirstWatchDate(): Promise<string | null> {
+    if (!this.db) await this.init();
+    const row = await this.db!.getFirstAsync<{ earliest: string | null }>(`
+      SELECT MIN(d) as earliest FROM (
+        SELECT MIN(watched_at) as d FROM episode_watch_history
+        UNION ALL
+        SELECT MIN(watched_at) as d FROM movie_watch_history
+      )
+    `);
+    return row?.earliest ?? null;
+  }
+
+  async getStatsShowsWithNullRuntime(): Promise<number[]> {
+    if (!this.db) await this.init();
+    const rows = await this.db!.getAllAsync<{ tmdb_id: number }>(
+      "SELECT tmdb_id FROM tracked_shows WHERE (media_type = 'tv' OR media_type IS NULL) AND runtime IS NULL"
+    );
+    return rows.map(r => r.tmdb_id);
+  }
+
+  async updateShowRuntime(tmdbId: number, runtime: number): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.runAsync('UPDATE tracked_shows SET runtime = ? WHERE tmdb_id = ? AND runtime IS NULL', [runtime, tmdbId]);
+  }
+
   // Clear all local data (used on sign out to prevent data bleeding between accounts)
   async clearAllData(): Promise<void> {
     if (!this.db) await this.init();
