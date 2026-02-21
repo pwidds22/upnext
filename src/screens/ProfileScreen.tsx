@@ -342,6 +342,9 @@ export default function ProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [visibilitySheetVisible, setVisibilitySheetVisible] = useState(false);
 
+  // Subscription status
+  const { isPremium } = useSubscription();
+
   // Profile visibility settings
   const { visibility, updateVisibility } = useProfileVisibility();
 
@@ -477,6 +480,18 @@ export default function ProfileScreen() {
   };
 
   const handleExportData = () => {
+    if (!isPremium) {
+      Alert.alert(
+        'Premium Feature',
+        'Data export is available with UpNext Premium. Export all your shows, movies, watch history, and ratings.',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => navigation.navigate('Paywall') },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       'Export Data',
       'Export all your shows, movies, watch history, and ratings to a JSON file.',

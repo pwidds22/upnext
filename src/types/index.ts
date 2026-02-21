@@ -237,6 +237,7 @@ export interface TMDBMovie {
 
 // Navigation types
 export type RootStackParamList = {
+  Onboarding: undefined;
   Main: undefined;
   ShowDetail: { show: TrackedShow };
   AddShow: { tmdbShow: TMDBShow };
@@ -253,7 +254,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   Import: undefined;
   Stats: undefined;
-  Paywall: undefined;
+  Paywall: { mode?: 'onboarding' | 'upgrade' } | undefined;
 };
 
 export type AuthStackParamList = {

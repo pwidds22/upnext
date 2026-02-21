@@ -10,11 +10,17 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { PurchasesPackage, PurchasesOffering, PurchasesIntroPrice } from 'react-native-purchases';
 import { COLORS } from '../utils/constants';
+import { RootStackParamList } from '../types';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { subscriptionService } from '../services/subscription';
+import { onboardingService } from '../services/onboarding';
+
+type PaywallNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Paywall'>;
+type PaywallRouteProp = RouteProp<RootStackParamList, 'Paywall'>;
 
 type PlanKey = 'monthly' | 'annual' | 'lifetime';
 
@@ -24,7 +30,7 @@ const FEATURES = [
   { icon: 'trophy', label: 'Most watched shows leaderboard' },
   { icon: 'bulb', label: 'Fun facts about your viewing habits' },
   { icon: 'download-outline', label: 'Data export' },
-  { icon: 'notifications-outline', label: 'Advanced notifications' },
+  { icon: 'heart', label: 'Support indie development' },
 ];
 
 function formatTrialText(introPrice: PurchasesIntroPrice): string {
@@ -43,7 +49,11 @@ function getSelectedPackage(
 }
 
 export default function PaywallScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<PaywallNavigationProp>();
+  const route = useRoute<PaywallRouteProp>();
+  const mode = route.params?.mode ?? 'upgrade';
+  const isOnboarding = mode === 'onboarding';
+
   const { isPremium, restorePurchases } = useSubscription();
 
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
@@ -51,6 +61,24 @@ export default function PaywallScreen() {
   const [loadingOfferings, setLoadingOfferings] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
   const [offeringsError, setOfferingsError] = useState(false);
+
+  const completeOnboarding = useCallback(async () => {
+    await onboardingService.markComplete();
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'Main' }],
+      }),
+    );
+  }, [navigation]);
+
+  const dismiss = useCallback(() => {
+    if (isOnboarding) {
+      completeOnboarding();
+    } else {
+      navigation.goBack();
+    }
+  }, [isOnboarding, completeOnboarding, navigation]);
 
   const fetchOfferings = useCallback(async () => {
     setLoadingOfferings(true);
@@ -69,6 +97,13 @@ export default function PaywallScreen() {
     fetchOfferings();
   }, [fetchOfferings]);
 
+  // If already premium during onboarding, skip straight to main
+  useEffect(() => {
+    if (isPremium && isOnboarding) {
+      completeOnboarding();
+    }
+  }, [isPremium, isOnboarding, completeOnboarding]);
+
   const handlePurchase = async () => {
     if (!offering) return;
     const pkg = getSelectedPackage(offering, selectedPlan);
@@ -78,7 +113,7 @@ export default function PaywallScreen() {
     try {
       await subscriptionService.purchasePackage(pkg);
       // SubscriptionContext listener auto-updates isPremium
-      navigation.goBack();
+      dismiss();
     } catch (e: any) {
       // Import error code lazily to avoid top-level native module access
       try {
@@ -98,15 +133,15 @@ export default function PaywallScreen() {
     const { success, error } = await restorePurchases();
     if (success) {
       Alert.alert('Restored', 'Your purchases have been restored.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+        { text: 'OK', onPress: dismiss },
       ]);
     } else {
       Alert.alert('Restore Failed', error || 'Could not restore purchases. Please try again.');
     }
   };
 
-  // Already premium
-  if (isPremium) {
+  // Already premium (upgrade mode only — onboarding mode auto-completes above)
+  if (isPremium && !isOnboarding) {
     return (
       <View style={styles.centeredContainer}>
         <Ionicons name="star" size={64} color={COLORS.primary} />
@@ -156,7 +191,11 @@ export default function PaywallScreen() {
       <View style={styles.hero}>
         <Ionicons name="star" size={64} color={COLORS.warning} />
         <Text style={styles.title}>UpNext Premium</Text>
-        <Text style={styles.subtitle}>Unlock your full viewing experience</Text>
+        <Text style={styles.subtitle}>
+          {isOnboarding
+            ? 'Your 14-day free trial includes:'
+            : 'Unlock your full viewing experience'}
+        </Text>
       </View>
 
       {/* Features */}
@@ -229,6 +268,17 @@ export default function PaywallScreen() {
           ) : (
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           )}
+        </TouchableOpacity>
+      )}
+
+      {/* Maybe Later — onboarding mode only */}
+      {isOnboarding && (
+        <TouchableOpacity
+          style={styles.skipButton}
+          onPress={completeOnboarding}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.skipText}>Maybe Later</Text>
         </TouchableOpacity>
       )}
 
@@ -453,6 +503,16 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  skipButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 4,
+  },
+  skipText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   restoreButton: {
     paddingVertical: 12,

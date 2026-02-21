@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -9,6 +9,8 @@ import { RootStackParamList, MainTabParamList, AuthStackParamList } from '../typ
 import { COLORS } from '../utils/constants';
 import { useAuth } from '../contexts/AuthContext';
 import { linking } from './linking';
+import { onboardingService } from '../services/onboarding';
+import { storageService } from '../services/storage';
 
 // Screens
 import UpNextScreen from '../screens/UpNextScreen';
@@ -29,6 +31,7 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import ImportScreen from '../screens/ImportScreen';
 import StatsScreen from '../screens/StatsScreen';
 import PaywallScreen from '../screens/PaywallScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -156,9 +159,47 @@ function LinkingFallback() {
 }
 
 export default function AppNavigator() {
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkOnboarding() {
+      // Check AsyncStorage flag first
+      const complete = await onboardingService.isComplete();
+      if (complete) {
+        setIsOnboardingComplete(true);
+        return;
+      }
+
+      // Existing users updating the app: if they have tracked shows, skip onboarding
+      try {
+        const shows = await storageService.getAllShows();
+        if (shows.length > 0) {
+          await onboardingService.markComplete();
+          setIsOnboardingComplete(true);
+          return;
+        }
+      } catch {
+        // DB not ready — proceed to onboarding
+      }
+
+      setIsOnboardingComplete(false);
+    }
+    checkOnboarding();
+  }, []);
+
+  // Show loading while checking onboarding state
+  if (isOnboardingComplete === null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer theme={DarkTheme} linking={linking} fallback={<LinkingFallback />}>
       <Stack.Navigator
+        initialRouteName={isOnboardingComplete ? 'Main' : 'Onboarding'}
         screenOptions={{
           headerStyle: {
             backgroundColor: COLORS.surface,
@@ -167,6 +208,11 @@ export default function AppNavigator() {
           headerShadowVisible: false,
         }}
       >
+        <Stack.Screen
+          name="Onboarding"
+          component={OnboardingScreen}
+          options={{ headerShown: false }}
+        />
         <Stack.Screen
           name="Main"
           component={MainTabs}
