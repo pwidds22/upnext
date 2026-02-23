@@ -17,6 +17,7 @@ import {
 import { tmdbIdResolver } from './tmdbIdResolver';
 import { storageService } from './storage';
 import { tmdbService } from './tmdb';
+import { ratingsService } from './supabase/ratings';
 
 // Status mapping from external sources to UpNext statuses
 export function mapShowStatus(sourceStatus: string | undefined): ShowStatus {
@@ -50,10 +51,12 @@ export function normalizeRating(value: number, maxScale: number): number {
  * Main import orchestrator.
  * Takes normalized data from any source, resolves TMDB IDs,
  * deduplicates against existing data, and inserts into SQLite.
+ * Pass userId to enable ratings import (stored in Supabase, requires auth).
  */
 export async function executeImport(
   data: NormalizedImportData,
   onProgress?: (progress: ImportProgress) => void,
+  userId?: string,
 ): Promise<ImportResult> {
   const startTime = Date.now();
   const errors: string[] = [];
@@ -194,9 +197,46 @@ export async function executeImport(
     errors.push('...additional errors were suppressed');
   }
 
-  // Ratings import not yet implemented — skip and inform user
+  // Import ratings (requires userId — stored in Supabase, not SQLite)
   if (data.ratings.length > 0) {
-    errors.push(`Rating import not yet supported (${data.ratings.length} ratings skipped)`);
+    if (!userId) {
+      errors.push(`Sign in to import ratings (${data.ratings.length} ratings skipped)`);
+    } else {
+      for (const ratingEntry of data.ratings) {
+        importedCount++;
+        if (importedCount % 10 === 0) {
+          onProgress?.({
+            phase: 'importing',
+            current: importedCount,
+            total: totalItems,
+            message: `Importing ratings... (${importedCount}/${totalItems})`,
+          });
+        }
+
+        const tmdbId = resolvedMap.get(candidateKey(ratingEntry.candidate));
+        if (!tmdbId) continue;
+
+        try {
+          const ratingInput = { tmdbId, rating: ratingEntry.rating, isPublic: false };
+
+          if (ratingEntry.ratingType === 'show') {
+            await ratingsService.rateShow(userId, ratingInput);
+          } else if (ratingEntry.ratingType === 'movie') {
+            await ratingsService.rateMovie(userId, ratingInput);
+          } else if (ratingEntry.ratingType === 'episode' && ratingEntry.seasonNumber != null && ratingEntry.episodeNumber != null) {
+            await ratingsService.rateEpisode(userId, tmdbId, ratingEntry.seasonNumber, ratingEntry.episodeNumber, ratingInput);
+          } else if (ratingEntry.ratingType === 'season' && ratingEntry.seasonNumber != null) {
+            await ratingsService.rateSeason(userId, tmdbId, ratingEntry.seasonNumber, ratingInput);
+          }
+
+          ratingsImported++;
+        } catch (e) {
+          if (errors.length < 50) {
+            errors.push(`Rating "${ratingEntry.candidate.title}": ${e instanceof Error ? e.message : 'unknown error'}`);
+          }
+        }
+      }
+    }
   }
 
   onProgress?.({

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Paths, File } from 'expo-file-system';
 import JSZip from 'jszip';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri, useAuthRequest } from 'expo-auth-session';
 
 import { COLORS } from '../utils/constants';
 import {
@@ -24,6 +26,38 @@ import { executeImport } from '../services/import';
 import { parseUpNextJson } from '../services/importSources/upnextJson';
 import { parseTVTimeExport } from '../services/importSources/tvtime';
 import { parseLetterboxdExport } from '../services/importSources/letterboxd';
+import { parseTraktData } from '../services/importSources/trakt';
+import { parseSimklData } from '../services/importSources/simkl';
+import {
+  storeTraktTokens,
+  getValidTraktAccessToken,
+  storeSimklToken,
+  getSimklToken,
+  clearSimklToken,
+} from '../services/oauthTokens';
+import { useAuth } from '../contexts/AuthContext';
+
+// Must be called at module level for expo-auth-session to dismiss the browser
+WebBrowser.maybeCompleteAuthSession();
+
+// OAuth configuration
+const TRAKT_CLIENT_ID = process.env.EXPO_PUBLIC_TRAKT_CLIENT_ID || '';
+const TRAKT_CLIENT_SECRET = process.env.EXPO_PUBLIC_TRAKT_CLIENT_SECRET || '';
+const SIMKL_CLIENT_ID = process.env.EXPO_PUBLIC_SIMKL_CLIENT_ID || '';
+const SIMKL_CLIENT_SECRET = process.env.EXPO_PUBLIC_SIMKL_CLIENT_SECRET || '';
+
+const TRAKT_REDIRECT_URI = makeRedirectUri({ scheme: 'upnext', path: 'oauth/trakt' });
+const SIMKL_REDIRECT_URI = makeRedirectUri({ scheme: 'upnext', path: 'oauth/simkl' });
+
+const traktDiscovery = {
+  authorizationEndpoint: 'https://trakt.tv/oauth/authorize',
+  tokenEndpoint: 'https://api.trakt.tv/oauth/token',
+};
+
+const simklDiscovery = {
+  authorizationEndpoint: 'https://simkl.com/oauth/authorize',
+  tokenEndpoint: 'https://api.simkl.com/oauth/token',
+};
 
 // Source configuration
 const IMPORT_SOURCES: Array<{
@@ -73,14 +107,150 @@ const IMPORT_SOURCES: Array<{
 type ScreenState = 'source_select' | 'importing' | 'results';
 
 export default function ImportScreen() {
+  const { user } = useAuth();
   const [screenState, setScreenState] = useState<ScreenState>('source_select');
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // OAuth hooks — always prepared, browser only opens on promptAsync()
+  const [traktRequest, traktResponse, promptTraktAsync] = useAuthRequest(
+    {
+      clientId: TRAKT_CLIENT_ID,
+      scopes: [], // Trakt uses implicit single scope
+      redirectUri: TRAKT_REDIRECT_URI,
+      usePKCE: false, // Trakt doesn't support PKCE
+    },
+    traktDiscovery,
+  );
+
+  const [simklRequest, simklResponse, promptSimklAsync] = useAuthRequest(
+    {
+      clientId: SIMKL_CLIENT_ID,
+      scopes: [], // SIMKL doesn't use scopes
+      redirectUri: SIMKL_REDIRECT_URI,
+      usePKCE: false, // SIMKL doesn't support PKCE
+    },
+    simklDiscovery,
+  );
+
   const handleProgress = useCallback((p: ImportProgress) => {
     setProgress(p);
   }, []);
+
+  // Shared function: run parser + executeImport for an OAuth source
+  const runOAuthImport = useCallback(
+    async (sourceType: 'trakt' | 'simkl', clientId: string, accessToken: string) => {
+      setScreenState('importing');
+      setError(null);
+      setProgress({ phase: 'parsing', current: 0, total: 0, message: `Fetching your ${sourceType === 'trakt' ? 'Trakt' : 'SIMKL'} data...` });
+
+      const normalizedData =
+        sourceType === 'trakt'
+          ? await parseTraktData(clientId, accessToken, handleProgress)
+          : await parseSimklData(clientId, accessToken, handleProgress);
+
+      setProgress({ phase: 'resolving_ids', current: 0, total: 0, message: 'Starting import...' });
+      const importResult = await executeImport(normalizedData, handleProgress, user?.id);
+      setResult(importResult);
+      setScreenState('results');
+    },
+    [handleProgress],
+  );
+
+  // Exchange Trakt auth code for tokens, store, and run import
+  const handleTraktCodeExchange = useCallback(
+    async (code: string) => {
+      try {
+        setScreenState('importing');
+        setError(null);
+        setProgress({ phase: 'parsing', current: 0, total: 0, message: 'Connecting to Trakt...' });
+
+        const res = await fetch('https://api.trakt.tv/oauth/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            client_id: TRAKT_CLIENT_ID,
+            client_secret: TRAKT_CLIENT_SECRET,
+            redirect_uri: TRAKT_REDIRECT_URI,
+            grant_type: 'authorization_code',
+          }),
+        });
+
+        if (!res.ok) throw new Error('Failed to get Trakt access token');
+        const tokens = await res.json();
+
+        await storeTraktTokens({
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresIn: tokens.expires_in,
+          createdAt: tokens.created_at,
+        });
+
+        await runOAuthImport('trakt', TRAKT_CLIENT_ID, tokens.access_token);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Trakt import failed';
+        setError(message);
+        setScreenState('source_select');
+        Alert.alert('Import Error', message);
+      }
+    },
+    [runOAuthImport],
+  );
+
+  // Exchange SIMKL auth code for token, store, and run import
+  const handleSimklCodeExchange = useCallback(
+    async (code: string) => {
+      try {
+        setScreenState('importing');
+        setError(null);
+        setProgress({ phase: 'parsing', current: 0, total: 0, message: 'Connecting to SIMKL...' });
+
+        const res = await fetch('https://api.simkl.com/oauth/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            client_id: SIMKL_CLIENT_ID,
+            client_secret: SIMKL_CLIENT_SECRET,
+            redirect_uri: SIMKL_REDIRECT_URI,
+            grant_type: 'authorization_code',
+          }),
+        });
+
+        if (!res.ok) throw new Error('Failed to get SIMKL access token');
+        const tokenData = await res.json();
+
+        await storeSimklToken(tokenData.access_token);
+        await runOAuthImport('simkl', SIMKL_CLIENT_ID, tokenData.access_token);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'SIMKL import failed';
+        setError(message);
+        setScreenState('source_select');
+        Alert.alert('Import Error', message);
+      }
+    },
+    [runOAuthImport],
+  );
+
+  // Handle Trakt OAuth browser response
+  useEffect(() => {
+    if (traktResponse?.type === 'success' && traktResponse.params.code) {
+      handleTraktCodeExchange(traktResponse.params.code);
+    } else if (traktResponse?.type === 'error') {
+      Alert.alert('Trakt Error', 'Failed to connect to Trakt. Please try again.');
+    }
+  }, [traktResponse, handleTraktCodeExchange]);
+
+  // Handle SIMKL OAuth browser response
+  useEffect(() => {
+    if (simklResponse?.type === 'success' && simklResponse.params.code) {
+      handleSimklCodeExchange(simklResponse.params.code);
+    } else if (simklResponse?.type === 'error') {
+      Alert.alert('SIMKL Error', 'Failed to connect to SIMKL. Please try again.');
+    }
+  }, [simklResponse, handleSimklCodeExchange]);
 
   const handleFileImport = useCallback(
     async (sourceType: ImportSourceType, fileType: 'json' | 'zip') => {
@@ -152,7 +322,7 @@ export default function ImportScreen() {
           message: 'Starting import...',
         });
 
-        const importResult = await executeImport(normalizedData, handleProgress);
+        const importResult = await executeImport(normalizedData, handleProgress, user?.id);
         setResult(importResult);
         setScreenState('results');
       } catch (e) {
@@ -166,16 +336,52 @@ export default function ImportScreen() {
   );
 
   const handleOAuthImport = useCallback(
-    (sourceType: ImportSourceType) => {
-      // OAuth-based imports (Trakt, SIMKL) require API keys and OAuth flow
-      // For now, show a placeholder message
-      Alert.alert(
-        `${sourceType === 'trakt' ? 'Trakt' : 'SIMKL'} Import`,
-        `To import from ${sourceType === 'trakt' ? 'Trakt' : 'SIMKL'}, you'll need to connect your account. This feature requires API configuration.\n\nComing soon in a future update!`,
-        [{ text: 'OK' }],
-      );
+    async (sourceType: ImportSourceType) => {
+      try {
+        if (sourceType === 'trakt') {
+          if (!TRAKT_CLIENT_ID) {
+            Alert.alert('Not Configured', 'Trakt API keys are not set. Add EXPO_PUBLIC_TRAKT_CLIENT_ID to your .env file.');
+            return;
+          }
+
+          // Check for stored token (may still be valid or refreshable)
+          const storedToken = await getValidTraktAccessToken(TRAKT_REDIRECT_URI);
+          if (storedToken) {
+            await runOAuthImport('trakt', TRAKT_CLIENT_ID, storedToken);
+            return;
+          }
+
+          // No valid token — open browser for OAuth
+          await promptTraktAsync();
+        } else if (sourceType === 'simkl') {
+          if (!SIMKL_CLIENT_ID) {
+            Alert.alert('Not Configured', 'SIMKL API keys are not set. Add EXPO_PUBLIC_SIMKL_CLIENT_ID to your .env file.');
+            return;
+          }
+
+          // SIMKL tokens never expire — check for stored token
+          const storedToken = await getSimklToken();
+          if (storedToken) {
+            try {
+              await runOAuthImport('simkl', SIMKL_CLIENT_ID, storedToken);
+              return;
+            } catch {
+              // Token may have been revoked — clear and re-authenticate
+              await clearSimklToken();
+            }
+          }
+
+          // No valid token — open browser for OAuth
+          await promptSimklAsync();
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'OAuth failed';
+        setError(message);
+        setScreenState('source_select');
+        Alert.alert('Import Error', message);
+      }
     },
-    [],
+    [promptTraktAsync, promptSimklAsync, runOAuthImport],
   );
 
   const handleSourcePress = useCallback(

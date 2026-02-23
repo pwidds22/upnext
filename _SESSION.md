@@ -1,107 +1,51 @@
 # UpNext - Session State
 Updated: 2026-02-23 | Branch: main
 
-## Status: Phases 5-6 COMPLETE — Git cleanup done, PR #1 created
+## Status: Strategic pivot — personal use app, strip complexity
 
 ### This Session
-- **Phase 5: Feature Gating — COMPLETE**
-  - Gated Data Export behind premium in `src/screens/ProfileScreen.tsx`: free users see "Premium Feature" Alert with "Upgrade" button → PaywallScreen
-  - Premium/trial users can export normally (isPremium is true during trial)
-  - Updated `src/screens/PaywallScreen.tsx` feature list: replaced "Advanced notifications" with "Support indie development"
-  - Notification gating skipped — only basic features exist, advanced not yet implemented
-- **Phase 6: Onboarding Revamp — COMPLETE** (done outside this session, committed in `766e5a7`)
-  - Welcome carousel, dual-mode paywall (onboarding vs upgrade), first-launch detection
-  - `src/screens/PaywallScreen.tsx` — onboarding mode with "Maybe Later" skip, completeOnboarding flow
-  - `src/services/onboarding.ts` — onboardingService for first-launch detection
-- **Git cleanup**
-  - Deleted 6 stale remote branches (claude/*, objective-bouman)
-  - Deleted 3 stale local branches
-  - Fixed `origin/HEAD` → `origin/main` (was pointing to non-existent master)
-  - Pruned stale remote tracking refs
-  - Only `main` branch remains (local + remote)
-- **PR #1 created**: "Monetization infrastructure + onboarding (Phases 1-6)" — https://github.com/pwidds22/upnext/pull/1
-  - Base: `pre-monetization` (commit `f9bce73`, pre-Phase-1)
-  - Head: `main` (all Phases 1-6)
-- **gh CLI authenticated** — `gh auth login` completed, PATH fix: `C:\Program Files\GitHub CLI`
-- TypeScript compiles cleanly (pre-existing NotificationsScreen type error only)
+- **RevenueCat production key swapped** — `.env` now has `appl_<REDACTED>` (was test key)
+- **Trakt + SIMKL OAuth flows built** (but will be removed next session)
+  - `src/services/oauthTokens.ts` — New: SecureStore token storage with Trakt refresh logic
+  - `src/screens/ImportScreen.tsx` — Replaced "Coming soon" placeholders with real OAuth flows using `expo-auth-session`
+  - `src/services/import.ts` — Added ratings import support via `ratingsService`
+  - `.env` — Added Trakt/SIMKL client ID/secret placeholders
+- **Deep research on market viability** — Concluded TV tracker market is saturated (17+ competitors), unit economics are brutal for solo dev with no marketing budget. Decision: **ship as personal-use app** for self and friends, stop chasing features for a market we're not trying to win.
+
+### Strategic Decision
+**UpNext is now a personal-use app**, not a business. Key implications:
+- Strip out import functionality (Trakt, SIMKL, TV Time, Letterboxd, UpNext JSON)
+- Strip out other complex features that only matter for market competition
+- Add **automatic data refresh** (cron job / background task) so the app stays up-to-date without manual management
+- Keep it self-sustaining — minimize ongoing maintenance
 
 ### Files Modified This Session
-- `src/screens/ProfileScreen.tsx` — Added `isPremium` check to `handleExportData()`, premium gate with paywall prompt
-- `src/screens/PaywallScreen.tsx` — Updated FEATURES list + onboarding mode (dual-mode paywall)
-- `src/services/onboarding.ts` — New: onboarding service for first-launch detection
+- `.env` — RevenueCat production key + Trakt/SIMKL placeholders (placeholders to be removed)
+- `src/screens/ImportScreen.tsx` — OAuth flows added (to be stripped next session)
+- `src/services/import.ts` — Ratings import added (to be stripped next session)
+- `src/services/oauthTokens.ts` — New file (to be stripped next session)
 
 ### Next Session Priority Order
-1. **Update `.env` with production RevenueCat API key** — Replace `test_TxZGwckdvmNGBzSQcqkuIGmyrRA` with production `appl_xxx` key
-2. **Test paywall on dev build** — Verify offerings load, plan cards show real prices, sandbox purchase works
-3. **Test onboarding flow** — Fresh install shows carousel → paywall, relaunch skips, existing users skip
-4. **Phase 7: Launch Prep** — Final phase before App Store submission
+1. **Strip import functionality** — Remove ImportScreen, import services, parsers, TMDB resolver, related types
+2. **Strip other unnecessary complexity** — Audit features that only matter for market competition
+3. **Add automatic data refresh** — Background task or Supabase Edge Function on schedule to keep shows/movies/episodes/air dates current without user intervention
+4. **Test onboarding + paywall** — Needs fresh dev build
+5. **Ship to App Store** — Minimal launch prep, don't over-polish
+
+### What Needs Auto-Refresh (Next Session)
+Currently the app fetches TMDB data **on-demand only** (search, open show). No background refresh for:
+- New episodes added to tracked shows
+- Air date changes
+- Show status changes (ended, cancelled)
+- New season announcements
+Options: Supabase Edge Function on cron schedule, or in-app background task on app launch
 
 ### RevenueCat Status
-- **Account**: Created, "UpNext" project exists
-- **Test API key**: `test_TxZGwckdvmNGBzSQcqkuIGmyrRA` (currently in `.env`)
-- **Production API key**: Created (Feb 20, 2026) — needs to be swapped into `.env` and EAS secrets
-- **Entitlement**: `premium` — created with 3 products attached
-- **Offerings**: `default` — with `$rc_monthly`, `$rc_annual`, `$rc_lifetime` packages
-- **ASC Products**: All 3 created with founding prices ($1.99/$14.99/$49.99)
-- **Server Notifications**: Production + Sandbox URLs configured (V2)
-- **P8 key**: Uploaded, valid credentials
-- **Shared secret**: Entered (legacy StoreKit 1, optional since P8 key handles StoreKit 2)
-
-### Stats-Specific Remaining Work
-- Genres breakdown (deferred — needs genre_ids column + backfill)
-- Runtime backfill could be more aggressive (currently lazy on stats screen open)
-
-### Import-Specific Remaining Work (from Phase 1)
-- Trakt OAuth flow (needs TRAKT_CLIENT_ID env var)
-- SIMKL OAuth flow (needs SIMKL_CLIENT_ID env var)
-- Manual resolution UI (tap unresolved items to search/pick TMDB match)
-- Generic CSV import source (column mapping UI)
-- Ratings import (currently skipped with user message)
-
-## Pre-Launch Roadmap
-
-### Before Launch (Priority Order)
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 1 | Fix 4 critical bugs | DONE | |
-| 2 | Test all fixes | DONE | |
-| 3 | Fix review feedback (3 issues) | DONE | |
-| 4 | Sync engine hardening (5 review rounds) | DONE | |
-| 5 | Tech debt pass | DONE | |
-| 6 | Fix review feedback (nested transactions + 6 more) | DONE | |
-| 7 | Production prep (env var security + validation) | DONE | |
-| 8 | Fix production black screen | DONE | |
-| 9 | Verify TestFlight build | DONE | |
-| 10 | Apple Sign-In (App Store requirement) | DONE | |
-| 11 | Fix profile avatar letter for Apple Sign-In users | DONE | useFocusEffect + profile fetch |
-| 12 | Show streaming availability on search page | DONE | Both modals, with race condition guard |
-| 13 | Google Sign-In | DONE | Tested on dev build, TestFlight building |
-| 14 | Fix remaining review feedback (6 issues) | DONE | Cached config, thenable, unknown props, fetchPaginated, profile in context |
-| 15 | Fix Find People text input (KeyboardAvoidingView) | DONE | Defensive fix: KAV + autoFocus + keyboardDismissMode |
-| 16 | My Ratings shows "Show #12345" instead of names on first load | DONE | TMDB fallback when show not in local SQLite |
-| 17 | Library shows wrong episode count (e.g. 5/4) until tapped | DONE | Display clamp + background refresh + store at add time |
-| 18 | Show air date alongside "in 4 days" / "tomorrow" countdown | DONE | Both EpisodeRow and UpNextScreen |
-| 19 | Add a way to test notifications without waiting for a real episode | DONE | Test button on NotificationsScreen |
-| 20 | Launch prep (app store assets) | IN PROGRESS | App Store Connect mostly configured |
-| 21 | Fix signup profile showing email prefix | DONE | Race condition: refreshProfile after signUp |
-| 22 | Fix episode watch count multiplying | DONE | Sync feedback loop, cleaned 1328 Supabase dupes |
-
-### Monetization Phases
-| # | Phase | Status | Notes |
-|---|-------|--------|-------|
-| 1 | Import Infrastructure | DONE | 5 sources, TMDB resolver, import UI |
-| 2 | Stats Dashboard | DONE | 10 sections, charts, premium gating ready |
-| 3 | RevenueCat + Subscriptions | DONE | SDK, service, context, ASC products, RevenueCat dashboard |
-| 4 | Paywall + Reverse Trial | DONE | Real paywall with offerings, plan cards, purchase flow |
-| 5 | Feature Gating | DONE | Data export gated, stats already gated, notifications deferred |
-| 6 | Onboarding Revamp | DONE | Welcome carousel, dual-mode paywall, first-launch detection |
-| 7 | Launch Prep | TODO | Requires all above |
-
-### Post-Launch (v1.1+)
-| # | Feature | Complexity | Notes |
-|---|---------|------------|-------|
-| 1 | **Widgets** | Medium | iOS home screen widget |
-| 2 | **Apple TV app** | High | Far down the road, after App Store launch |
+- **Production API key**: `appl_<REDACTED>` — NOW IN `.env`
+- **EAS secret still needs updating** before next build: `eas secret:create --name EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY --value appl_<REDACTED> --scope project`
+- **Entitlement**: `premium` — 3 products attached
+- **Offerings**: `default` — monthly/annual/lifetime packages
+- **ASC Products**: Founding prices ($1.99/$14.99/$49.99)
 
 ### App Store Connect Status
 - **Privacy Policy**: Notion page (published, URL set in ASC)
@@ -111,27 +55,7 @@ Updated: 2026-02-23 | Branch: main
 - **Pricing**: Free, all territories
 - **App Privacy**: 4 data types declared
 - **Build**: Build 14 submitted to TestFlight (ASC App ID: 6758222275)
-- **Subscription Products**: 3 products created (founding prices: $1.99/$14.99/$49.99)
-- **Server Notifications**: V2, production + sandbox URLs set
-- **Still needs**: App name resolution, screenshots, test account, export compliance, marketing URL cleanup
-
-### Google Cloud Console Status
-- **Project**: UpNext (895548176925)
-- **OAuth consent screen**: Published (production), External
-- **Scopes**: openid, email, profile (non-sensitive, no verification needed)
-- **Clients**: UpNext Web (web app), UpNext iOS (iOS app)
-- **Redirect URIs on Web client**: `https://aqzbfqkimrndyuukkozn.supabase.co/auth/v1/callback`, `https://auth.expo.io/@pwidds/upnext`
-- **Google Play Developer Account**: Created (personal)
-
-### Open Questions
-- **Email change for Apple Sign-In users**: Apple provides a private relay email. Allow users to change, or not necessary?
-
-### Deferred Items
-- Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
-- Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at`
-- Schema: `tmdb_id` PK vs UNIQUE INDEX contradiction in `tracked_shows`
-- `deduplicateWatchHistory` runs on every init (cheap at current scale, add migration flag later)
-- See `TECH_DEBT.md` for full medium/low priority debt
+- **Still needs**: App name resolution, screenshots, test account, export compliance
 
 ### Completed Features
 - **Core** — Search, tracking, episodes, sync engine
@@ -145,9 +69,16 @@ Updated: 2026-02-23 | Branch: main
 - **Share Profile** — Deep links, privacy controls, profile stats
 - **Data Export** — JSON export with profile, follows, ratings, warnings
 - **Settings** — About, Sync Settings, Notifications screens
-- **Import Data** — 5 sources (UpNext JSON, Trakt, TV Time, SIMKL, Letterboxd)
+- **Import Data** — 5 sources (TO BE REMOVED next session)
 - **Stats Dashboard** — 10-section analytics with custom charts, premium gating
 - **Subscriptions** — RevenueCat SDK, SubscriptionContext, real PaywallScreen with purchase flow
+- **Onboarding** — Welcome carousel, dual-mode paywall, first-launch detection
+
+### Deferred Items
+- Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
+- Bug 10: Conflict resolution uses `lastSyncedAt` instead of local `updated_at`
+- Schema: `tmdb_id` PK vs UNIQUE INDEX contradiction in `tracked_shows`
+- See `TECH_DEBT.md` for full medium/low priority debt
 
 ## Build Info
 - Expo SDK 54 | React Native 0.81
@@ -155,14 +86,16 @@ Updated: 2026-02-23 | Branch: main
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
 - **Build 14** on TestFlight (all 22 fixes)
 - **ASC App ID**: 6758222275
-- **Dev build in progress** — EAS building iOS development profile (includes `react-native-purchases` native module)
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
 - **IAP Key ID**: A3VL7TXUCZ (uploaded to RevenueCat)
 - **Google Sign-In**: Configured — Web + iOS client IDs in `.env`, Supabase Google provider enabled
 - **Google Play**: Developer account created (personal, $25)
-- **RevenueCat**: Production key created, test key currently in `.env` (swap before next TestFlight)
+- **RevenueCat**: Production key now in `.env` (still needs EAS secret update before next build)
 
-## Known Issues
-- See `TECH_DEBT.md` for full technical debt tracking
+## Research Files (Not Committed)
+- `CLAUDE_DEEP_RESEARCH.md` — Market viability analysis
+- `OAUTH_TRAKT_SIMKL.md` — OAuth research for Trakt/SIMKL (no longer needed)
+- `Monetization_Launch.md` — Original monetization strategy
+- `Premium_Value_Proposition.md`, `WATCH_HISTORY_IMPORT.md`, `series_guide_reviews.md`, `trakt_reviews.md`, `tv_time_reviews.md` — Research docs
