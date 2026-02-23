@@ -150,6 +150,11 @@ export interface TMDBShow {
   networks?: TMDBNetwork[];
   vote_average?: number;
   episode_run_time?: number[]; // Typical episode runtimes in minutes
+  seasons?: Array<{
+    season_number: number;
+    episode_count: number;
+    air_date: string | null;
+  }>;
 }
 
 export interface TMDBGenre {

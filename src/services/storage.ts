@@ -184,6 +184,13 @@ class StorageService {
       // Index already exists, ignore error
     }
 
+    // Migration: add metadata refresh tracking column
+    try {
+      await this.db.runAsync('ALTER TABLE tracked_shows ADD COLUMN metadata_refreshed_at TEXT');
+    } catch {
+      // Column already exists, ignore error
+    }
+
     // Bug #22 fix: Deduplicate episode/movie watch history
     // Duplicates were created by sync pulling back records and re-inserting with new IDs
     await this.deduplicateWatchHistory();
@@ -408,6 +415,58 @@ class StorageService {
       airedEpisodes,
       tmdbId,
     ]);
+  }
+
+  async getShowsNeedingRefresh(statuses: string[]): Promise<Array<{
+    tmdb_id: number;
+    total_seasons: number;
+    media_type: string;
+    metadata_refreshed_at: string | null;
+  }>> {
+    if (!this.db) await this.init();
+
+    const placeholders = statuses.map(() => '?').join(',');
+    return this.db!.getAllAsync(
+      `SELECT tmdb_id, total_seasons, media_type, metadata_refreshed_at
+       FROM tracked_shows
+       WHERE status IN (${placeholders})
+       ORDER BY metadata_refreshed_at IS NOT NULL, metadata_refreshed_at ASC`,
+      statuses
+    );
+  }
+
+  async updateShowMetadata(tmdbId: number, data: {
+    totalSeasons: number;
+    totalEpisodes: number;
+    airedEpisodes: number;
+    posterPath: string | null;
+  }): Promise<void> {
+    if (!this.db) await this.init();
+
+    const now = new Date().toISOString();
+    await this.db!.runAsync(
+      `UPDATE tracked_shows SET
+         total_seasons = ?, total_episodes = ?, aired_episodes = ?,
+         poster_path = ?, metadata_refreshed_at = ?
+       WHERE tmdb_id = ? AND (media_type = 'tv' OR media_type IS NULL)`,
+      [data.totalSeasons, data.totalEpisodes, data.airedEpisodes,
+       data.posterPath, now, tmdbId]
+    );
+  }
+
+  async updateMovieMetadata(tmdbId: number, data: {
+    releaseDate: string | null;
+    runtime: number | null;
+  }): Promise<void> {
+    if (!this.db) await this.init();
+
+    const now = new Date().toISOString();
+    await this.db!.runAsync(
+      `UPDATE tracked_shows SET
+         release_date = ?, runtime = ?, metadata_refreshed_at = ?
+       WHERE tmdb_id = ? AND media_type = 'movie'`,
+      [data.releaseDate, data.runtime, now, tmdbId]
+    );
   }
 
   async updateShowStatus(tmdbId: number, status: ShowStatus): Promise<void> {

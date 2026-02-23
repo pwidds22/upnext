@@ -1,55 +1,32 @@
 # UpNext - Session State
 Updated: 2026-02-23 | Branch: main
 
-## Status: Personal-use app — stripped complexity, preparing to ship
+## Status: Personal-use app — automatic data refresh implemented, preparing to ship
 
 ### This Session
-- **Stripped import functionality** — Deleted 9 files: ImportScreen, import.ts, oauthTokens.ts, tmdbIdResolver.ts, 5 importSources parsers (trakt, simkl, letterboxd, tvtime, upnextJson)
-- **Stripped subscription/paywall system** — Deleted 4 files: PaywallScreen, SubscriptionContext, subscription.ts, LockedSection. All features now free.
-- **Unlocked all stats** — Removed LockedSection wrappers from StatsScreen, FunFacts shows all facts
-- **Simplified onboarding** — Carousel now goes directly to Main app (skips paywall)
-- **Removed premium gating on data export** — Export works without premium check
-- **Removed Import Data menu** from Profile screen
-- **Removed PremiumMenuItem** from Profile screen
-- **Cleaned up dependencies** — Removed `jszip`, `expo-document-picker`, `react-native-purchases`
-- **Cleaned up .env** — Removed RevenueCat, Trakt, SIMKL keys
-- **Cleaned up constants.ts** — Removed RevenueCat env validation
+- **Implemented automatic TMDB metadata refresh** — Shows/movies now auto-refresh when app comes to foreground (if >6 hours stale)
+  - Refreshes `total_seasons`, `total_episodes`, `aired_episodes`, `poster_path` for TV shows in watching/waiting status
+  - Refreshes `release_date`, `runtime` for movies in watchlist status
+  - Throttled at 400ms between TMDB API calls (safely under rate limit)
+  - Handles 429 rate limiting with 10s pause + retry
+  - Abort support and concurrent-run guard
+  - Screens auto-reload via `refreshKey` context broadcast
 
-### Files Deleted This Session
-- `src/screens/ImportScreen.tsx`
-- `src/screens/PaywallScreen.tsx`
-- `src/services/import.ts`
-- `src/services/oauthTokens.ts`
-- `src/services/tmdbIdResolver.ts`
-- `src/services/importSources/` (entire directory: trakt, simkl, letterboxd, tvtime, upnextJson)
-- `src/contexts/SubscriptionContext.tsx`
-- `src/services/subscription.ts`
-- `src/components/stats/LockedSection.tsx`
+### Files Created This Session
+- `src/services/metadataRefresh.ts` — Core refresh service (staleness check, TMDB batching, throttling)
+- `src/contexts/MetadataRefreshContext.tsx` — React context (AppState foreground detection, refreshKey broadcast)
 
 ### Files Modified This Session
-- `App.tsx` — Removed SubscriptionProvider wrapper
-- `src/navigation/AppNavigator.tsx` — Removed Import + Paywall routes and imports
-- `src/types/index.ts` — Removed Import types, Subscription types, nav params
-- `src/screens/OnboardingScreen.tsx` — Onboarding completes to Main, not Paywall
-- `src/screens/StatsScreen.tsx` — Removed all premium gating, all sections visible
-- `src/components/stats/FunFacts.tsx` — Removed isPremium prop, shows all facts
-- `src/screens/ProfileScreen.tsx` — Removed PremiumMenuItem, Import menu, premium export gate
-- `src/utils/constants.ts` — Removed RevenueCat env check
-- `.env` — Removed RevenueCat + Trakt + SIMKL keys
-- `package.json` — Removed jszip, expo-document-picker, react-native-purchases
+- `src/services/storage.ts` — Added `metadata_refreshed_at` column migration + `getShowsNeedingRefresh()`, `updateShowMetadata()`, `updateMovieMetadata()` methods
+- `src/types/index.ts` — Added `seasons` summary array to `TMDBShow` interface (TMDB returns this from `/tv/{id}`)
+- `App.tsx` — Wrapped with `MetadataRefreshProvider` inside SyncProvider
+- `src/screens/UpNextScreen.tsx` — Watches `refreshKey` to reload when metadata refresh completes
+- `src/screens/MyShowsScreen.tsx` — Same `refreshKey` pattern
 
 ### Next Session Priority Order
-1. **Add automatic data refresh** — Background task or Supabase Edge Function on schedule to keep shows/movies/episodes/air dates current without user intervention
-2. **Test onboarding flow** — Verify carousel → Main works on fresh install
-3. **Ship to App Store** — Minimal launch prep, don't over-polish
-
-### What Needs Auto-Refresh
-Currently the app fetches TMDB data **on-demand only** (search, open show). No background refresh for:
-- New episodes added to tracked shows
-- Air date changes
-- Show status changes (ended, cancelled)
-- New season announcements
-Options: Supabase Edge Function on cron schedule, or in-app background task on app launch
+1. **Test onboarding flow** — Verify carousel → Main works on fresh install
+2. **Ship to App Store** — Minimal launch prep, don't over-polish
+3. **Consider show status notifications** — When refresh detects a show changed to "Ended"/"Cancelled", could prompt user
 
 ### App Store Connect Status
 - **Privacy Policy**: Notion page (published, URL set in ASC)
@@ -75,11 +52,7 @@ Options: Supabase Edge Function on cron schedule, or in-app background task on a
 - **Settings** — About, Sync Settings, Notifications screens
 - **Stats Dashboard** — 10-section analytics with custom charts (all free)
 - **Onboarding** — Welcome carousel, first-launch detection
-
-### Removed Features (This Session)
-- **Import Data** — 5 sources (Trakt, SIMKL, TV Time, Letterboxd, UpNext JSON)
-- **Subscriptions** — RevenueCat SDK, paywall, premium gating
-- **Feature Gating** — All features now free
+- **Auto Refresh** — TMDB metadata refresh on app foreground (6h staleness window)
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -91,7 +64,7 @@ Options: Supabase Edge Function on cron schedule, or in-app background task on a
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
-- **Build 14** on TestFlight (STALE — needs rebuild with stripped features)
+- **Build 14** on TestFlight (STALE — needs rebuild with auto-refresh + stripped features)
 - **ASC App ID**: 6758222275
 
 ## External Config Notes

@@ -6,6 +6,7 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { SyncProvider } from './src/contexts/SyncContext';
 
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { MetadataRefreshProvider } from './src/contexts/MetadataRefreshContext';
 import { storageService } from './src/services/storage';
 import { COLORS } from './src/utils/constants';
 
@@ -53,8 +54,10 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <SyncProvider>
+          <MetadataRefreshProvider>
             <AppNavigator />
-            <StatusBar style="light" />
+          </MetadataRefreshProvider>
+          <StatusBar style="light" />
         </SyncProvider>
       </AuthProvider>
     </ErrorBoundary>

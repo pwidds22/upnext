@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TrackedShow, TrackedMovie, TrackedMedia, RootStackParamList, ShowStatus, MovieStatus } from '../types';
 import { storageService } from '../services/storage';
 import { tmdbService } from '../services/tmdb';
+import { useMetadataRefresh } from '../contexts/MetadataRefreshContext';
 import ShowPoster from '../components/ShowPoster';
 import { COLORS, STATUS_CONFIG, hasAiredPacific } from '../utils/constants';
 
@@ -43,6 +44,7 @@ type LibraryItem = ShowWithProgress | MovieItem;
 
 export default function MyShowsScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const { refreshKey } = useMetadataRefresh();
   const [shows, setShows] = useState<ShowWithProgress[]>([]);
   const [movies, setMovies] = useState<MovieItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +188,13 @@ export default function MyShowsScreen() {
       loadData();
     }, [loadData])
   );
+
+  // Reload when background metadata refresh completes
+  useEffect(() => {
+    if (refreshKey > 0) {
+      loadData();
+    }
+  }, [refreshKey, loadData]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);

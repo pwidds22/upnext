@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList, TrackedShow, UpNextEpisode } from '../types';
 import { storageService } from '../services/storage';
 import { tmdbService } from '../services/tmdb';
+import { useMetadataRefresh } from '../contexts/MetadataRefreshContext';
 import ShowPoster from '../components/ShowPoster';
 import { COLORS, formatEpisodeCode, getCountdownText, getDaysUntil, formatAirDate, hasAiredPacific } from '../utils/constants';
 
@@ -23,6 +24,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function UpNextScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const { refreshKey } = useMetadataRefresh();
   const [readyToWatch, setReadyToWatch] = useState<UpNextEpisode[]>([]);
   const [comingSoon, setComingSoon] = useState<UpNextEpisode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +144,13 @@ export default function UpNextScreen() {
       loadUpNext();
     }, [loadUpNext])
   );
+
+  // Reload when background metadata refresh completes
+  useEffect(() => {
+    if (refreshKey > 0) {
+      loadUpNext();
+    }
+  }, [refreshKey, loadUpNext]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
