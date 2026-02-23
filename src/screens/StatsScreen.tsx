@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,8 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { COLORS } from '../utils/constants';
 import { useStats } from '../hooks/useStats';
-import { useSubscription } from '../contexts/SubscriptionContext';
-import type { RootStackParamList } from '../types';
 import HeroBanner from '../components/stats/HeroBanner';
 import WatchingStreak from '../components/stats/WatchingStreak';
 import LibraryOverview from '../components/stats/LibraryOverview';
@@ -24,17 +20,10 @@ import ActivityCalendar from '../components/stats/ActivityCalendar';
 import MostWatchedShows from '../components/stats/MostWatchedShows';
 import MonthlyTrend from '../components/stats/MonthlyTrend';
 import FunFacts from '../components/stats/FunFacts';
-import LockedSection from '../components/stats/LockedSection';
 
 export default function StatsScreen() {
   const { stats, loading, error, refresh } = useStats();
-  const { isPremium } = useSubscription();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [refreshing, setRefreshing] = React.useState(false);
-
-  const handleUnlock = useCallback(() => {
-    navigation.navigate('Paywall');
-  }, [navigation]);
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -88,52 +77,34 @@ export default function StatsScreen() {
       contentContainerStyle={styles.scrollContent}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.primary} />}
     >
-      {/* FREE: Hero Banner */}
       <HeroBanner stats={stats.hero} />
 
-      {/* FREE: Watching Streak */}
       <WatchingStreak streak={stats.streak} />
 
-      {/* FREE: Library Overview */}
       <LibraryOverview breakdown={stats.library} />
 
-      {/* FREE: Episode Reactions */}
       {stats.reactions.total > 0 && (
         <ReactionsSummary reactions={stats.reactions} />
       )}
 
-      {/* FREE: Streaming Services */}
       {stats.streaming.length > 0 && (
         <StreamingBreakdown services={stats.streaming} />
       )}
 
-      {/* PREMIUM: Watch Time Breakdown */}
-      <LockedSection isPremium={isPremium} title="Watch Time" onUnlock={handleUnlock}>
-        <WatchTimeBreakdown watchTime={stats.watchTime} />
-      </LockedSection>
+      <WatchTimeBreakdown watchTime={stats.watchTime} />
 
-      {/* PREMIUM: Activity Calendar */}
-      <LockedSection isPremium={isPremium} title="Activity" onUnlock={handleUnlock}>
-        <ActivityCalendar data={stats.activityCalendar} />
-      </LockedSection>
+      <ActivityCalendar data={stats.activityCalendar} />
 
-      {/* PREMIUM: Most Watched Shows */}
       {stats.mostWatched.length > 0 && (
-        <LockedSection isPremium={isPremium} title="Most Watched" onUnlock={handleUnlock}>
-          <MostWatchedShows shows={stats.mostWatched} />
-        </LockedSection>
+        <MostWatchedShows shows={stats.mostWatched} />
       )}
 
-      {/* PREMIUM: Monthly Trend */}
       {stats.monthlyTrend.length > 0 && (
-        <LockedSection isPremium={isPremium} title="Monthly Trend" onUnlock={handleUnlock}>
-          <MonthlyTrend data={stats.monthlyTrend} />
-        </LockedSection>
+        <MonthlyTrend data={stats.monthlyTrend} />
       )}
 
-      {/* PREMIUM: Fun Facts (first one free) */}
       {stats.funFacts.length > 0 && (
-        <FunFacts facts={stats.funFacts} isPremium={isPremium} />
+        <FunFacts facts={stats.funFacts} />
       )}
     </ScrollView>
   );

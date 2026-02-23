@@ -252,9 +252,7 @@ export type RootStackParamList = {
   About: undefined;
   SyncSettings: undefined;
   Notifications: undefined;
-  Import: undefined;
   Stats: undefined;
-  Paywall: { mode?: 'onboarding' | 'upgrade' } | undefined;
 };
 
 export type AuthStackParamList = {
@@ -582,122 +580,6 @@ export interface ExportData {
   warnings?: string[];
 }
 
-// ==================== Data Import Types ====================
-
-// Supported import sources
-export type ImportSourceType = 'upnext' | 'trakt' | 'tvtime' | 'simkl' | 'letterboxd' | 'csv';
-
-// Import progress phases
-export type ImportPhase = 'parsing' | 'resolving_ids' | 'importing' | 'complete' | 'error';
-
-// A show/movie that needs TMDB ID resolution
-export interface ImportShowCandidate {
-  title: string;
-  year?: number;
-  mediaType: MediaType;
-  // External IDs from source (any that are available)
-  externalIds?: {
-    imdbId?: string;
-    tvdbId?: number;
-    traktId?: number;
-    traktSlug?: string;
-    simklId?: number;
-  };
-  // Resolved TMDB ID (filled in during resolution phase)
-  tmdbId?: number;
-  // Source-specific status mapping
-  sourceStatus?: string;
-}
-
-// Normalized data format that all import sources produce
-export interface NormalizedImportData {
-  source: ImportSourceType;
-  shows: ImportShowEntry[];
-  movies: ImportMovieEntry[];
-  episodes: ImportEpisodeEntry[];
-  ratings: ImportRatingEntry[];
-}
-
-// A show to import with all its metadata
-export interface ImportShowEntry {
-  candidate: ImportShowCandidate;
-  status: ShowStatus;
-  addedAt?: string; // ISO date
-}
-
-// A movie to import with all its metadata
-export interface ImportMovieEntry {
-  candidate: ImportShowCandidate;
-  status: MovieStatus;
-  addedAt?: string;
-  watchedAt?: string;
-}
-
-// An episode watch to import
-export interface ImportEpisodeEntry {
-  showCandidate: ImportShowCandidate;
-  seasonNumber: number;
-  episodeNumber: number;
-  watchedAt: string; // ISO date
-  episodeTitle?: string;
-}
-
-// A rating to import
-export interface ImportRatingEntry {
-  candidate: ImportShowCandidate;
-  ratingType: RatingType;
-  rating: number; // 0-10 scale (UpNext internal)
-  seasonNumber?: number;
-  episodeNumber?: number;
-  createdAt?: string;
-}
-
-// Items that couldn't be auto-resolved to a TMDB ID
-export interface UnresolvedItem {
-  candidate: ImportShowCandidate;
-  reason: string;
-  // TMDB search suggestions for manual resolution
-  suggestions?: Array<{
-    tmdbId: number;
-    title: string;
-    year?: string;
-    posterPath?: string | null;
-    mediaType: MediaType;
-  }>;
-}
-
-// Progress callback for import operations
-export interface ImportProgress {
-  phase: ImportPhase;
-  current: number;
-  total: number;
-  message: string;
-}
-
-// Final import result
-export interface ImportResult {
-  source: ImportSourceType;
-  showsImported: number;
-  moviesImported: number;
-  episodesImported: number;
-  ratingsImported: number;
-  showsSkipped: number; // Already existed
-  moviesSkipped: number;
-  episodesSkipped: number; // Already watched
-  unresolved: UnresolvedItem[];
-  errors: string[];
-  durationMs: number;
-}
-
-// ID mapping cache entry (persisted in SQLite)
-export interface IdMappingCache {
-  externalSource: string; // 'imdb', 'tvdb', 'trakt', 'simkl', 'title'
-  externalId: string; // The external ID or "title::year" for title-based
-  tmdbId: number;
-  mediaType: MediaType;
-  cachedAt: string;
-}
-
 // Stats Dashboard types
 export interface HeroStats {
   totalEpisodesWatched: number;
@@ -780,27 +662,4 @@ export interface StatsData {
   mostWatched: MostWatchedShow[];
   monthlyTrend: MonthlyTrendItem[];
   funFacts: FunFact[];
-}
-
-// ==================== Subscription Types ====================
-
-export type SubscriptionPlan = 'monthly' | 'annual' | 'lifetime';
-
-export type SubscriptionPeriodType = 'TRIAL' | 'INTRO' | 'NORMAL';
-
-export interface SubscriptionState {
-  isPremium: boolean;
-  isLoading: boolean;
-  plan: SubscriptionPlan | null;
-  periodType: SubscriptionPeriodType | null;
-  expiresDate: string | null;
-  isTrialActive: boolean;
-  trialDaysRemaining: number | null;
-}
-
-export interface CachedPremiumStatus {
-  isPremium: boolean;
-  plan: SubscriptionPlan | null;
-  expiresDate: string | null;
-  checkedAt: string;
 }

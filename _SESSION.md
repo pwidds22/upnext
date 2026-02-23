@@ -1,38 +1,49 @@
 # UpNext - Session State
 Updated: 2026-02-23 | Branch: main
 
-## Status: Strategic pivot — personal use app, strip complexity
+## Status: Personal-use app — stripped complexity, preparing to ship
 
 ### This Session
-- **RevenueCat production key swapped** — `.env` now has `appl_<REDACTED>` (was test key)
-- **Trakt + SIMKL OAuth flows built** (but will be removed next session)
-  - `src/services/oauthTokens.ts` — New: SecureStore token storage with Trakt refresh logic
-  - `src/screens/ImportScreen.tsx` — Replaced "Coming soon" placeholders with real OAuth flows using `expo-auth-session`
-  - `src/services/import.ts` — Added ratings import support via `ratingsService`
-  - `.env` — Added Trakt/SIMKL client ID/secret placeholders
-- **Deep research on market viability** — Concluded TV tracker market is saturated (17+ competitors), unit economics are brutal for solo dev with no marketing budget. Decision: **ship as personal-use app** for self and friends, stop chasing features for a market we're not trying to win.
+- **Stripped import functionality** — Deleted 9 files: ImportScreen, import.ts, oauthTokens.ts, tmdbIdResolver.ts, 5 importSources parsers (trakt, simkl, letterboxd, tvtime, upnextJson)
+- **Stripped subscription/paywall system** — Deleted 4 files: PaywallScreen, SubscriptionContext, subscription.ts, LockedSection. All features now free.
+- **Unlocked all stats** — Removed LockedSection wrappers from StatsScreen, FunFacts shows all facts
+- **Simplified onboarding** — Carousel now goes directly to Main app (skips paywall)
+- **Removed premium gating on data export** — Export works without premium check
+- **Removed Import Data menu** from Profile screen
+- **Removed PremiumMenuItem** from Profile screen
+- **Cleaned up dependencies** — Removed `jszip`, `expo-document-picker`, `react-native-purchases`
+- **Cleaned up .env** — Removed RevenueCat, Trakt, SIMKL keys
+- **Cleaned up constants.ts** — Removed RevenueCat env validation
 
-### Strategic Decision
-**UpNext is now a personal-use app**, not a business. Key implications:
-- Strip out import functionality (Trakt, SIMKL, TV Time, Letterboxd, UpNext JSON)
-- Strip out other complex features that only matter for market competition
-- Add **automatic data refresh** (cron job / background task) so the app stays up-to-date without manual management
-- Keep it self-sustaining — minimize ongoing maintenance
+### Files Deleted This Session
+- `src/screens/ImportScreen.tsx`
+- `src/screens/PaywallScreen.tsx`
+- `src/services/import.ts`
+- `src/services/oauthTokens.ts`
+- `src/services/tmdbIdResolver.ts`
+- `src/services/importSources/` (entire directory: trakt, simkl, letterboxd, tvtime, upnextJson)
+- `src/contexts/SubscriptionContext.tsx`
+- `src/services/subscription.ts`
+- `src/components/stats/LockedSection.tsx`
 
 ### Files Modified This Session
-- `.env` — RevenueCat production key + Trakt/SIMKL placeholders (placeholders to be removed)
-- `src/screens/ImportScreen.tsx` — OAuth flows added (to be stripped next session)
-- `src/services/import.ts` — Ratings import added (to be stripped next session)
-- `src/services/oauthTokens.ts` — New file (to be stripped next session)
+- `App.tsx` — Removed SubscriptionProvider wrapper
+- `src/navigation/AppNavigator.tsx` — Removed Import + Paywall routes and imports
+- `src/types/index.ts` — Removed Import types, Subscription types, nav params
+- `src/screens/OnboardingScreen.tsx` — Onboarding completes to Main, not Paywall
+- `src/screens/StatsScreen.tsx` — Removed all premium gating, all sections visible
+- `src/components/stats/FunFacts.tsx` — Removed isPremium prop, shows all facts
+- `src/screens/ProfileScreen.tsx` — Removed PremiumMenuItem, Import menu, premium export gate
+- `src/utils/constants.ts` — Removed RevenueCat env check
+- `.env` — Removed RevenueCat + Trakt + SIMKL keys
+- `package.json` — Removed jszip, expo-document-picker, react-native-purchases
 
 ### Next Session Priority Order
-1. **Strip import functionality** — Remove ImportScreen, import services, parsers, TMDB resolver, related types
-2. **Strip other unnecessary complexity** — Audit features that only matter for market competition
-3. **Add automatic data refresh** — Background task or Supabase Edge Function on schedule to keep shows/movies/episodes/air dates current without user intervention
-4. **Test onboarding + paywall** — Needs fresh dev build
-5. **Ship to App Store** — Minimal launch prep, don't over-polish
+1. **Add automatic data refresh** — Background task or Supabase Edge Function on schedule to keep shows/movies/episodes/air dates current without user intervention
+2. **Test onboarding flow** — Verify carousel → Main works on fresh install
+3. **Ship to App Store** — Minimal launch prep, don't over-polish
 
-### What Needs Auto-Refresh (Next Session)
+### What Needs Auto-Refresh
 Currently the app fetches TMDB data **on-demand only** (search, open show). No background refresh for:
 - New episodes added to tracked shows
 - Air date changes
@@ -40,21 +51,14 @@ Currently the app fetches TMDB data **on-demand only** (search, open show). No b
 - New season announcements
 Options: Supabase Edge Function on cron schedule, or in-app background task on app launch
 
-### RevenueCat Status
-- **Production API key**: `appl_<REDACTED>` — NOW IN `.env`
-- **EAS secret still needs updating** before next build: `eas secret:create --name EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY --value appl_<REDACTED> --scope project`
-- **Entitlement**: `premium` — 3 products attached
-- **Offerings**: `default` — monthly/annual/lifetime packages
-- **ASC Products**: Founding prices ($1.99/$14.99/$49.99)
-
 ### App Store Connect Status
 - **Privacy Policy**: Notion page (published, URL set in ASC)
 - **Support Page**: Notion page (published, URL set in ASC)
 - **Description, Keywords, Promo Text**: Written and saved
 - **Age Rating**: 4+ configured
 - **Pricing**: Free, all territories
-- **App Privacy**: 4 data types declared
-- **Build**: Build 14 submitted to TestFlight (ASC App ID: 6758222275)
+- **App Privacy**: 4 data types declared (may need update now that subscriptions are removed)
+- **Build**: Build 14 submitted to TestFlight (ASC App ID: 6758222275) — **STALE, needs rebuild**
 - **Still needs**: App name resolution, screenshots, test account, export compliance
 
 ### Completed Features
@@ -67,12 +71,15 @@ Options: Supabase Edge Function on cron schedule, or in-app background task on a
 - **Movies** — Full tracking with search, status, ratings
 - **Rewatch Tracking** — Full watch history with editable timestamps
 - **Share Profile** — Deep links, privacy controls, profile stats
-- **Data Export** — JSON export with profile, follows, ratings, warnings
+- **Data Export** — JSON export with profile, follows, ratings, warnings (free for all)
 - **Settings** — About, Sync Settings, Notifications screens
-- **Import Data** — 5 sources (TO BE REMOVED next session)
-- **Stats Dashboard** — 10-section analytics with custom charts, premium gating
-- **Subscriptions** — RevenueCat SDK, SubscriptionContext, real PaywallScreen with purchase flow
-- **Onboarding** — Welcome carousel, dual-mode paywall, first-launch detection
+- **Stats Dashboard** — 10-section analytics with custom charts (all free)
+- **Onboarding** — Welcome carousel, first-launch detection
+
+### Removed Features (This Session)
+- **Import Data** — 5 sources (Trakt, SIMKL, TV Time, Letterboxd, UpNext JSON)
+- **Subscriptions** — RevenueCat SDK, paywall, premium gating
+- **Feature Gating** — All features now free
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -84,18 +91,15 @@ Options: Supabase Edge Function on cron schedule, or in-app background task on a
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
-- **Build 14** on TestFlight (all 22 fixes)
+- **Build 14** on TestFlight (STALE — needs rebuild with stripped features)
 - **ASC App ID**: 6758222275
 
 ## External Config Notes
 - **Apple Key ID**: 3D34TRP685 (keep .p8 file secure, cannot re-download)
-- **IAP Key ID**: A3VL7TXUCZ (uploaded to RevenueCat)
 - **Google Sign-In**: Configured — Web + iOS client IDs in `.env`, Supabase Google provider enabled
 - **Google Play**: Developer account created (personal, $25)
-- **RevenueCat**: Production key now in `.env` (still needs EAS secret update before next build)
 
 ## Research Files (Not Committed)
 - `CLAUDE_DEEP_RESEARCH.md` — Market viability analysis
-- `OAUTH_TRAKT_SIMKL.md` — OAuth research for Trakt/SIMKL (no longer needed)
-- `Monetization_Launch.md` — Original monetization strategy
-- `Premium_Value_Proposition.md`, `WATCH_HISTORY_IMPORT.md`, `series_guide_reviews.md`, `trakt_reviews.md`, `tv_time_reviews.md` — Research docs
+- `Monetization_Launch.md` — Original monetization strategy (obsolete)
+- Other research docs — `OAUTH_TRAKT_SIMKL.md`, `Premium_Value_Proposition.md`, `WATCH_HISTORY_IMPORT.md`, `series_guide_reviews.md`, `trakt_reviews.md`, `tv_time_reviews.md`

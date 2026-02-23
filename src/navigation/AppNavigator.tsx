@@ -28,9 +28,7 @@ import UserListScreen from '../screens/UserListScreen';
 import AboutScreen from '../screens/AboutScreen';
 import SyncSettingsScreen from '../screens/SyncSettingsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
-import ImportScreen from '../screens/ImportScreen';
 import StatsScreen from '../screens/StatsScreen';
-import PaywallScreen from '../screens/PaywallScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -284,22 +282,9 @@ export default function AppNavigator() {
           options={{ title: 'Notifications' }}
         />
         <Stack.Screen
-          name="Import"
-          component={ImportScreen}
-          options={{ title: 'Import Data' }}
-        />
-        <Stack.Screen
           name="Stats"
           component={StatsScreen}
           options={{ title: 'My Stats' }}
-        />
-        <Stack.Screen
-          name="Paywall"
-          component={PaywallScreen}
-          options={{
-            title: 'UpNext Premium',
-            presentation: 'modal',
-          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

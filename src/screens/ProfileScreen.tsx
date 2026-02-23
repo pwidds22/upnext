@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
-import { useSubscription } from '../contexts/SubscriptionContext';
+
 import { ratingsService, UserRatingRow } from '../services/supabase/ratings';
 import { followsService } from '../services/supabase/follows';
 import { useDataExport } from '../hooks/useDataExport';
@@ -306,31 +306,6 @@ interface RatingWithShowInfo extends UserRatingRow {
   posterPath?: string | null;
 }
 
-function PremiumMenuItem() {
-  const navigation = useNavigation<NavigationProp>();
-  const { isPremium, isTrialActive, trialDaysRemaining } = useSubscription();
-
-  return (
-    <TouchableOpacity
-      style={styles.menuItem}
-      onPress={() => navigation.navigate('Paywall')}
-    >
-      <Ionicons
-        name={isPremium ? 'star' : 'star-outline'}
-        size={22}
-        color={isPremium ? COLORS.primary : COLORS.warning}
-      />
-      <Text style={styles.menuItemText}>
-        {isPremium ? 'Premium' : 'Upgrade to Premium'}
-      </Text>
-      {isTrialActive && trialDaysRemaining !== null && (
-        <Text style={styles.trialBadge}>{trialDaysRemaining}d trial</Text>
-      )}
-      <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
-    </TouchableOpacity>
-  );
-}
-
 export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { user, isConfigured, signOut, refreshProfile: refreshAuthProfile } = useAuth();
@@ -341,9 +316,6 @@ export default function ProfileScreen() {
   const [profileLoading, setProfileLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [visibilitySheetVisible, setVisibilitySheetVisible] = useState(false);
-
-  // Subscription status
-  const { isPremium } = useSubscription();
 
   // Profile visibility settings
   const { visibility, updateVisibility } = useProfileVisibility();
@@ -480,18 +452,6 @@ export default function ProfileScreen() {
   };
 
   const handleExportData = () => {
-    if (!isPremium) {
-      Alert.alert(
-        'Premium Feature',
-        'Data export is available with UpNext Premium. Export all your shows, movies, watch history, and ratings.',
-        [
-          { text: 'Not Now', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => navigation.navigate('Paywall') },
-        ]
-      );
-      return;
-    }
-
     Alert.alert(
       'Export Data',
       'Export all your shows, movies, watch history, and ratings to a JSON file.',
@@ -647,8 +607,6 @@ export default function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
-          <PremiumMenuItem />
-
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => setEditModalVisible(true)}
@@ -673,15 +631,6 @@ export default function ProfileScreen() {
           >
             <Ionicons name="notifications-outline" size={22} color={COLORS.text} />
             <Text style={styles.menuItemText}>Notifications</Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('Import')}
-          >
-            <Ionicons name="cloud-upload-outline" size={22} color={COLORS.text} />
-            <Text style={styles.menuItemText}>Import Data</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textTertiary} />
           </TouchableOpacity>
 
@@ -949,12 +898,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.text,
     fontSize: 16,
-  },
-  trialBadge: {
-    color: COLORS.warning,
-    fontSize: 13,
-    fontWeight: '500',
-    marginRight: 4,
   },
   signOutButton: {
     flexDirection: 'row',

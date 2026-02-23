@@ -1,6 +1,11 @@
 # Technical Debt Tracker
 
-Last scanned: 2026-02-03
+Last scanned: 2026-02-23
+
+## Session Notes (2026-02-23)
+- **Import system removed** — All import screens, services, parsers, TMDB resolver deleted
+- **Subscription/paywall system removed** — RevenueCat, PaywallScreen, SubscriptionContext, LockedSection deleted
+- **All features now free** — Stats unlocked, data export ungated, no premium tiers
 
 ## How to Use
 - Run `/techdebt` periodically to rescan and update this file

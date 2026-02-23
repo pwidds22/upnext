@@ -4,7 +4,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { SyncProvider } from './src/contexts/SyncContext';
-import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
+
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { storageService } from './src/services/storage';
 import { COLORS } from './src/utils/constants';
@@ -53,10 +53,8 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <SyncProvider>
-          <SubscriptionProvider>
             <AppNavigator />
             <StatusBar style="light" />
-          </SubscriptionProvider>
         </SyncProvider>
       </AuthProvider>
     </ErrorBoundary>

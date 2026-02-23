@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { COLORS } from '../utils/constants';
+import { onboardingService } from '../services/onboarding';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
 
@@ -162,6 +163,11 @@ export default function OnboardingScreen() {
     [],
   );
 
+  const handleComplete = useCallback(async () => {
+    await onboardingService.markComplete();
+    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+  }, [navigation]);
+
   const handleNext = useCallback(() => {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({
@@ -169,9 +175,9 @@ export default function OnboardingScreen() {
         animated: true,
       });
     } else {
-      navigation.navigate('Paywall', { mode: 'onboarding' });
+      handleComplete();
     }
-  }, [currentIndex, navigation]);
+  }, [currentIndex, handleComplete]);
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
@@ -240,7 +246,7 @@ export default function OnboardingScreen() {
         {!isLastSlide ? (
           <TouchableOpacity
             style={styles.skipButton}
-            onPress={() => navigation.navigate('Paywall', { mode: 'onboarding' })}
+            onPress={handleComplete}
             activeOpacity={0.7}
           >
             <Text style={styles.skipText}>Skip</Text>
