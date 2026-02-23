@@ -10,7 +10,11 @@
       "Bash(head *)",
       "Bash(tail *)",
       "WebFetch(domain:x.com)",
-      "WebFetch(domain:dev.to)"
+      "WebFetch(domain:dev.to)",
+      "Bash(tasklist:*)",
+      "Bash(gh pr create:*)",
+      "Bash(winget install:*)",
+      "Bash(export PATH=\"/c/Program Files/GitHub CLI:$PATH\")"
     ]
   },
   "enableAllProjectMcpServers": true,
