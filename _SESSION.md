@@ -1,33 +1,19 @@
 # UpNext - Session State
 Updated: 2026-02-24 | Branch: main
 
-## Status: Onboarding + auth gating complete, caught-up detection added
+## Status: Caught-up detection refined, ready for App Store launch prep
 
 ### This Session
-- **Fixed stale refresh token data bleed** — When session restoration fails (stale token), now clears orphaned SQLite data alongside auth session
-- **Required auth before main app** — Onboarding → Sign In/Sign Up → Main (no more "Continue without account")
-  - Conditional screen rendering in AppNavigator based on `isOnboardingComplete` + `user`
-  - Removed `onSkip` prop and skip button from SignIn/SignUp screens
-  - OnboardingScreen now accepts `onComplete` callback instead of using navigation
-- **Added empty state CTAs** — Home and Library show actionable "Find Shows & Movies" / "Search" buttons when empty
-- **Added caught-up detection** — When user watches all aired episodes, prompts with "Mark as Waiting" / "Mark as Completed" / "Keep Watching"
-- **Fixed auto-mark transaction error** — Skip auto-mark when already caught up (prevents nested SQLite transaction crash)
+- **Fixed caught-up prompt showing mid-season** — The "All Caught Up!" prompt was firing whenever all aired episodes were watched, even for weekly shows with more episodes coming. Now suppressed unless the season is fully aired or the show is Ended/Canceled.
+  - Three-layer check: (1) `show.totalEpisodes > airedEpisodes`, (2) unaired episodes in season data, (3) `episode_count` vs aired count
+  - Search bar yellow tint was already fixed (user confirmed)
 
 ### Files Modified This Session
-- `src/contexts/AuthContext.tsx` — Clear orphaned local data on stale session detection
-- `src/navigation/AppNavigator.tsx` — Conditional rendering: Onboarding → Auth → Main; removed `onComplete` from AuthNavigator
-- `src/screens/OnboardingScreen.tsx` — Accept `onComplete` prop, removed `useNavigation` dependency
-- `src/screens/auth/SignInScreen.tsx` — Removed `onSkip` prop, "Continue without account" button, and post-auth `onSkip()` calls
-- `src/screens/auth/SignUpScreen.tsx` — Same removals as SignInScreen
-- `src/screens/ProfileScreen.tsx` — Removed `onSkip` from embedded auth screens (dead code now)
-- `src/screens/UpNextScreen.tsx` — Welcome empty state with "Find Shows & Movies" CTA button
-- `src/screens/MyShowsScreen.tsx` — Empty state with "Search" CTA button
-- `src/screens/ShowDetailScreen.tsx` — Caught-up prompt (watching → waiting/completed), skip auto-mark when already caught up
+- `src/screens/ShowDetailScreen.tsx` — Refined caught-up detection: skip prompt when current season has unaired episodes remaining; only prompt when season is complete or show is Ended/Canceled
 
 ### Next Session Priority Order
 1. **Ship to App Store** — Minimal launch prep (screenshots, app name resolution, test account, export compliance)
-2. **Investigate search bar yellow tint** — User noticed search TextInput appears yellowish; may be cursor tint from nav theme primary color
-3. **Consider show status notifications** — When metadata refresh detects a show changed to "Ended"/"Cancelled", could prompt user
+2. **Consider show status notifications** — When metadata refresh detects a show changed to "Ended"/"Cancelled", could prompt user
 
 ### App Store Connect Status
 - **Privacy Policy**: Notion page (published, URL set in ASC)

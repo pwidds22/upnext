@@ -418,6 +418,8 @@ export default function ShowDetailScreen() {
   );
 
   // Prompt user when caught up with all aired episodes
+  // Only prompt if the current season has no more unaired episodes coming
+  // (e.g., don't prompt mid-season for a weekly show with future episodes)
   const hasPromptedCaughtUpRef = useRef(false);
   useEffect(() => {
     if (
@@ -428,6 +430,39 @@ export default function ShowDetailScreen() {
       seasons.length > 0 &&
       !hasPromptedCaughtUpRef.current
     ) {
+      // Check if more episodes are coming — don't prompt mid-season
+      const showEnded = showDetails?.status === 'Ended' || showDetails?.status === 'Canceled';
+      if (!showEnded) {
+        // Check 1: Does the show have more total episodes than have aired?
+        if (show.totalEpisodes > airedEpisodes) {
+          return; // More episodes exist beyond what's aired
+        }
+
+        // Check 2: Does any season have unaired episodes in the data?
+        const latestAiredSeason = [...seasons]
+          .reverse()
+          .find(s => s.episodes?.some(ep => hasAiredPacific(ep.air_date)));
+
+        if (latestAiredSeason?.episodes) {
+          const hasUnairedEpisodes = latestAiredSeason.episodes.some(
+            ep => !hasAiredPacific(ep.air_date)
+          );
+          if (hasUnairedEpisodes) {
+            return; // More episodes coming in this season
+          }
+        }
+
+        // Check 3: Does the season's episode_count exceed its episode data?
+        if (latestAiredSeason && latestAiredSeason.episode_count) {
+          const airedInSeason = latestAiredSeason.episodes?.filter(
+            ep => hasAiredPacific(ep.air_date)
+          ).length ?? 0;
+          if (latestAiredSeason.episode_count > airedInSeason) {
+            return; // TMDB knows about more episodes than have aired
+          }
+        }
+      }
+
       hasPromptedCaughtUpRef.current = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
@@ -446,7 +481,7 @@ export default function ShowDetailScreen() {
         ]
       );
     }
-  }, [watchedCount, airedEpisodes, currentStatus, seasons.length, show.tmdbId, show.title, handleStatusChange]);
+  }, [watchedCount, airedEpisodes, currentStatus, seasons.length, show.tmdbId, show.title, handleStatusChange, showDetails]);
 
   const handleDelete = useCallback(() => {
     Alert.alert('Remove Show', `Remove "${show.title}" from your library?`, [
