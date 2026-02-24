@@ -485,7 +485,6 @@ export default function ProfileScreen() {
     return (
       <SignInScreen
         onNavigateToSignUp={() => setAuthScreen('signUp')}
-        onSkip={() => setAuthScreen(null)}
       />
     );
   }
@@ -494,7 +493,6 @@ export default function ProfileScreen() {
     return (
       <SignUpScreen
         onNavigateToSignIn={() => setAuthScreen('signIn')}
-        onSkip={() => setAuthScreen(null)}
       />
     );
   }

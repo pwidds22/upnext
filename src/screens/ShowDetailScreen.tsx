@@ -116,6 +116,11 @@ export default function ShowDetailScreen() {
         hasAutoMarkedRef.current = true;
         pendingAutoMarkRef.current = false;
 
+        // Skip if already caught up — all aired episodes are already watched
+        if (airedEpisodes > 0 && watchedCount >= airedEpisodes) {
+          return;
+        }
+
         try {
           for (const season of seasons) {
             if (season.episodes) {
@@ -411,6 +416,37 @@ export default function ShowDetailScreen() {
     },
     [show.tmdbId]
   );
+
+  // Prompt user when caught up with all aired episodes
+  const hasPromptedCaughtUpRef = useRef(false);
+  useEffect(() => {
+    if (
+      currentStatus === 'watching' &&
+      watchedCount > 0 &&
+      airedEpisodes > 0 &&
+      watchedCount >= airedEpisodes &&
+      seasons.length > 0 &&
+      !hasPromptedCaughtUpRef.current
+    ) {
+      hasPromptedCaughtUpRef.current = true;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(
+        'All Caught Up!',
+        `You've watched all aired episodes of ${show.title}.`,
+        [
+          {
+            text: 'Mark as Waiting',
+            onPress: () => handleStatusChange('waiting'),
+          },
+          {
+            text: 'Mark as Completed',
+            onPress: () => handleStatusChange('completed'),
+          },
+          { text: 'Keep Watching', style: 'cancel' },
+        ]
+      );
+    }
+  }, [watchedCount, airedEpisodes, currentStatus, seasons.length, show.tmdbId, show.title, handleStatusChange]);
 
   const handleDelete = useCallback(() => {
     Alert.alert('Remove Show', `Remove "${show.title}" from your library?`, [

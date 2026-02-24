@@ -298,9 +298,19 @@ export default function UpNextScreen() {
         </ScrollView>
       ) : isEmpty ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="tv-outline" size={48} color={COLORS.textSecondary} />
-          <Text style={styles.emptyTitle}>No Shows Being Watched</Text>
-          <Text style={styles.emptyText}>Add shows and start tracking to see what's next</Text>
+          <Ionicons name="tv-outline" size={64} color={COLORS.primary} />
+          <Text style={styles.emptyTitle}>Welcome to UpNext!</Text>
+          <Text style={styles.emptyText}>
+            Add shows you're watching or have watched to start tracking your progress.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => (navigation as any).navigate('Search')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="search" size={20} color={COLORS.text} />
+            <Text style={styles.emptyButtonText}>Find Shows & Movies</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -401,17 +411,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-    gap: 12,
+    gap: 16,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: COLORS.text,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    lineHeight: 22,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 25,
+    marginTop: 8,
+  },
+  emptyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   retryButton: {
     marginTop: 8,

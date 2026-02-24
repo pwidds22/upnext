@@ -29,10 +29,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 interface Props {
   onNavigateToSignIn: () => void;
-  onSkip: () => void;
 }
 
-export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
+export default function SignUpScreen({ onNavigateToSignIn }: Props) {
   const { signUp, signInWithApple, signInWithGoogleToken } = useAuth();
   const { checkAvailability, checking: checkingUsername } = useUsernameCheck();
   const [email, setEmail] = useState('');
@@ -84,7 +83,6 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onSkip();
       }
     } catch (e) {
       setError('Google Sign-Up failed. Please try again.');
@@ -113,7 +111,6 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onSkip();
       }
     } catch (e) {
       setError('Apple Sign-In failed. Please try again.');
@@ -203,7 +200,7 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onSkip(); // Go directly to main app (no email confirmation needed)
+        // Auth state change will automatically navigate to main app
       }
     } catch (e) {
       setError('Something went wrong. Please try again.');
@@ -401,10 +398,6 @@ export default function SignUpScreen({ onNavigateToSignIn, onSkip }: Props) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
-          <Text style={styles.skipText}>Continue without account</Text>
-          <Ionicons name="arrow-forward" size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -506,17 +499,6 @@ const styles = StyleSheet.create({
   linkTextBold: {
     color: COLORS.primary,
     fontWeight: '600',
-  },
-  skipButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 40,
-    gap: 4,
-  },
-  skipText: {
-    color: COLORS.textSecondary,
-    fontSize: 15,
   },
   successContainer: {
     flex: 1,

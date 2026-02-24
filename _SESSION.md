@@ -1,32 +1,33 @@
 # UpNext - Session State
-Updated: 2026-02-23 | Branch: main
+Updated: 2026-02-24 | Branch: main
 
-## Status: Personal-use app — automatic data refresh implemented, preparing to ship
+## Status: Onboarding + auth gating complete, caught-up detection added
 
 ### This Session
-- **Implemented automatic TMDB metadata refresh** — Shows/movies now auto-refresh when app comes to foreground (if >6 hours stale)
-  - Refreshes `total_seasons`, `total_episodes`, `aired_episodes`, `poster_path` for TV shows in watching/waiting status
-  - Refreshes `release_date`, `runtime` for movies in watchlist status
-  - Throttled at 400ms between TMDB API calls (safely under rate limit)
-  - Handles 429 rate limiting with 10s pause + retry
-  - Abort support and concurrent-run guard
-  - Screens auto-reload via `refreshKey` context broadcast
-
-### Files Created This Session
-- `src/services/metadataRefresh.ts` — Core refresh service (staleness check, TMDB batching, throttling)
-- `src/contexts/MetadataRefreshContext.tsx` — React context (AppState foreground detection, refreshKey broadcast)
+- **Fixed stale refresh token data bleed** — When session restoration fails (stale token), now clears orphaned SQLite data alongside auth session
+- **Required auth before main app** — Onboarding → Sign In/Sign Up → Main (no more "Continue without account")
+  - Conditional screen rendering in AppNavigator based on `isOnboardingComplete` + `user`
+  - Removed `onSkip` prop and skip button from SignIn/SignUp screens
+  - OnboardingScreen now accepts `onComplete` callback instead of using navigation
+- **Added empty state CTAs** — Home and Library show actionable "Find Shows & Movies" / "Search" buttons when empty
+- **Added caught-up detection** — When user watches all aired episodes, prompts with "Mark as Waiting" / "Mark as Completed" / "Keep Watching"
+- **Fixed auto-mark transaction error** — Skip auto-mark when already caught up (prevents nested SQLite transaction crash)
 
 ### Files Modified This Session
-- `src/services/storage.ts` — Added `metadata_refreshed_at` column migration + `getShowsNeedingRefresh()`, `updateShowMetadata()`, `updateMovieMetadata()` methods
-- `src/types/index.ts` — Added `seasons` summary array to `TMDBShow` interface (TMDB returns this from `/tv/{id}`)
-- `App.tsx` — Wrapped with `MetadataRefreshProvider` inside SyncProvider
-- `src/screens/UpNextScreen.tsx` — Watches `refreshKey` to reload when metadata refresh completes
-- `src/screens/MyShowsScreen.tsx` — Same `refreshKey` pattern
+- `src/contexts/AuthContext.tsx` — Clear orphaned local data on stale session detection
+- `src/navigation/AppNavigator.tsx` — Conditional rendering: Onboarding → Auth → Main; removed `onComplete` from AuthNavigator
+- `src/screens/OnboardingScreen.tsx` — Accept `onComplete` prop, removed `useNavigation` dependency
+- `src/screens/auth/SignInScreen.tsx` — Removed `onSkip` prop, "Continue without account" button, and post-auth `onSkip()` calls
+- `src/screens/auth/SignUpScreen.tsx` — Same removals as SignInScreen
+- `src/screens/ProfileScreen.tsx` — Removed `onSkip` from embedded auth screens (dead code now)
+- `src/screens/UpNextScreen.tsx` — Welcome empty state with "Find Shows & Movies" CTA button
+- `src/screens/MyShowsScreen.tsx` — Empty state with "Search" CTA button
+- `src/screens/ShowDetailScreen.tsx` — Caught-up prompt (watching → waiting/completed), skip auto-mark when already caught up
 
 ### Next Session Priority Order
-1. **Test onboarding flow** — Verify carousel → Main works on fresh install
-2. **Ship to App Store** — Minimal launch prep, don't over-polish
-3. **Consider show status notifications** — When refresh detects a show changed to "Ended"/"Cancelled", could prompt user
+1. **Ship to App Store** — Minimal launch prep (screenshots, app name resolution, test account, export compliance)
+2. **Investigate search bar yellow tint** — User noticed search TextInput appears yellowish; may be cursor tint from nav theme primary color
+3. **Consider show status notifications** — When metadata refresh detects a show changed to "Ended"/"Cancelled", could prompt user
 
 ### App Store Connect Status
 - **Privacy Policy**: Notion page (published, URL set in ASC)
@@ -41,6 +42,7 @@ Updated: 2026-02-23 | Branch: main
 ### Completed Features
 - **Core** — Search, tracking, episodes, sync engine
 - **Auth** — Signup, signin (email or username), Apple Sign-In, Google Sign-In
+- **Auth Gating** — Onboarding → required auth → main app (no anonymous use)
 - **Social** — Follow system, activity feed, friend ratings
 - **Ratings** — 5-star system with half-star toggle, episode reactions
 - **Recommendations** — Trending + personalized with dismiss feature
@@ -51,8 +53,9 @@ Updated: 2026-02-23 | Branch: main
 - **Data Export** — JSON export with profile, follows, ratings, warnings (free for all)
 - **Settings** — About, Sync Settings, Notifications screens
 - **Stats Dashboard** — 10-section analytics with custom charts (all free)
-- **Onboarding** — Welcome carousel, first-launch detection
+- **Onboarding** — Welcome carousel → required auth, empty state CTAs
 - **Auto Refresh** — TMDB metadata refresh on app foreground (6h staleness window)
+- **Caught-Up Detection** — Prompt to mark as Waiting/Completed when all aired episodes watched
 
 ### Deferred Items
 - Bug 8: `dismissed_movies` cloud sync — needs new Supabase table
@@ -64,7 +67,7 @@ Updated: 2026-02-23 | Branch: main
 - Expo SDK 54 | React Native 0.81
 - Supabase backend
 - TypeScript compiles cleanly (one pre-existing NotificationsScreen type error)
-- **Build 14** on TestFlight (STALE — needs rebuild with auto-refresh + stripped features)
+- **Build 14** on TestFlight (STALE — needs rebuild with all recent changes)
 - **ASC App ID**: 6758222275
 
 ## External Config Notes

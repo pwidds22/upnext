@@ -35,14 +35,13 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-function AuthNavigator({ onComplete }: { onComplete: () => void }) {
+function AuthNavigator() {
   const [screen, setScreen] = useState<'signIn' | 'signUp'>('signIn');
 
   if (screen === 'signUp') {
     return (
       <SignUpScreen
         onNavigateToSignIn={() => setScreen('signIn')}
-        onSkip={onComplete}
       />
     );
   }
@@ -50,7 +49,6 @@ function AuthNavigator({ onComplete }: { onComplete: () => void }) {
   return (
     <SignInScreen
       onNavigateToSignUp={() => setScreen('signUp')}
-      onSkip={onComplete}
     />
   );
 }
@@ -157,6 +155,7 @@ function LinkingFallback() {
 }
 
 export default function AppNavigator() {
+  const { user, isLoading: authLoading } = useAuth();
   const [isOnboardingComplete, setIsOnboardingComplete] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -185,8 +184,8 @@ export default function AppNavigator() {
     checkOnboarding();
   }, []);
 
-  // Show loading while checking onboarding state
-  if (isOnboardingComplete === null) {
+  // Show loading while checking onboarding or auth state
+  if (isOnboardingComplete === null || authLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -197,7 +196,6 @@ export default function AppNavigator() {
   return (
     <NavigationContainer theme={DarkTheme} linking={linking} fallback={<LinkingFallback />}>
       <Stack.Navigator
-        initialRouteName={isOnboardingComplete ? 'Main' : 'Onboarding'}
         screenOptions={{
           headerStyle: {
             backgroundColor: COLORS.surface,
@@ -206,11 +204,16 @@ export default function AppNavigator() {
           headerShadowVisible: false,
         }}
       >
-        <Stack.Screen
-          name="Onboarding"
-          component={OnboardingScreen}
-          options={{ headerShown: false }}
-        />
+        {!isOnboardingComplete ? (
+          <Stack.Screen name="Onboarding" options={{ headerShown: false }}>
+            {() => <OnboardingScreen onComplete={() => setIsOnboardingComplete(true)} />}
+          </Stack.Screen>
+        ) : !user ? (
+          <Stack.Screen name="Auth" options={{ headerShown: false }}>
+            {() => <AuthNavigator />}
+          </Stack.Screen>
+        ) : (
+          <>
         <Stack.Screen
           name="Main"
           component={MainTabs}
@@ -286,6 +289,8 @@ export default function AppNavigator() {
           component={StatsScreen}
           options={{ title: 'My Stats' }}
         />
+        </>
+        )}
       </Stack.Navigator>
     </NavigationContainer>
   );

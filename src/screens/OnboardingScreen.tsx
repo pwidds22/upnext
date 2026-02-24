@@ -9,13 +9,8 @@ import {
   ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types';
 import { COLORS } from '../utils/constants';
 import { onboardingService } from '../services/onboarding';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Onboarding'>;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -144,8 +139,11 @@ function SocialIllustration() {
 
 // --- Main Screen ---
 
-export default function OnboardingScreen() {
-  const navigation = useNavigation<NavigationProp>();
+interface OnboardingScreenProps {
+  onComplete: () => void;
+}
+
+export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const flatListRef = useRef<FlatList<SlideData>>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -165,8 +163,8 @@ export default function OnboardingScreen() {
 
   const handleComplete = useCallback(async () => {
     await onboardingService.markComplete();
-    navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-  }, [navigation]);
+    onComplete();
+  }, [onComplete]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < SLIDES.length - 1) {

@@ -29,10 +29,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 interface Props {
   onNavigateToSignUp: () => void;
-  onSkip: () => void;
 }
 
-export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
+export default function SignInScreen({ onNavigateToSignUp }: Props) {
   const { signIn, signInWithApple, signInWithGoogleToken } = useAuth();
   const { lookupByUsername } = useProfileLookup();
   const [emailOrUsername, setEmailOrUsername] = useState('');
@@ -79,7 +78,6 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onSkip();
       }
     } catch (e) {
       setError('Google Sign-In failed. Please try again.');
@@ -99,7 +97,6 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onSkip();
       }
     } catch (e) {
       setError('Apple Sign-In failed. Please try again.');
@@ -147,7 +144,6 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onSkip(); // Close the signin screen on success
       }
     } catch (e) {
       setError('Sign in failed. Please try again.');
@@ -276,10 +272,6 @@ export default function SignInScreen({ onNavigateToSignUp, onSkip }: Props) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
-          <Text style={styles.skipText}>Continue without account</Text>
-          <Ionicons name="arrow-forward" size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -367,17 +359,6 @@ const styles = StyleSheet.create({
   linkTextBold: {
     color: COLORS.primary,
     fontWeight: '600',
-  },
-  skipButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 40,
-    gap: 4,
-  },
-  skipText: {
-    color: COLORS.textSecondary,
-    fontSize: 15,
   },
   socialButtons: {
     gap: 12,

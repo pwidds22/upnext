@@ -66,6 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await authService.signOut();
       } catch { /* ignore signOut errors during cleanup */ }
+      // Clear orphaned local data from the previous session
+      try {
+        await storageService.clearAllData();
+      } catch { /* ignore storage errors during cleanup */ }
       setSession(null);
       setUser(null);
     }).finally(() => {

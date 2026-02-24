@@ -430,13 +430,23 @@ export default function MyShowsScreen() {
     const title = mediaFilter === 'movie' ? 'No Movies Yet' : mediaFilter === 'tv' ? 'No Shows Yet' : 'Library Empty';
     const text = mediaFilter === 'movie'
       ? 'Search for movies to add to your watchlist'
-      : 'Search for shows to add to your watchlist';
+      : mediaFilter === 'tv'
+      ? 'Search for shows to start tracking'
+      : 'Add shows and movies you\'re watching or have watched';
 
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name={icon} size={48} color={COLORS.textSecondary} />
+        <Ionicons name={icon as any} size={48} color={COLORS.textSecondary} />
         <Text style={styles.emptyTitle}>{title}</Text>
         <Text style={styles.emptyText}>{text}</Text>
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={() => (navigation as any).navigate('Search')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="search" size={18} color={COLORS.text} />
+          <Text style={styles.emptyButtonText}>Search</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -659,6 +669,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  emptyButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   retryButton: {
     marginTop: 8,
