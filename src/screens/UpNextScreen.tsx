@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { RootStackParamList, TrackedShow, UpNextEpisode } from '../types';
 import { storageService } from '../services/storage';
 import { tmdbService } from '../services/tmdb';
 import { useMetadataRefresh } from '../contexts/MetadataRefreshContext';
+import { useSyncContext } from '../contexts/SyncContext';
 import ShowPoster from '../components/ShowPoster';
 import { COLORS, formatEpisodeCode, getCountdownText, getDaysUntil, formatAirDate, hasAiredPacific } from '../utils/constants';
 
@@ -25,6 +26,8 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export default function UpNextScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { refreshKey } = useMetadataRefresh();
+  const { syncState } = useSyncContext();
+  const prevSyncState = useRef(syncState);
   const [readyToWatch, setReadyToWatch] = useState<UpNextEpisode[]>([]);
   const [comingSoon, setComingSoon] = useState<UpNextEpisode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +147,14 @@ export default function UpNextScreen() {
       loadUpNext();
     }, [loadUpNext])
   );
+
+  // Reload when sync completes (e.g. after sign-in)
+  useEffect(() => {
+    if (prevSyncState.current === 'syncing' && syncState === 'idle') {
+      loadUpNext();
+    }
+    prevSyncState.current = syncState;
+  }, [syncState, loadUpNext]);
 
   // Reload when background metadata refresh completes
   useEffect(() => {

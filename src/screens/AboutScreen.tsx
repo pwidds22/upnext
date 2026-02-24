@@ -19,10 +19,8 @@ export default function AboutScreen() {
     Linking.openURL(url).catch((err) => console.error('Failed to open URL:', err));
   };
 
-  const sendEmail = () => {
-    Linking.openURL('mailto:support@upnext.app?subject=UpNext%20Support').catch((err) =>
-      console.error('Failed to open email:', err)
-    );
+  const openSupport = () => {
+    openLink('https://www.notion.so/UpNext-Support-30ba0298439280b196a2c1dfdee97e44');
   };
 
   return (
@@ -49,7 +47,7 @@ export default function AboutScreen() {
 
         <TouchableOpacity
           style={styles.linkItem}
-          onPress={() => openLink('https://upnext.app/privacy')}
+          onPress={() => openLink('https://www.notion.so/UpNext-Privacy-Policy-30ba0298439280bbae97e9edd7b96d46')}
         >
           <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.text} />
           <Text style={styles.linkText}>Privacy Policy</Text>
@@ -58,14 +56,14 @@ export default function AboutScreen() {
 
         <TouchableOpacity
           style={styles.linkItem}
-          onPress={() => openLink('https://upnext.app/terms')}
+          onPress={() => openLink('https://peat-bow-b31.notion.site/UpNext-Terms-of-Use-311a02984392809f8122caa63c62e123')}
         >
           <Ionicons name="document-text-outline" size={22} color={COLORS.text} />
-          <Text style={styles.linkText}>Terms of Service</Text>
+          <Text style={styles.linkText}>Terms of Use</Text>
           <Ionicons name="open-outline" size={18} color={COLORS.textTertiary} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.linkItem} onPress={sendEmail}>
+        <TouchableOpacity style={styles.linkItem} onPress={openSupport}>
           <Ionicons name="mail-outline" size={22} color={COLORS.text} />
           <Text style={styles.linkText}>Contact Support</Text>
           <Ionicons name="open-outline" size={18} color={COLORS.textTertiary} />

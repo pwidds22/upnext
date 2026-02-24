@@ -133,9 +133,9 @@ export default function SearchScreen() {
       await storageService.addShow(trackedShow);
       setTrackedShowIds((prev) => new Set([...prev, show.id]));
 
-      // Auto-mark all aired episodes when adding as 'completed'
+      // Calculate aired episodes and optionally mark all as watched
       const numSeasons = details.number_of_seasons ?? 0;
-      if (status === 'completed' && numSeasons > 0) {
+      if (numSeasons > 0) {
         try {
           const seasons = await tmdbService.getAllSeasons(show.id, numSeasons);
           let totalAiredCount = 0;
@@ -143,7 +143,8 @@ export default function SearchScreen() {
             if (season.episodes) {
               const airedEpisodes = season.episodes.filter((ep) => hasAiredPacific(ep.air_date));
               totalAiredCount += airedEpisodes.length;
-              if (airedEpisodes.length > 0) {
+              // Auto-mark all aired episodes when adding as 'completed'
+              if (status === 'completed' && airedEpisodes.length > 0) {
                 await storageService.markSeasonWatched(
                   show.id,
                   season.season_number,
@@ -160,8 +161,8 @@ export default function SearchScreen() {
             await storageService.updateAiredEpisodes(show.id, totalAiredCount);
           }
         } catch (markError) {
-          console.error('Failed to auto-mark episodes:', markError);
-          // Don't fail the whole add operation if marking fails
+          console.error('Failed to calculate aired episodes:', markError);
+          // Don't fail the whole add operation
         }
       }
 

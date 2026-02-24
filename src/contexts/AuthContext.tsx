@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import type { User, Session } from '@supabase/supabase-js';
 import { authService } from '../services/supabase/auth';
 import { isSupabaseConfigured } from '../services/supabase/client';
+import { syncService } from '../services/supabase/sync';
 import { storageService } from '../services/storage';
 import { followsService } from '../services/supabase/follows';
 import type { UserProfile } from '../types';
@@ -113,11 +114,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Flush pending sync queue before clearing local data
+    if (user) {
+      try {
+        await syncService.pushChanges(user.id);
+      } catch (e) {
+        console.warn('Failed to flush sync queue on sign-out:', e);
+      }
+    }
     await authService.signOut();
     setProfile(null);
     // Clear local data to prevent data bleeding between accounts
     await storageService.clearAllData();
-  }, []);
+  }, [user]);
 
   const resetPassword = useCallback(async (email: string) => {
     const { error } = await authService.resetPassword(email);

@@ -143,11 +143,13 @@ export default function MyShowsScreen() {
       setShows(showsWithProgress);
       setMovies(allMovies);
 
-      // Background refresh for shows with stale aired episode counts
+      // Background refresh for shows with stale or missing aired episode counts
       if (!skipBackgroundRefresh) {
         const staleShows = showsWithProgress.filter((s) => {
-          const total = s.airedEpisodes ?? s.totalEpisodes;
-          return s.watchedCount > total && s.totalSeasons > 0;
+          if (s.totalSeasons === 0) return false;
+          // Refresh if airedEpisodes was never calculated, or if watched exceeds known total
+          if (s.airedEpisodes == null) return true;
+          return s.watchedCount > s.airedEpisodes;
         });
 
         if (staleShows.length > 0) {
