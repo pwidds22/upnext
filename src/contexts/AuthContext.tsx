@@ -18,6 +18,7 @@ interface AuthContextType {
   signInWithApple: () => Promise<{ error: string | null }>;
   signInWithGoogleToken: (idToken: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   refreshProfile: (userId?: string) => Promise<void>;
 }
@@ -128,6 +129,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await storageService.clearAllData();
   }, [user]);
 
+  const deleteAccount = useCallback(async () => {
+    const { error } = await authService.deleteAccount();
+    if (!error) {
+      setProfile(null);
+      // Clear local data after account deletion
+      await storageService.clearAllData();
+    }
+    return { error };
+  }, []);
+
   const resetPassword = useCallback(async (email: string) => {
     const { error } = await authService.resetPassword(email);
     return { error: error?.message ?? null };
@@ -145,10 +156,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signInWithApple,
       signInWithGoogleToken,
       signOut,
+      deleteAccount,
       resetPassword,
       refreshProfile,
     }),
-    [user, session, profile, isLoading, isConfigured, signIn, signUp, signInWithApple, signInWithGoogleToken, signOut, resetPassword, refreshProfile]
+    [user, session, profile, isLoading, isConfigured, signIn, signUp, signInWithApple, signInWithGoogleToken, signOut, deleteAccount, resetPassword, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

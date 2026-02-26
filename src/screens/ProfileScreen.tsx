@@ -308,7 +308,7 @@ interface RatingWithShowInfo extends UserRatingRow {
 
 export default function ProfileScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { user, isConfigured, signOut, refreshProfile: refreshAuthProfile } = useAuth();
+  const { user, isConfigured, signOut, deleteAccount, refreshProfile: refreshAuthProfile } = useAuth();
   const [authScreen, setAuthScreen] = useState<'signIn' | 'signUp' | null>(null);
   const [ratings, setRatings] = useState<RatingWithShowInfo[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
@@ -316,6 +316,7 @@ export default function ProfileScreen() {
   const [profileLoading, setProfileLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [visibilitySheetVisible, setVisibilitySheetVisible] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Profile visibility settings
   const { visibility, updateVisibility } = useProfileVisibility();
@@ -413,6 +414,54 @@ export default function ProfileScreen() {
           onPress: async () => {
             await signOut();
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? This will remove all your data including shows, watch history, ratings, and followers. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              'Final Confirmation',
+              'This is permanent. All your data will be deleted forever.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    try {
+                      const { error } = await deleteAccount();
+                      if (error) {
+                        Alert.alert('Error', `Failed to delete account: ${error}`);
+                        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                      } else {
+                        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      }
+                    } catch (e) {
+                      Alert.alert(
+                        'Error',
+                        'Failed to delete account. Please try again.',
+                      );
+                      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
           },
         },
       ]
@@ -699,6 +748,21 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={isDeletingAccount}
+        >
+          {isDeletingAccount ? (
+            <ActivityIndicator size="small" color={COLORS.textTertiary} />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={18} color={COLORS.textTertiary} />
+              <Text style={styles.deleteAccountText}>Delete Account</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         <EditProfileModal
           visible={editModalVisible}
           onClose={() => setEditModalVisible(false)}
@@ -910,6 +974,19 @@ const styles = StyleSheet.create({
     color: COLORS.error,
     fontSize: 16,
     fontWeight: '500',
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginHorizontal: 16,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  deleteAccountText: {
+    color: COLORS.textTertiary,
+    fontSize: 14,
   },
   notSignedInContainer: {
     flex: 1,

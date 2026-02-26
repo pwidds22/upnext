@@ -190,6 +190,18 @@ export const authService = {
     }
   },
 
+  // Delete account permanently — calls a SECURITY DEFINER DB function
+  // that deletes from auth.users, cascading to all user data
+  async deleteAccount(): Promise<{ error: string | null }> {
+    const { error } = await supabase.rpc('delete_user_account');
+    if (error) {
+      return { error: error.message };
+    }
+    // Sign out locally to clear session
+    await supabase.auth.signOut();
+    return { error: null };
+  },
+
   // Sign out
   async signOut(): Promise<{ error: AuthError | null }> {
     const { error } = await supabase.auth.signOut();
