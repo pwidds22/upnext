@@ -39,7 +39,7 @@ Commit: `[commit message from above]`
 5. Edge cases not handled
 6. Anything that looks off
 
-**Context:** Read `CLAUDE.md` for project conventions, `_SESSION.md` for what was being worked on.
+**Context:** Read `CLAUDE.md` for project conventions.
 
 ---
 

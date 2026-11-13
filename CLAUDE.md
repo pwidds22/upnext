@@ -121,10 +121,7 @@ try {
 3. Add types for response data
 
 ## Session Workflow
-- Read `_SESSION.md` for current state and in-progress work
-- Read `_HANDOFF.md` for full project context
 - Check `TECH_DEBT.md` for known issues to fix when convenient
-- Update `_SESSION.md` with file paths when making changes
 - Run `/techdebt` at end of sessions to update debt tracker
 - Use semantic commit messages
 
@@ -191,12 +188,6 @@ Example prompts:
 **Detailed Specs:**
 - The more specific you are, the better the output
 - Use `/interview` to create specs before handing off work
-
-### Terminal Setup Tips
-- **Voice dictation**: Press `fn` twice on macOS - you speak 3x faster than you type
-- **Status line**: Run `/statusline` to always show context usage + git branch
-- **Multiple terminals**: One tab per task/worktree, color-code them
-- **Ghostty**: Recommended terminal for best Unicode and color support
 
 ## Known Issues
 - No automated tests yet (add before launch)
